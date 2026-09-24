@@ -1,0 +1,75 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+/*
+ * The AI bridge, client side. The website can't start or read a Claude or ChatGPT
+ * conversation, so it queues a request on the desk and opens the student's assistant with a
+ * message asking it to handle the desk's requests through the connector. The answer comes
+ * back through the connector (answer_request, suggest_edits, set_college_strategy) and shows up
+ * live.
+ */
+
+export type Assistant = "claude" | "chatgpt";
+export type RequestKind = "ask" | "polish" | "odds";
+
+export interface DeskRequest {
+  id: string;
+  desk_id: string;
+  piece_id: string | null;
+  kind: RequestKind;
+  prompt: string;
+  selection: string;
+  status: "pending" | "answered" | "dismissed";
+  answer: string;
+  answered_by: string;
+  created_at: string;
+  answered_at: string | null;
+}
+
+export const REQUEST_COLS = "id, desk_id, piece_id, kind, prompt, selection, status, answer, answered_by, created_at, answered_at";
+
+/** The message that sends the assistant to the desk's queue. */
+export function handoffMessage(kind: RequestKind): string {
+  if (kind === "odds") {
+    return "Use my Application Desk connector: handle my pending desk requests. For the odds request, estimate my admission chances for each college on my desk from my profile and set them with set_college_strategy.";
+  }
+  return "Use my Application Desk connector: handle my pending desk requests (list_desk_requests), then answer each one.";
+}
+
+/** A link that opens the assistant with the message filled in. */
+export function assistantUrl(assistant: Assistant, message: string): string {
+  const q = encodeURIComponent(message);
+  return assistant === "chatgpt" ? `https://chatgpt.com/?q=${q}` : `https://claude.ai/new?q=${q}`;
+}
+
+/** Queue a request on the desk. */
+export async function queueRequest(
+  supabase: SupabaseClient,
+  r: { deskId: string; pieceId?: string | null; kind: RequestKind; prompt: string; selection?: string },
+): Promise<DeskRequest> {
+  const { data, error } = await supabase
+    .from("desk_requests")
+    .insert({ desk_id: r.deskId, piece_id: r.pieceId ?? null, kind: r.kind, prompt: r.prompt, selection: r.selection ?? "" })
+    .select(REQUEST_COLS)
+    .single();
+  if (error) throw error;
+  return data as DeskRequest;
+}
+
+const ASSISTANT_KEY = "desk:assistant";
+
+/** Which assistant this student uses, remembered per browser. */
+export function preferredAssistant(): Assistant {
+  try {
+    return localStorage.getItem(ASSISTANT_KEY) === "chatgpt" ? "chatgpt" : "claude";
+  } catch {
+    return "claude";
+  }
+}
+
+export function setPreferredAssistant(a: Assistant) {
+  try {
+    localStorage.setItem(ASSISTANT_KEY, a);
+  } catch {
+    // Private mode: just don't remember.
+  }
+}

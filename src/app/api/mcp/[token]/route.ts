@@ -1,5 +1,7 @@
 import { createMcpHandler } from "mcp-handler";
+import { registerBridgeTools } from "@/lib/connector/bridge-tools";
 import { registerManageTools } from "@/lib/connector/manage-tools";
+import { registerStrategyTools } from "@/lib/connector/strategy-tools";
 import { INSTRUCTIONS, registerTools, validToken } from "@/lib/connector/tools";
 
 /*
@@ -17,9 +19,11 @@ async function handle(request: Request, ctx: RouteContext<"/api/mcp/[token]">) {
     (server) => {
       registerTools(server, token);
       registerManageTools(server, token);
+      registerStrategyTools(server, token);
+      registerBridgeTools(server, token);
     },
     {
-      serverInfo: { name: "application-desk", version: "1.1.0" },
+      serverInfo: { name: "application-desk", version: "1.2.0" },
       instructions: INSTRUCTIONS,
     },
   );
