@@ -283,6 +283,8 @@ function EssayEditor({
 }) {
   const supabase = supabaseBrowser();
   const lastSnapshot = useRef<{ at: number; text: string | null }>({ at: 0, text: null });
+  // The text as it was when this piece was opened.
+  const opening = useRef<{ text: string; json: JSONContent } | null>(null);
 
   const extensions = useMemo(
     () => [
@@ -302,6 +304,7 @@ function EssayEditor({
         const t = textOf(editor);
         onText(t);
         lastSnapshot.current = { at: Date.now(), text: t };
+        opening.current = { text: t, json: editor.getJSON() };
       },
       onUpdate: ({ editor }) => onText(textOf(editor)),
     },
@@ -340,13 +343,22 @@ function EssayEditor({
       if (derivedTimer) clearTimeout(derivedTimer);
       derivedTimer = setTimeout(saveDerived, 800);
       if (!firstChecked) {
-        // A piece's first save records a version straight away, so history reaches the start.
         firstChecked = true;
-        const { count } = await supabase
+        const { data } = await supabase
           .from("piece_versions")
-          .select("id", { count: "exact", head: true })
-          .eq("piece_id", pieceId);
-        if (!count) {
+          .select("plain_text")
+          .eq("piece_id", pieceId)
+          .order("at", { ascending: false })
+          .limit(1);
+        const newest = data?.[0]?.plain_text ?? null;
+        const open = opening.current;
+        // Leaving a page can't be relied on to save a version, so the text a session ends with
+        // is recorded when the next session starts changing it.
+        if (open && open.text.trim() && open.text !== newest) {
+          await saveVersion(supabase, pieceId, author, open.json, open.text);
+        }
+        // A new piece's first save records a version straight away, so history reaches the start.
+        if (newest === null && !open?.text.trim()) {
           lastSnapshot.current.text = null;
           return snapshot(true);
         }

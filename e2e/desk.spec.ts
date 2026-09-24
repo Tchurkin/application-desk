@@ -107,13 +107,20 @@ test("history keeps the first save and restores an old version", async ({ page }
   await page.keyboard.press("Control+A");
   await page.keyboard.insertText("second draft");
   await waitSaved(page);
-  // Leaving records a version of the latest text.
+  // Leave, come back, keep writing: the text the last session ended with is kept.
   await page.goto("/desk");
   await page.getByRole("list", { name: "Colleges by deadline" }).getByRole("link", { name: /Drafts/ }).click();
+  await essay(page).click();
+  await page.keyboard.press("End");
+  await page.keyboard.insertText(", continued");
+  await waitSaved(page);
+  await page.waitForTimeout(1500); // the version is written just after the save
 
   await page.getByRole("button", { name: /History/ }).click();
   const list = page.getByRole("list", { name: "Saved versions" });
   await expect(list.getByRole("button")).toHaveCount(2);
+  await list.getByRole("button").first().click();
+  await expect(page.getByTestId("version-preview")).toHaveText("second draft");
   await list.getByRole("button").last().click();
   await expect(page.getByTestId("version-preview")).toHaveText("first draft");
   await page.getByRole("button", { name: "Restore this version" }).click();
