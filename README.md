@@ -7,8 +7,8 @@ version history back to the first draft.
 Parents can be invited to read along and suggest edits, and an optional Claude counselor can
 ask questions. **Nothing anyone else does changes your text unless you accept it.**
 
-> Status: early. Milestone 1 (one student working alone) is in place. Parents, suggestions
-> and the counselor are next. See [Roadmap](#roadmap).
+> Status: early. Milestones 1 (one student) and 2 (parents) are in place. The Claude
+> counselor is next. See [Roadmap](#roadmap).
 
 ## What it does today
 
@@ -25,6 +25,13 @@ ask questions. **Nothing anyone else does changes your text unless you accept it
   and the newest. Restore any of them.
 - **Reopens the piece you were last on.**
 - **Delete my data** in Settings removes your account and everything in it.
+- **Share links** (Settings → Sharing): read-only or can-suggest, with an optional password,
+  revocable at any time. The person opening it just types their name; no account needed.
+- **Suggestions / track changes**: someone with a can-suggest link types, deletes and pastes
+  normally, and it all shows as suggestions you accept or decline. Ctrl+Z undoes their last
+  burst; you can undo an accept or decline. The database itself refuses to let anyone but
+  you change your text.
+- **Live**: edits, suggestions and everyone's cursor (with their name) appear as they happen.
 
 ## Run it on your computer
 
@@ -53,6 +60,8 @@ Put those two values in `.env.local`.
 3. Apply the schema: `npx supabase link --project-ref <your-ref>` then `npx supabase db push`.
 4. For a quick start, turn off Authentication → Sign In / Providers → Email → **Confirm
    email**, or set up SMTP. Supabase's built-in email is rate-limited to a few messages an hour.
+5. For share links, turn on Authentication → Sign In / Providers → **Allow anonymous
+   sign-ins** (parents join with just a name).
 
 Then:
 
@@ -95,7 +104,7 @@ These are minors' essays.
 ## Roadmap
 
 1. ✅ One student, working alone.
-2. Parents: share links (view or suggest, optional password, revocable), suggestions / track
+2. ✅ Parents: share links (view or suggest, optional password, revocable), suggestions / track
    changes the student accepts or declines, live cursors.
 3. The Claude counselor: an Ask panel and "suggest edits" that land as suggestions, never in
    the text. Per-college "no AI drafting" policy, no invented facts, provenance for anything

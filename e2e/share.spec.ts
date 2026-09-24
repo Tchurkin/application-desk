@@ -9,7 +9,7 @@ async function makeLink(page: Page, opts: { role: "suggest" | "view"; label?: st
   await page.getByLabel("They can").selectOption(opts.role);
   if (opts.password) await page.getByLabel("Password (optional)").fill(opts.password);
   await page.getByRole("button", { name: "Make a share link" }).click();
-  const url = await page.getByLabel("Share link").inputValue();
+  const url = await page.getByRole("textbox", { name: "Share link" }).inputValue();
   await page.goto(back);
   return url;
 }
