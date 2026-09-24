@@ -15,7 +15,7 @@ export default async function PiecePage(props: PageProps<"/desk/piece/[id]">) {
 
   const [{ data: college }, { data: siblings }, { data: profile }] = await Promise.all([
     piece.college_id
-      ? supabase.from("colleges").select("id, name, ai_policy").eq("id", piece.college_id).maybeSingle()
+      ? supabase.from("colleges").select("id, name, ai_policy, research").eq("id", piece.college_id).maybeSingle()
       : Promise.resolve({ data: null }),
     piece.college_id
       ? supabase.from("pieces").select("id, title").eq("college_id", piece.college_id).order("sort").order("created_at")
@@ -53,6 +53,8 @@ export default async function PiecePage(props: PageProps<"/desk/piece/[id]">) {
         userId={userId}
         author={profile?.display_name || "Student"}
         collegeName={college?.name ?? null}
+        aiPolicy={college?.ai_policy === "no_drafting" ? "no_drafting" : "allowed"}
+        research={college?.research ?? ""}
       />
     </main>
   );

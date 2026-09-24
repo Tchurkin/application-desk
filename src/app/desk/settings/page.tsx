@@ -1,12 +1,14 @@
 import { ConfirmButton } from "@/components/confirm-button";
 import { requireDesk } from "@/lib/supabase/server";
 import { deleteMyAccount, updateProfile } from "../actions";
+import { revokeConnectorLink } from "../connector-actions";
 import { revokeShareLink } from "../share-actions";
+import { ConnectorCreator } from "./connector-creator";
 import { ShareCreator } from "./share-creator";
 
 export default async function SettingsPage() {
   const { supabase, userId, desk } = await requireDesk();
-  const [{ data: profile }, { data: links }, { data: members }] = await Promise.all([
+  const [{ data: profile }, { data: links }, { data: members }, { data: connectors }] = await Promise.all([
     supabase.from("profiles").select("display_name, about").eq("id", userId).single(),
     supabase
       .from("share_links")
@@ -15,6 +17,12 @@ export default async function SettingsPage() {
       .is("revoked_at", null)
       .order("created_at", { ascending: false }),
     supabase.from("desk_members").select("user_id, display_name, link_id, joined_at").eq("desk_id", desk.id),
+    supabase
+      .from("connector_links")
+      .select("id, label, created_at, last_used_at")
+      .eq("desk_id", desk.id)
+      .is("revoked_at", null)
+      .order("created_at", { ascending: false }),
   ]);
 
   return (
@@ -74,6 +82,40 @@ export default async function SettingsPage() {
                 </li>
               );
             })}
+          </ul>
+        )}
+      </section>
+
+      <section className="card mb-10 px-4 py-4" aria-labelledby="connect">
+        <h2 id="connect" className="mb-1 font-serif text-xl">Connect Claude or ChatGPT</h2>
+        <p className="mb-2 text-sm text-muted">
+          Let Claude or ChatGPT read your desk and suggest edits, on your own plan with no extra cost. Its edits arrive here as
+          suggestions you accept or decline; it never changes your text itself. Colleges marked &quot;no AI drafting&quot; get
+          questions and fact checks, not edits.
+        </p>
+        <p className="mb-4 text-sm text-muted">
+          Anyone with a connector link can read your desk and add suggestions, so keep it private and revoke it when you&apos;re
+          done. For privacy, turn off model training on your chats in Claude or ChatGPT settings.
+        </p>
+        <ConnectorCreator />
+        {connectors && connectors.length > 0 && (
+          <ul className="mt-6 flex flex-col gap-2" aria-label="Connector links">
+            {connectors.map((c) => (
+              <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-line px-3 py-2 text-sm">
+                <span>
+                  <span className="font-medium">{c.label}</span>
+                  <span className="block text-xs text-muted">
+                    {c.last_used_at ? `Last used ${new Date(c.last_used_at).toLocaleString()}` : "Not used yet"}
+                  </span>
+                </span>
+                <ConfirmButton
+                  label="Revoke"
+                  confirmLabel="Revoke"
+                  question={`Disconnect ${c.label}?`}
+                  onConfirm={revokeConnectorLink.bind(null, c.id)}
+                />
+              </li>
+            ))}
           </ul>
         )}
       </section>

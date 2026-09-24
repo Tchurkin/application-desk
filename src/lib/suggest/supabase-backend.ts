@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { BackendResult, Suggestion, SuggestionBackend, SuggestionStatus } from "./store";
 
 export const SUGGESTION_COLS =
-  "id, piece_id, author_id, author_name, source, kind, anchor_from, anchor_to, quote, body, status, version, created_at";
+  "id, piece_id, author_id, author_name, source, kind, anchor_from, anchor_to, quote, body, note, status, version, created_at";
 
 /** Refusals that retrying won't fix: policy, trigger, or a deleted piece. */
 function outcome(error: { code?: string } | null): BackendResult {
@@ -15,14 +15,13 @@ export class SupabaseSuggestionBackend implements SuggestionBackend {
   constructor(private supabase: SupabaseClient) {}
 
   async list(pieceId: string) {
-    const { data, error } = await this.supabase
-      .from("suggestions")
-      .select(SUGGESTION_COLS)
-      .eq("piece_id", pieceId)
-      .eq("status", "open")
-      .order("created_at");
+    const query = (cols: string) =>
+      this.supabase.from("suggestions").select(cols).eq("piece_id", pieceId).eq("status", "open").order("created_at");
+    let { data, error } = await query(SUGGESTION_COLS);
+    // A database from before suggestion notes (migration 20260925) has no "note" column.
+    if (error?.code === "42703") ({ data, error } = await query(SUGGESTION_COLS.replace(", note", "")));
     if (error) throw error;
-    return data as Suggestion[];
+    return data as unknown as Suggestion[];
   }
 
   async put(s: Suggestion) {

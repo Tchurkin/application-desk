@@ -81,12 +81,16 @@ export function PieceEditor({
   author,
   collegeName,
   role = "owner",
+  aiPolicy = "allowed",
+  research = "",
 }: {
   piece: PieceMeta;
   userId: string;
   author: string;
   collegeName: string | null;
   role?: Role;
+  aiPolicy?: "allowed" | "no_drafting";
+  research?: string;
 }) {
   const supabase = supabaseBrowser();
   const owner = role === "owner";
@@ -339,6 +343,23 @@ export function PieceEditor({
             )}
           </div>
         )}
+        {owner && (
+          <ChatbotCopy
+            build={() =>
+              chatbotPrompt({
+                title,
+                collegeName,
+                aiPolicy,
+                prompt,
+                limitKind,
+                limitValue,
+                text,
+                notes,
+                research,
+              })
+            }
+          />
+        )}
         <History pieceId={piece.id} editor={owner ? editor : null} />
         {owner && (
           <div>
@@ -543,6 +564,7 @@ function SuggestionsPanel({ live, editor, role, me }: { live: Live; editor: Edit
                   {r.gone && " · its text is gone"}
                 </span>
                 <span className="break-words">{describe(s)}</span>
+                {s.note && <span className="mt-1 block text-xs text-muted">Why: {s.note}</span>}
               </button>
               <div className="mt-2 flex gap-2">
                 {role === "owner" && (
@@ -660,6 +682,70 @@ function History({ pieceId, editor }: { pieceId: string; editor: Editor | null }
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Everything a chatbot needs to help with this piece, with the desk's rules. */
+function chatbotPrompt(p: {
+  title: string;
+  collegeName: string | null;
+  aiPolicy: "allowed" | "no_drafting";
+  prompt: string;
+  limitKind: LimitKind;
+  limitValue: number | null;
+  text: string;
+  notes: string;
+  research: string;
+}): string {
+  const noDrafting = p.aiPolicy === "no_drafting";
+  const limit =
+    p.limitKind === "none" || !p.limitValue ? "no limit" : `${p.limitValue} ${p.limitKind === "chars" ? "characters" : "words"}`;
+  return [
+    "You're helping me, a high school senior, with a college application essay. Act as a thoughtful college counselor.",
+    "",
+    "Rules:",
+    "- I write the essay. Don't write it, or whole paragraphs, for me.",
+    noDrafting
+      ? `- ${p.collegeName ?? "This college"} does not allow AI help with drafting. Don't suggest wording or write sentences. Ask me questions, point out what's unclear, and check facts and requirements only.`
+      : "- When you suggest wording, keep it to specific, small edits in my voice: quote the exact words to change and give the replacement and a short reason.",
+    "- Never add facts I haven't told you: no invented events, roles, feelings, outcomes, numbers or names. Ask me instead.",
+    `- Keep to the limit: ${limit}.`,
+    "",
+    `Piece: ${p.title}${p.collegeName ? ` for ${p.collegeName}` : ""}`,
+    `Prompt: ${p.prompt || "(not entered)"}`,
+    "",
+    "My draft:",
+    p.text || "(I haven't started yet.)",
+    ...(p.notes ? ["", "My notes:", p.notes] : []),
+    ...(p.research ? ["", `My research on ${p.collegeName}:`, p.research] : []),
+    "",
+    "Start by telling me what's working and the one or two most important things to improve.",
+  ].join("\n");
+}
+
+function ChatbotCopy({ build }: { build: () => string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div>
+      <p className="label">Ask a chatbot</p>
+      <button
+        type="button"
+        className="btn w-full"
+        onClick={async () => {
+          await navigator.clipboard.writeText(build());
+          setCopied(true);
+          setTimeout(() => setCopied(false), 4000);
+        }}
+      >
+        {copied ? "Copied. Paste it into a chat." : "Copy this piece for a chatbot"}
+      </button>
+      <p className="mt-1 text-xs text-muted">
+        Copies the prompt, your draft, notes and research with the desk&apos;s rules, for{" "}
+        <a className="underline" href="https://claude.ai/new" target="_blank" rel="noreferrer">Claude</a> or{" "}
+        <a className="underline" href="https://chatgpt.com/" target="_blank" rel="noreferrer">ChatGPT</a>. To have edits arrive here
+        as suggestions, connect one in Settings.
+      </p>
     </div>
   );
 }

@@ -7,8 +7,8 @@ version history back to the first draft.
 Parents can be invited to read along and suggest edits, and an optional Claude counselor can
 ask questions. **Nothing anyone else does changes your text unless you accept it.**
 
-> Status: early. Milestones 1 (one student) and 2 (parents) are in place. The Claude
-> counselor is next. See [Roadmap](#roadmap).
+> Status: early. Milestones 1 (one student), 2 (parents) and 3 (Claude and ChatGPT as
+> counselors) are in place. See [Roadmap](#roadmap).
 
 ## What it does today
 
@@ -32,6 +32,12 @@ ask questions. **Nothing anyone else does changes your text unless you accept it
   burst; you can undo an accept or decline. The database itself refuses to let anyone but
   you change your text.
 - **Live**: edits, suggestions and everyone's cursor (with their name) appear as they happen.
+- **Claude and ChatGPT as counselors** (Settings → Connect Claude or ChatGPT): a secret
+  connector link turns Application Desk into a connector (an MCP server) for Claude (any
+  plan, including free) or ChatGPT (Plus and up, developer mode). The assistant can read your
+  colleges and pieces and suggest edits, which arrive as suggestions you accept or decline.
+  It runs on your own plan, so there's no API key and no per-token bill. Colleges marked
+  "no AI drafting" refuse edits. A **Copy for a chatbot** button covers any other chatbot.
 
 ## Run it on your computer
 
@@ -97,8 +103,8 @@ These are minors' essays.
 
 - Every table has row-level security; a student can only ever read their own desk.
 - No analytics, and nothing logs essay text.
-- The AI counselor (coming) is off unless the student turns it on, and uses the student's own
-  Anthropic API key.
+- Nothing goes to an AI unless the student makes a connector link or copies a piece. A
+  connector link can be revoked at any time, and only a hash of it is stored.
 - **Delete my data** really deletes.
 
 ## Roadmap
@@ -106,9 +112,9 @@ These are minors' essays.
 1. ✅ One student, working alone.
 2. ✅ Parents: share links (view or suggest, optional password, revocable), suggestions / track
    changes the student accepts or declines, live cursors.
-3. The Claude counselor: an Ask panel and "suggest edits" that land as suggestions, never in
-   the text. Per-college "no AI drafting" policy, no invented facts, provenance for anything
-   that started as AI text. Bring your own Anthropic API key.
+3. ✅ Claude and ChatGPT as counselors, through a connector on the student's own plan: edits
+   land as suggestions, never in the text; per-college "no AI drafting" policy; no invented
+   facts (in the connector's instructions).
 4. Polish: tabs side by side, a second version of a piece with compare, a five-minute setup.
 
 ## License

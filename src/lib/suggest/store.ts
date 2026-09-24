@@ -23,6 +23,8 @@ export interface Suggestion {
   anchor_to: string | null;
   quote: string;
   body: string;
+  /** Why it was suggested (always present on AI suggestions). */
+  note?: string;
   status: SuggestionStatus;
   version: number;
   created_at: string;
