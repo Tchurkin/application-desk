@@ -149,6 +149,31 @@ begin
 end;
 $$;
 
+-- Everything the assistant needs to estimate odds: each college's strategy fields and the
+-- student's academic profile.
+create or replace function public.connector_strategy(token text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  l public.connector_links := public.connector_link(token);
+begin
+  return jsonb_build_object(
+    'student', (select jsonb_build_object('name', p.display_name, 'about', p.about, 'gpa', p.gpa,
+                                          'test_scores', p.test_scores, 'intended_major', p.intended_major)
+                  from public.desks d join public.profiles p on p.id = d.owner_id where d.id = l.desk_id),
+    'colleges', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', c.id, 'name', c.name, 'round', c.round, 'deadline', c.deadline, 'scorecard_id', c.scorecard_id,
+        'chance_percent', c.chance_percent, 'chance_source', c.chance_source, 'chance_note', c.chance_note,
+        'fit_rank', c.fit_rank, 'campus_life', c.campus_life, 'reputation', c.reputation,
+        'cost_sticker', c.cost_sticker, 'cost_net', c.cost_net, 'country', c.country,
+        'intl_course', c.intl_course, 'intl_criterion', c.intl_criterion, 'intl_cost', c.intl_cost,
+        'intl_status', c.intl_status, 'research', c.research) order by c.name)
+      from public.colleges c where c.desk_id = l.desk_id), '[]'::jsonb)
+  );
+end;
+$$;
+
+grant execute on function public.connector_strategy(text) to anon, authenticated;
 grant execute on function public.connector_requests(text) to anon, authenticated;
 grant execute on function public.connector_answer_request(text, uuid, text) to anon, authenticated;
 grant execute on function public.connector_set_strategy(text, uuid, jsonb) to anon, authenticated;
