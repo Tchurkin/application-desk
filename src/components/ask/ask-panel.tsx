@@ -420,7 +420,10 @@ export function AskPanel({ deskId, pieceId, pieceTitle, getSelection, collegeNam
                 onDismiss={() => void dismiss(r)}
                 showing={showing?.requestId === r.id ? showing.index : null}
                 kept={kept[r.id] ?? null}
-                onShow={(options, index) => offerRewrites({ pieceId, requestId: r.id, passage: r.selection, options, index })}
+                onShow={(options, index) =>
+                  // After keeping a version, that version is what's in the essay now.
+                  offerRewrites({ pieceId, requestId: r.id, passage: kept[r.id] !== undefined ? options[kept[r.id]] : r.selection, options, index })
+                }
               />
             ))}
           </ol>
