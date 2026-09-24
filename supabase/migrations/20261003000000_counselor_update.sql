@@ -7,6 +7,18 @@
 
 alter table public.connector_links add column if not exists replaces uuid references public.connector_links (id) on delete set null;
 
+-- From 20261002, in case an earlier copy of it was run: the poll below reads it.
+alter table public.connector_links add column if not exists counselor_remove boolean not null default false;
+create or replace function public.connector_counselor_removed(token text)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  l public.connector_links := public.connector_link(token);
+begin
+  update public.connector_links set revoked_at = now() where id = l.id;
+end;
+$$;
+grant execute on function public.connector_counselor_removed(text) to anon, authenticated;
+
 create or replace function public.connector_counselor_poll(token text, version text default '')
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare
