@@ -50,6 +50,11 @@ each assistant may do**, and every direct change is kept in the piece's history.
   or by the **counselor**: a one-file Windows setup that runs Claude Code hidden on your own
   computer. It keeps one Claude session warm, gets each request with the essay or college list
   it's about, and streams its answer onto the page as it writes.
+- **Import from Google Docs** (Board → Import essays): pick docs from Google Drive (a doc per
+  essay, or one doc with a tab per essay), or upload Word files or a whole Drive folder
+  downloaded as a .zip. Each essay is matched to its college and piece before anything is
+  imported. Direct Drive import needs a free Google Cloud project: see
+  [docs/google-import.md](docs/google-import.md).
 - **Counselor page**: talk to the counselor directly, see what it's doing and what it has done
   lately, set its speed (Fast, Balanced, Thorough), pause it, update it, or remove it from your
   computer.

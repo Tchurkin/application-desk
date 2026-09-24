@@ -35,11 +35,16 @@ export default async function BoardPage() {
         <h1 className="font-serif text-3xl">
           {profile?.display_name ? `${profile.display_name}'s board` : "Your board"}
         </h1>
-        {last && (
-          <Link href={pieceHref(last.id)} className="btn">
-            Continue: {last.title} →
+        <div className="flex flex-wrap gap-2">
+          <Link href="/desk/import" className="btn">
+            Import essays
           </Link>
-        )}
+          {last && (
+            <Link href={pieceHref(last.id)} className="btn">
+              Continue: {last.title} →
+            </Link>
+          )}
+        </div>
       </div>
 
       {ca.over && (
