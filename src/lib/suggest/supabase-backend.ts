@@ -2,7 +2,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { BackendResult, Suggestion, SuggestionBackend, SuggestionStatus } from "./store";
 
 export const SUGGESTION_COLS =
-  "id, piece_id, author_id, author_name, source, kind, anchor_from, anchor_to, quote, body, note, status, version, created_at";
+  "id, piece_id, author_id, author_name, source, kind, anchor_from, anchor_to, quote, body, note, context, status, version, created_at";
+
+/** Columns added by later migrations, newest first, for databases that don't have them yet. */
+const OPTIONAL_COLS = [", context", ", note"];
 
 /** Refusals that retrying won't fix: policy, trigger, or a deleted piece. */
 function outcome(error: { code?: string } | null): BackendResult {
@@ -11,36 +14,46 @@ function outcome(error: { code?: string } | null): BackendResult {
   return "retry";
 }
 
+/** Postgres "undefined column", or PostgREST "column not in schema". */
+const missingColumn = (e: { code?: string } | null) => e?.code === "42703" || e?.code === "PGRST204";
+
 export class SupabaseSuggestionBackend implements SuggestionBackend {
   constructor(private supabase: SupabaseClient) {}
 
   async list(pieceId: string) {
     const query = (cols: string) =>
       this.supabase.from("suggestions").select(cols).eq("piece_id", pieceId).eq("status", "open").order("created_at");
-    let { data, error } = await query(SUGGESTION_COLS);
-    // A database from before suggestion notes (migration 20260925) has no "note" column.
-    if (error?.code === "42703") ({ data, error } = await query(SUGGESTION_COLS.replace(", note", "")));
+    let cols = SUGGESTION_COLS;
+    let { data, error } = await query(cols);
+    for (const drop of OPTIONAL_COLS) {
+      if (!missingColumn(error)) break;
+      cols = cols.replace(drop, "");
+      ({ data, error } = await query(cols));
+    }
     if (error) throw error;
     return data as unknown as Suggestion[];
   }
 
   async put(s: Suggestion) {
-    const { error } = await this.supabase.from("suggestions").upsert(
-      {
-        id: s.id,
-        piece_id: s.piece_id,
-        author_name: s.author_name,
-        source: s.source,
-        kind: s.kind,
-        anchor_from: s.anchor_from,
-        anchor_to: s.anchor_to,
-        quote: s.quote,
-        body: s.body,
-        version: s.version,
-        created_at: s.created_at,
-      },
-      { onConflict: "id" },
-    );
+    const row: Record<string, unknown> = {
+      id: s.id,
+      piece_id: s.piece_id,
+      author_name: s.author_name,
+      source: s.source,
+      kind: s.kind,
+      anchor_from: s.anchor_from,
+      anchor_to: s.anchor_to,
+      quote: s.quote,
+      body: s.body,
+      version: s.version,
+      created_at: s.created_at,
+    };
+    if (s.context) row.context = s.context;
+    let { error } = await this.supabase.from("suggestions").upsert(row, { onConflict: "id" });
+    if (missingColumn(error) && "context" in row) {
+      delete row.context;
+      ({ error } = await this.supabase.from("suggestions").upsert(row, { onConflict: "id" }));
+    }
     return outcome(error);
   }
 

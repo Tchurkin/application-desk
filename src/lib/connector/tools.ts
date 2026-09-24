@@ -19,7 +19,9 @@ export const INSTRUCTIONS = `You are connected to a high school student's Applic
 You can work in two ways; follow what the student asks for:
 - Suggest: suggest_edits puts proposed changes on their desk as suggestions they accept or decline one by one. Use it when they want feedback, a review, or edits they will go through themselves.
 - Write: write_piece drafts or replaces a whole piece, and edit_piece applies specific changes directly. Use these when they ask you to draft, rewrite, or just make the changes (for example, "draft all my supplementals so I can go through them"). Before any direct write, the desk saves the current text in the piece's History, so the student can always restore it.
-You can also create_piece to add a new essay or short answer to a college.
+You can also set up and manage the whole desk:
+- When the student gives you a list of colleges, look up each one's application system, round, deadlines and current supplemental essay prompts with word limits (search the web if you can; say which details you couldn't confirm), then call set_up_colleges once with all of them. It adds each college with a piece for every prompt, and never duplicates a college or piece already on the desk.
+- create_piece adds one essay or short answer; update_college and update_piece change any detail (deadlines, prompts, limits, status, notes, research); delete_college and delete_piece remove them; update_my_profile sets the student's name and "about me".
 
 Start with list_my_desk to see the colleges and pieces, and read_piece before working on a piece: it has the prompt, the word or character limit, the current text, the student's notes, their research on the college, and their other essays for that college. Use what the student has written about themselves; when a draft needs a specific detail you don't have, ask or leave a clear [bracketed placeholder]. Mind the limit. Some colleges have an AI policy noted on the desk; tell the student if what they ask for would go against it.`;
 
@@ -29,14 +31,14 @@ export function validToken(token: string) {
   return TOKEN_RE.test(token);
 }
 
-function db(): SupabaseClient {
+export function db(): SupabaseClient {
   const { url, key } = supabaseEnv();
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
 type Text = { content: { type: "text"; text: string }[]; isError?: boolean };
-const text = (t: string): Text => ({ content: [{ type: "text", text: t }] });
-const fail = (t: string): Text => ({ content: [{ type: "text", text: t }], isError: true });
+export const text = (t: string): Text => ({ content: [{ type: "text", text: t }] });
+export const fail = (t: string): Text => ({ content: [{ type: "text", text: t }], isError: true });
 
 interface DeskInfo {
   desk_title: string;
@@ -49,11 +51,14 @@ interface DeskInfo {
     deadline: string | null;
     materials_deadline: string | null;
     ai_policy: "allowed" | "no_drafting";
+    needs_letters?: boolean;
+    has_research?: boolean;
   }[];
   pieces: {
     id: string;
     college_id: string | null;
     title: string;
+    prompt?: string;
     status: string;
     word_count: number;
     limit_kind: "words" | "chars" | "none";
@@ -90,12 +95,16 @@ export function renderDesk(d: DeskInfo): string {
   if (d.student?.about) lines.push(`About the student (in their words): ${d.student.about}`);
   const piecesFor = (id: string | null) => d.pieces.filter((p) => p.college_id === id);
   const pieceLine = (p: DeskInfo["pieces"][number]) =>
-    `  - ${p.title} [piece_id: ${p.id}] ${labelOf(PIECE_STATUSES, p.status)}, ${p.word_count} words, limit ${limitLine(p.limit_kind, p.limit_value)}`;
+    `  - ${p.title} [piece_id: ${p.id}] ${labelOf(PIECE_STATUSES, p.status)}, ${p.word_count} words, limit ${limitLine(p.limit_kind, p.limit_value)}` +
+    (p.prompt ? `\n    Prompt: ${p.prompt.length > 160 ? `${p.prompt.slice(0, 160)}…` : p.prompt}` : "\n    Prompt: (none entered)");
   lines.push("", "## Colleges (by deadline)");
   if (!d.colleges.length) lines.push("None yet.");
   for (const c of d.colleges) {
     lines.push(
       `- ${c.name} [college_id: ${c.id}] ${labelOf(ROUNDS, c.round)}, ${labelOf(APP_SYSTEMS, c.app_system)}, deadline ${c.deadline ?? "not set"}` +
+        (c.materials_deadline ? `, materials by ${c.materials_deadline}` : "") +
+        (c.needs_letters === false ? ", no letters needed" : "") +
+        (c.has_research ? ", has research notes" : "") +
         (c.ai_policy === "no_drafting" ? ` (AI policy: ${POLICY_NOTE})` : ""),
     );
     for (const p of piecesFor(c.id)) lines.push(pieceLine(p));

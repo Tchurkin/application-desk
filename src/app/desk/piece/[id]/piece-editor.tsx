@@ -504,7 +504,10 @@ function EssayEditor({
 }
 
 function describe(s: Suggestion): string {
-  const q = (t: string) => `“${t.replace(/\n/g, " ¶ ").slice(0, 80)}${t.length > 80 ? "…" : ""}”`;
+  const q = (t: string | undefined) => {
+    const s = t ?? "";
+    return `“${s.replace(/\n/g, " ¶ ").slice(0, 80)}${s.length > 80 ? "…" : ""}”`;
+  };
   if (s.kind === "insert") return `Add ${q(s.body)}`;
   if (s.kind === "delete") return `Delete ${q(s.quote)}`;
   return `Replace ${q(s.quote)} with ${q(s.body)}`;

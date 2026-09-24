@@ -25,6 +25,8 @@ export interface Suggestion {
   body: string;
   /** Why it was suggested (always present on AI suggestions). */
   note?: string;
+  /** For an insertion: the text just before it, to find the spot again if its anchor comes loose. */
+  context?: string;
   status: SuggestionStatus;
   version: number;
   created_at: string;
@@ -210,11 +212,21 @@ export class SuggestionStore {
   // ─── changes from elsewhere ───────────────────────────────────────────────
 
   /** A row arrived from the server (someone else's change, or an echo of ours). */
-  applyRemote(row: Suggestion) {
-    const p = this.pending.get(row.id);
-    const cur = this.rows.get(row.id);
+  applyRemote(incoming: Suggestion) {
+    const p = this.pending.get(incoming.id);
+    const cur = this.rows.get(incoming.id);
     if (p && p.op !== "resolve") return; // ours is newer and on its way
-    if (p?.op === "resolve" && row.status !== p.status) return;
+    if (p?.op === "resolve" && incoming.status !== p.status) return;
+    // Realtime leaves out long text columns an UPDATE didn't change (Postgres TOAST), and
+    // drops large fields from oversized rows. Merge what arrived into the row we have; if we
+    // don't have it, fetch it whole rather than keep a row with missing text.
+    const present = Object.fromEntries(Object.entries(incoming).filter(([, v]) => v != null));
+    if (!cur && (incoming.quote == null || incoming.body == null || incoming.anchor_from == null)) {
+      void this.reload();
+      return;
+    }
+    const row = (cur ? { ...cur, ...present } : incoming) as Suggestion;
+    if (row.anchor_to === undefined) row.anchor_to = null;
     if (cur && cur.author_id === row.author_id && cur.version > row.version) return; // stale echo
     if (cur && sameRow(cur, row)) return;
     this.rows.set(row.id, row);

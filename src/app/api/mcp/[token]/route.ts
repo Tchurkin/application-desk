@@ -1,10 +1,11 @@
 import { createMcpHandler } from "mcp-handler";
+import { registerManageTools } from "@/lib/connector/manage-tools";
 import { INSTRUCTIONS, registerTools, validToken } from "@/lib/connector/tools";
 
 /*
  * The Application Desk connector (an MCP server). A student pastes
  * https://<site>/api/mcp/<token> into Claude (Settings → Connectors) or ChatGPT
- * (developer mode), and the assistant can read their desk and suggest edits.
+ * (developer mode), and the assistant can work on their whole desk.
  */
 
 export const maxDuration = 60;
@@ -12,10 +13,16 @@ export const maxDuration = 60;
 async function handle(request: Request, ctx: RouteContext<"/api/mcp/[token]">) {
   const { token } = await ctx.params;
   if (!validToken(token)) return new Response("Not found", { status: 404 });
-  const handler = createMcpHandler((server) => registerTools(server, token), {
-    serverInfo: { name: "application-desk", version: "1.0.0" },
-    instructions: INSTRUCTIONS,
-  });
+  const handler = createMcpHandler(
+    (server) => {
+      registerTools(server, token);
+      registerManageTools(server, token);
+    },
+    {
+      serverInfo: { name: "application-desk", version: "1.1.0" },
+      instructions: INSTRUCTIONS,
+    },
+  );
   return handler(request);
 }
 

@@ -26,8 +26,13 @@ async function connect(url: string) {
 
 type ToolResult = { content: { type: string; text?: string }[]; isError?: boolean };
 async function call(client: Client, name: string, args: Record<string, unknown> = {}) {
-  const r = (await client.callTool({ name, arguments: args })) as ToolResult;
-  return { text: r.content.map((c) => c.text ?? "").join("\n"), isError: !!r.isError };
+  try {
+    const r = (await client.callTool({ name, arguments: args })) as ToolResult;
+    return { text: r.content.map((c) => c.text ?? "").join("\n"), isError: !!r.isError };
+  } catch (e) {
+    // Arguments the tool's schema rejects can come back as a protocol error instead.
+    return { text: (e as Error).message, isError: true };
+  }
 }
 
 const LONG = Array.from({ length: 40 }, (_, i) => `Sentence ${i + 1} of a long rewrite that goes well past the old cap.`).join(" ");
@@ -133,6 +138,78 @@ test("the AI writes, edits and adds pieces directly; the old text stays in Histo
   await expect(page.getByRole("link", { name: /Why Strict\?/ })).toBeVisible();
   await page.goto(`/desk/piece/${newId}`);
   await expectEssay(page, "Draft paragraph one.Draft paragraph two.");
+  await client.close();
+});
+
+test("the AI sets up the whole desk from a list, without duplicates, and manages it", async ({ page }) => {
+  await signUp(page, "connsetup");
+  await page.goto("/desk/settings");
+  const client = await connect(await makeConnector(page));
+
+  const colleges = [
+    {
+      name: "Northfield University",
+      app_system: "common_app",
+      round: "EA",
+      deadline: "2030-11-01",
+      needs_letters: true,
+      research: "Strong robotics program.",
+      pieces: [
+        { title: "Why Northfield?", prompt: "Why do you want to attend Northfield?", limit_value: 250 },
+        { title: "Community", prompt: "Describe a community you belong to.", limit_kind: "chars", limit_value: 1500 },
+      ],
+    },
+    {
+      name: "Coastal Tech",
+      app_system: "own_portal",
+      round: "RD",
+      deadline: "2031-01-05",
+      needs_letters: false,
+      pieces: [{ title: "Short answer", prompt: "What will you build?", limit_value: 100 }],
+    },
+  ];
+  const first = await call(client, "set_up_colleges", { colleges });
+  expect(first.isError).toBe(false);
+  expect(first.text).toContain("Northfield University");
+  expect(first.text).toContain("2 pieces added");
+
+  // Again, with one more prompt: nothing duplicated, the new one added.
+  colleges[1].pieces.push({ title: "Activity", prompt: "Tell us about an activity.", limit_value: 150 });
+  const again = await call(client, "set_up_colleges", { colleges });
+  expect(again.text).toContain("already on the desk");
+  expect(again.text).toContain("1 piece added, 1 already there");
+
+  await page.goto("/desk");
+  const board = page.getByRole("list", { name: "Colleges by deadline" });
+  await expect(board.locator("[data-college]")).toHaveCount(2);
+  await expect(board.locator("[data-college]").first()).toContainText("Northfield University");
+  await expect(board).toContainText("Why Northfield?");
+  await expect(board).toContainText("Activity");
+
+  const desk = await call(client, "list_my_desk");
+  const northfield = desk.text.match(/Northfield University \[college_id: ([0-9a-f-]{36})\]/)![1];
+  const activity = desk.text.match(/Activity \[piece_id: ([0-9a-f-]{36})\]/)![1];
+  const why = desk.text.match(/Why Northfield\? \[piece_id: ([0-9a-f-]{36})\]/)![1];
+  expect(desk.text).toContain("Prompt: Why do you want to attend Northfield?");
+
+  expect((await call(client, "update_college", { college_id: northfield, deadline: "2030-10-15", round: "ED" })).isError).toBe(false);
+  expect(
+    (await call(client, "update_piece", { piece_id: why, prompt: "Why Northfield, specifically?", limit_value: 300, status: "drafting" })).isError,
+  ).toBe(false);
+  expect((await call(client, "delete_piece", { piece_id: activity })).isError).toBe(false);
+  expect((await call(client, "update_my_profile", { about: "I build robots and run the school maker club." })).isError).toBe(false);
+
+  await page.goto(`/desk/piece/${why}`);
+  await expect(page.getByLabel("Prompt")).toHaveValue("Why Northfield, specifically?");
+  await expect(page.getByLabel("Limit", { exact: true })).toHaveValue("300");
+  await page.goto("/desk");
+  await expect(board).not.toContainText("Activity");
+  await expect(board.locator("[data-college]").first()).toContainText("Early Decision");
+  await page.goto("/desk/settings");
+  await expect(page.getByLabel("About you")).toHaveValue("I build robots and run the school maker club.");
+
+  const bad = await call(client, "update_college", { college_id: northfield, deadline: "Nov 1" });
+  expect(bad.isError).toBe(true);
   await client.close();
 });
 

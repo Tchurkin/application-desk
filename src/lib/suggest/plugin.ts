@@ -17,6 +17,9 @@ import { Decoration, DecorationSet, type EditorView } from "@tiptap/pm/view";
 import { absolutePositionToRelativePosition, relativePositionToAbsolutePosition, ySyncPluginKey } from "@tiptap/y-tiptap";
 import * as Y from "yjs";
 import { insertLines } from "@/lib/editor/insert-lines";
+import { CONTEXT_CHARS } from "./anchor-text";
+import { docText, textBetweenPos } from "./doc-text";
+import { findText, loosen } from "./loose";
 import { fromBase64, toBase64 } from "@/lib/sync/base64";
 import type { Suggestion, SuggestionStore } from "./store";
 
@@ -135,19 +138,92 @@ export interface Resolved {
   gone: boolean;
 }
 
+/**
+ * Where an anchor is now, and whether the character it is tied to still exists. When
+ * paragraphs are joined, split or restructured, y-prosemirror re-creates the moved text as new
+ * characters; anchors tied to the old ones still resolve, but to wherever the old text was.
+ */
+function resolveLive(state: EditorState, y: YCtx, anchor: string): { pos: number; alive: boolean } | null {
+  let rel: Y.RelativePosition;
+  try {
+    rel = Y.decodeRelativePosition(fromBase64(anchor));
+  } catch {
+    return null;
+  }
+  let pos: number | null;
+  try {
+    pos = relativePositionToAbsolutePosition(y.doc, y.type, rel, y.mapping as never) ?? resolveInText(state, y, rel);
+  } catch {
+    pos = null;
+  }
+  if (pos === null) return null;
+  return { pos: clampToText(state.doc, pos), alive: anchorAlive(y.doc, rel) };
+}
+
+function anchorAlive(doc: Y.Doc, rel: Y.RelativePosition): boolean {
+  try {
+    const id = rel.item ?? rel.type;
+    return id ? !Y.getItem(doc.store, id).deleted : true;
+  } catch {
+    return false;
+  }
+}
+
+/** Whether `text` ends with `tail`, allowing for curly quotes and whitespace differences. */
+function endsWithLoosely(text: string, tail: string): boolean {
+  const t = loosen(tail).text;
+  return loosen(text.slice(-(tail.length * 2 + 16))).text.endsWith(t);
+}
+
+/**
+ * Where a suggestion applies now. Its anchors are trusted while the characters they are tied
+ * to exist and the text still matches; otherwise it is found again by its quoted words (or,
+ * for an insertion, the words just before it), nearest to where the anchor points. It is gone
+ * only when those words are gone.
+ */
 export function resolveSuggestion(state: EditorState, s: Suggestion): Resolved {
+  const quote = s.quote ?? "";
+  const context = s.context ?? "";
+  const gone: Resolved = { s, from: null, to: null, at: null, stale: true, gone: true };
+  const y = yctx(state);
+  if (!y) return gone;
+  const dt = docText(state.doc);
+
   if (s.kind === "insert") {
-    const at = resolveAnchor(state, s.anchor_from);
-    return { s, from: null, to: null, at, stale: false, gone: at === null };
+    const a = resolveLive(state, y, s.anchor_from);
+    const fits = (pos: number) => !context || endsWithLoosely(dt.text.slice(0, dt.offsetOf(pos)), context);
+    if (a && a.alive && fits(a.pos)) return { s, from: null, to: null, at: a.pos, stale: false, gone: false };
+    if (context.trim()) {
+      // The words before the insertion point; if some of them were edited, the last few still place it.
+      const near = a ? dt.offsetOf(a.pos) : undefined;
+      for (const len of [context.length, 60, 30]) {
+        if (len > context.length) continue;
+        const f = findText(dt.hay, context.slice(-len), near);
+        if ("start" in f) return { s, from: null, to: null, at: dt.posTo(f.end), stale: len < context.length, gone: false };
+      }
+    }
+    // Its anchor holds but the words before it changed: the student decides. A loose anchor
+    // whose words are gone points nowhere trustworthy.
+    return a && (a.alive || !context.trim()) ? { s, from: null, to: null, at: a.pos, stale: true, gone: false } : gone;
   }
-  const from = resolveAnchor(state, s.anchor_from);
-  const to = s.anchor_to ? resolveAnchor(state, s.anchor_to) : null;
-  if (from === null || to === null || to < from) {
-    return { s, from: null, to: null, at: null, stale: true, gone: true };
+
+  const a = resolveLive(state, y, s.anchor_from);
+  const b = s.anchor_to ? resolveLive(state, y, s.anchor_to) : null;
+  const trusted = !!(a && b && a.alive && b.alive && b.pos > a.pos);
+  if (trusted && textBetweenPos(dt, a!.pos, b!.pos) === quote) {
+    return { s, from: a!.pos, to: b!.pos, at: s.kind === "replace" ? b!.pos : null, stale: false, gone: false };
   }
-  const now = state.doc.textBetween(from, to, "\n");
-  const gone = to === from && s.quote.length > 0;
-  return { s, from, to, at: s.kind === "replace" ? to : null, stale: now !== s.quote, gone };
+  if (quote) {
+    const f = findText(dt.hay, quote, a ? dt.offsetOf(a.pos) : undefined);
+    if ("start" in f) {
+      const from = dt.posFrom(f.start);
+      const to = dt.posTo(f.end);
+      return { s, from, to, at: s.kind === "replace" ? to : null, stale: false, gone: false };
+    }
+  }
+  // The quoted words were edited, but the anchors still hold: the student decides.
+  if (trusted) return { s, from: a!.pos, to: b!.pos, at: s.kind === "replace" ? b!.pos : null, stale: true, gone: false };
+  return gone;
 }
 
 // ─── decorations ────────────────────────────────────────────────────────────
@@ -158,7 +234,7 @@ function widget(s: Suggestion, mine: boolean, picked: boolean) {
     el.className = `sugg-ins${mine ? " sugg-mine" : ""}${picked ? " sugg-picked" : ""}`;
     el.dataset.sugg = s.id;
     el.title = `${s.author_name || "Someone"} suggests adding this`;
-    el.textContent = s.body.replace(/\n/g, " ¶ ");
+    el.textContent = (s.body ?? "").replace(/\n/g, " ¶ ");
     return el;
   };
 }
@@ -179,7 +255,7 @@ function decorations(state: EditorState, opts: SuggestOptions): DecorationSet {
           title: `${s.author_name || "Someone"} suggests deleting this`,
         }),
       );
-      if (s.quote.includes("\n")) {
+      if ((s.quote ?? "").includes("\n")) {
         decos.push(Decoration.widget(r.from, widgetMark(s.id, "¶", `sugg-del${cls}`), { side: 1, key: `${s.id}:para` }));
       }
     }
@@ -313,7 +389,7 @@ export function suggestText(view: EditorView, opts: SuggestOptions, from: number
     if (s) {
       store.put({ ...s, body: s.body + text });
     } else {
-      store.put({ ...base(opts, "insert"), anchor_from: anchorAt(state, from, -1), body: text });
+      store.put({ ...base(opts, "insert"), anchor_from: anchorAt(state, from, -1), body: text, context: textBefore(state, from) });
     }
     // The text doesn't change, so the caret stays; say so, so a redraw can't move it.
     moveCaret(view, from);
@@ -323,7 +399,7 @@ export function suggestText(view: EditorView, opts: SuggestOptions, from: number
     ...base(opts, "replace"),
     anchor_from: anchorAt(state, from, 0),
     anchor_to: anchorAt(state, to, -1),
-    quote: state.doc.textBetween(from, to, "\n"),
+    quote: textBetweenPos(docText(state.doc), from, to),
     body: text,
   });
   moveCaret(view, to);
@@ -336,9 +412,16 @@ function suggestDelete(view: EditorView, opts: SuggestOptions, from: number, to:
     ...base(opts, "delete"),
     anchor_from: anchorAt(state, from, 0),
     anchor_to: anchorAt(state, to, -1),
-    quote: state.doc.textBetween(from, to, "\n"),
+    quote: textBetweenPos(docText(state.doc), from, to),
   });
   moveCaret(view, caret);
+}
+
+/** The text just before `pos`, kept with an insertion so it can be found again. */
+function textBefore(state: EditorState, pos: number): string {
+  const dt = docText(state.doc);
+  const off = dt.offsetOf(pos);
+  return dt.text.slice(Math.max(0, off - CONTEXT_CHARS), off);
 }
 
 /** The position one character (or one paragraph break) before or after `pos`. */
@@ -380,7 +463,7 @@ export function suggestBackspace(view: EditorView, opts: SuggestOptions) {
     opts.store.put({
       ...d,
       anchor_from: anchorAt(state, prev, 0),
-      quote: state.doc.textBetween(prev, pos, "\n") + d.quote,
+      quote: textBetweenPos(docText(state.doc), prev, pos) + (d.quote ?? ""),
     });
     moveCaret(view, prev);
     return;
@@ -400,7 +483,7 @@ export function suggestForwardDelete(view: EditorView, opts: SuggestOptions) {
     opts.store.put({
       ...d,
       anchor_to: anchorAt(state, next, -1),
-      quote: d.quote + state.doc.textBetween(pos, next, "\n"),
+      quote: (d.quote ?? "") + textBetweenPos(docText(state.doc), pos, next),
     });
     moveCaret(view, next);
     return;

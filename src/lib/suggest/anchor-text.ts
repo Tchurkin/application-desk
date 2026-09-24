@@ -9,19 +9,26 @@
 
 import * as Y from "yjs";
 import { fromBase64, toBase64 } from "@/lib/sync/base64";
+import { findText } from "./loose";
 
-/** One run of text in the document: a Y.XmlText and where its characters sit in `text`. */
+/**
+ * One run of the document: a Y.XmlText and where its characters sit in `text`, or an empty
+ * textblock (len 0) so a position inside a blank line can be anchored too.
+ */
 interface Segment {
-  t: Y.XmlText;
+  t: Y.XmlText | Y.XmlElement;
   start: number;
   len: number;
 }
 
 export interface FlatDoc {
-  /** The document's text, paragraphs separated by "\n". */
+  /** The document's text: textblocks separated by "\n", hard breaks as "\n". */
   text: string;
   segments: Segment[];
 }
+
+/** Nodes that hold a line of text (the rest, like lists and quotes, only hold other nodes). */
+const TEXTBLOCKS = new Set(["paragraph", "heading", "codeBlock"]);
 
 export function docFromRows(state: string, updates: string[]): Y.Doc {
   const doc = new Y.Doc();
@@ -36,32 +43,27 @@ export function docFromRows(state: string, updates: string[]): Y.Doc {
 export function flatten(doc: Y.Doc, field = "default"): FlatDoc {
   const segments: Segment[] = [];
   let text = "";
-  let blockOpen = false;
+  let blocks = 0;
 
   const visit = (el: Y.XmlElement | Y.XmlFragment) => {
-    const kids = el.toArray();
-    const inline = kids.some((k) => k instanceof Y.XmlText);
-    if (inline) {
-      if (blockOpen) text += "\n";
-      blockOpen = true;
-      for (const k of kids) {
-        if (k instanceof Y.XmlText) {
-          const s = plain(k);
-          segments.push({ t: k, start: text.length, len: s.length });
-          text += s;
-        } else if (k instanceof Y.XmlElement && k.nodeName === "hardBreak") {
-          text += "\n";
-        }
+    const isBlock = el instanceof Y.XmlElement && (TEXTBLOCKS.has(el.nodeName) || el.toArray().some((k) => k instanceof Y.XmlText));
+    if (!isBlock) {
+      for (const k of el.toArray()) if (k instanceof Y.XmlElement) visit(k);
+      return;
+    }
+    if (blocks++ > 0) text += "\n";
+    let hadText = false;
+    for (const k of el.toArray()) {
+      if (k instanceof Y.XmlText) {
+        const s = plain(k);
+        segments.push({ t: k, start: text.length, len: s.length });
+        text += s;
+        hadText = true;
+      } else if (k instanceof Y.XmlElement && k.nodeName === "hardBreak") {
+        text += "\n";
       }
-      return;
     }
-    if (el instanceof Y.XmlElement && kids.length === 0 && el.nodeName === "paragraph") {
-      // An empty paragraph still separates the ones around it.
-      if (blockOpen) text += "\n";
-      blockOpen = true;
-      return;
-    }
-    for (const k of kids) if (k instanceof Y.XmlElement) visit(k);
+    if (!hadText) segments.push({ t: el as Y.XmlElement, start: text.length, len: 0 });
   };
   visit(doc.getXmlFragment(field));
   return { text, segments };
@@ -80,30 +82,18 @@ export function normalizeBreaks(text: string): string {
   return text.replace(/\r\n?/g, "\n").replace(/\n{2,}/g, "\n");
 }
 
-/** Curly quotes, dashes and odd spaces as plain characters, one for one (lengths are kept). */
-function normalize(s: string): string {
-  return s
-    .replace(/[‘’ʼ]/g, "'")
-    .replace(/[“”]/g, '"')
-    .replace(/[–—]/g, "-")
-    .replace(/[   ]/g, " ");
-}
-
 export type FindResult = { ok: true; start: number; end: number } | { ok: false; reason: string };
 
-/** Where `quote` occurs in the document. It must occur exactly once. */
+/**
+ * Where `quote` occurs in the document: exactly, or allowing for curly quotes, extra spaces
+ * and blank lines. It must occur exactly once.
+ */
 export function findQuote(flat: FlatDoc, quote: string): FindResult {
   if (!quote) return { ok: false, reason: "The quoted text is empty." };
-  for (const [hay, needle] of [
-    [flat.text, quote],
-    [normalize(flat.text), normalize(quote)],
-  ]) {
-    const first = hay.indexOf(needle);
-    if (first < 0) continue;
-    if (hay.indexOf(needle, first + 1) >= 0) {
-      return { ok: false, reason: `"${quote}" appears more than once. Quote a few more words so it is unique.` };
-    }
-    return { ok: true, start: first, end: first + needle.length };
+  const f = findText(flat.text, quote);
+  if ("start" in f) return { ok: true, start: f.start, end: f.end };
+  if (f.error === "ambiguous") {
+    return { ok: false, reason: `"${quote}" appears ${f.count} times. Quote a few more words so it is unique.` };
   }
   return { ok: false, reason: `"${quote}" isn't in the piece. Quote the text exactly as it is now.` };
 }
@@ -111,22 +101,23 @@ export function findQuote(flat: FlatDoc, quote: string): FindResult {
 /**
  * A relative position at text offset `off`. assoc 0 sticks to the character after the
  * offset (a range's start); assoc -1 sticks to the character before it (a range's end or an
- * insertion point).
+ * insertion point). Inside a blank line, it sticks to that line.
  */
 export function anchorAtOffset(flat: FlatDoc, off: number, assoc: -1 | 0): string {
   const { segments } = flat;
   if (!segments.length) throw new Error("The piece is empty.");
+  const blank = segments.find((s) => s.len === 0 && s.start === off);
   let seg: Segment | undefined;
   if (assoc === 0) {
-    seg = segments.find((s) => off >= s.start && off < s.start + s.len);
+    seg = segments.find((s) => s.len > 0 && off >= s.start && off < s.start + s.len) ?? blank;
     // At a paragraph break or the very end: stick to the end of the run before it.
     seg ??= [...segments].reverse().find((s) => s.start + s.len <= off) ?? segments[0];
   } else {
-    seg = segments.find((s) => off > s.start && off <= s.start + s.len);
+    seg = segments.find((s) => s.len > 0 && off > s.start && off <= s.start + s.len) ?? blank;
     // Right after a paragraph break: the start of the run that follows it.
     seg ??= segments.find((s) => s.start >= off) ?? segments[segments.length - 1];
   }
-  const index = Math.max(0, Math.min(seg.len, off - seg.start));
+  const index = seg.t instanceof Y.XmlText ? Math.max(0, Math.min(seg.len, off - seg.start)) : 0;
   return toBase64(Y.encodeRelativePosition(Y.createRelativePositionFromTypeIndex(seg.t, index, assoc)));
 }
 
@@ -144,9 +135,14 @@ export interface AnchoredRow {
   quote: string;
   body: string;
   note: string;
+  /** For an insertion: the text just before it, to find the spot again if the anchor comes loose. */
+  context: string;
 }
 
 export type EditOutcome = { ok: true; row: AnchoredRow } | { ok: false; reason: string };
+
+/** How much of the text before an insertion point to keep as its context. */
+export const CONTEXT_CHARS = 120;
 
 /** Turn a proposed edit into an anchored suggestion row, or explain why it can't be. */
 export function anchorEdit(flat: FlatDoc, e: Edit): EditOutcome {
@@ -167,6 +163,7 @@ export function anchorEdit(flat: FlatDoc, e: Edit): EditOutcome {
         quote: "",
         body: normalizeBreaks(e.insert_after),
         note: e.reason,
+        context: flat.text.slice(Math.max(0, f.end - CONTEXT_CHARS), f.end),
       },
     };
   }
@@ -181,6 +178,7 @@ export function anchorEdit(flat: FlatDoc, e: Edit): EditOutcome {
       quote,
       body,
       note: e.reason,
+      context: "",
     },
   };
 }
