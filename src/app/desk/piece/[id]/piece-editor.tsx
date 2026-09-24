@@ -126,7 +126,8 @@ export function PieceEditor({
       },
       onPeople: (p) => alive && setPeople(p),
     });
-    Promise.all([sync.start(), store.start()])
+    // Suggestions failing to load must never stop the essay from opening.
+    Promise.all([sync.start(), store.start().catch(() => undefined)])
       .then(([r]) => {
         if (!alive || r !== "ok") return;
         channel.start();
