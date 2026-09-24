@@ -117,6 +117,15 @@ export function PieceEditor({
   const [text, setText] = useState("");
   const [editor, setEditor] = useState<Editor | null>(null);
   const meta = useMetaSaver(piece.id);
+  // Editing or Suggesting. The student starts in Editing, people they share with in Suggesting;
+  // either can switch, and the choice is remembered per browser. Read-only links only read.
+  const canWrite = role !== "view";
+  const [editMode, setEditMode] = useState<EditMode>(owner ? "editing" : "suggesting");
+  const editorMode: SuggestMode = !canWrite ? "view" : editMode === "editing" ? "owner" : "suggest";
+  const chooseMode = (m: EditMode) => {
+    setEditMode(m);
+    writeMode(role, m);
+  };
 
   // Load the document and its suggestions, keep them saved, and follow everyone else live.
   useEffect(() => {
@@ -124,7 +133,7 @@ export function PieceEditor({
     const clientId = tabClientId();
     const storage = safeLocalStorage();
     const sync = new PieceSync(piece.id, new SupabaseUpdateStore(supabase), storage, clientId, {
-      readOnly: role !== "owner",
+      readOnly: role === "view",
       onStatus: (st) => alive && setStatus(st),
     });
     const store = new SuggestionStore(piece.id, new SupabaseSuggestionBackend(supabase), storage, clientId);
@@ -144,6 +153,8 @@ export function PieceEditor({
       .then(([r]) => {
         if (!alive || r !== "ok") return;
         channel.start();
+        const saved = readMode(role);
+        if (saved) setEditMode(saved);
         setLive({ sync, store, channel });
       })
       .catch((e: Error) => alive && setLoadError(e.message));
@@ -232,17 +243,35 @@ export function PieceEditor({
           prompt && <p className="mt-3 rounded-md border border-line bg-panel px-3 py-2 text-sm">{prompt}</p>
         )}
 
-        {role === "suggest" && (
-          <p className="mt-3 rounded-md bg-accent-soft px-3 py-2 text-sm">
-            You&apos;re suggesting. Type, delete or paste as usual: your changes show as suggestions for the writer to accept or
-            decline. Ctrl+Z undoes your last suggestions.
-          </p>
+        {canWrite && (
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <div role="radiogroup" aria-label="Mode" className="inline-flex rounded-md border border-line bg-panel p-0.5 text-sm">
+              {(["editing", "suggesting"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  role="radio"
+                  aria-checked={editMode === m}
+                  onClick={() => chooseMode(m)}
+                  className={`rounded px-3 py-1 ${editMode === m ? "bg-accent text-accent-ink" : "text-muted hover:text-ink"}`}
+                >
+                  {m === "editing" ? "Editing" : "Suggesting"}
+                </button>
+              ))}
+            </div>
+            {editMode === "suggesting" && (
+              <p className="text-sm text-muted">
+                Your changes show as suggestions{owner ? " you can accept or decline" : " for the writer to accept or decline"}. Ctrl+Z
+                undoes your last suggestions.
+              </p>
+            )}
+          </div>
         )}
         {role === "view" && <p className="mt-3 text-sm text-muted">You can read this piece. You can&apos;t change it.</p>}
 
-        {editor && live && (role === "owner" || role === "suggest") && (
+        {editor && live && canWrite && (
           <div className="mt-3">
-            <FormatToolbar editor={editor} mode={role} store={live.store} />
+            <FormatToolbar editor={editor} mode={editorMode === "suggest" ? "suggest" : "owner"} store={live.store} />
           </div>
         )}
         <div className="card essay mt-4 px-5 py-4 sm:px-8 sm:py-6">
@@ -251,7 +280,16 @@ export function PieceEditor({
           ) : status === "gone" ? (
             <p className="text-danger">{STATUS_TEXT.gone}</p>
           ) : live ? (
-            <EssayEditor live={live} pieceId={piece.id} me={me} mode={role as SuggestMode} onText={onText} onEditor={setEditor} />
+            <EssayEditor
+              key={editorMode}
+              live={live}
+              pieceId={piece.id}
+              me={me}
+              mode={editorMode}
+              isDeskOwner={owner}
+              onText={onText}
+              onEditor={setEditor}
+            />
           ) : (
             <p className="text-muted">{STATUS_TEXT.loading}</p>
           )}
@@ -265,7 +303,7 @@ export function PieceEditor({
             {limit.over && ` (${limit.used - limit.limit!} over)`}
           </span>
           <span data-testid="sync-status" className={status === "offline" ? "text-warn" : "text-muted"}>
-            {owner ? STATUS_TEXT[status] : status === "loading" ? STATUS_TEXT.loading : "Live"}
+            {editorMode === "owner" ? STATUS_TEXT[status] : status === "loading" ? STATUS_TEXT.loading : "Live"}
           </span>
         </div>
         {limit.fraction !== null && (
@@ -415,6 +453,7 @@ function EssayEditor({
   pieceId,
   me,
   mode,
+  isDeskOwner = false,
   onText,
   onEditor,
 }: {
@@ -422,6 +461,8 @@ function EssayEditor({
   pieceId: string;
   me: { id: string; name: string };
   mode: SuggestMode;
+  /** The student (who keeps the version history); others editing only update the counts. */
+  isDeskOwner?: boolean;
   onText: (t: string) => void;
   onEditor: (e: Editor | null) => void;
 }) {
@@ -479,13 +520,17 @@ function EssayEditor({
     const saveDerived = () => {
       derivedTimer = null;
       const t = textOf(editor);
+      const stats = { plain_text: t, word_count: countWords(t), char_count: countChars(t) };
+      // Anyone editing may update the counts (migration 20260930); before it, only the student could.
       supabase
-        .from("pieces")
-        .update({ plain_text: t, word_count: countWords(t), char_count: countChars(t) })
-        .eq("id", pieceId)
-        .then(() => {});
+        .rpc("set_piece_text_stats", { piece: pieceId, plain: t, words: stats.word_count, chars: stats.char_count })
+        .then(({ error }) => {
+          if (error && isDeskOwner) supabase.from("pieces").update(stats).eq("id", pieceId).then(() => {});
+        });
     };
     const snapshot = (force: boolean) => {
+      // The version history is the student's; their editor keeps it.
+      if (!isDeskOwner) return;
       const t = textOf(editor);
       const last = lastSnapshot.current;
       if (t === last.text) return;
@@ -496,7 +541,7 @@ function EssayEditor({
     const onSaved = async () => {
       if (derivedTimer) clearTimeout(derivedTimer);
       derivedTimer = setTimeout(saveDerived, 800);
-      if (!firstChecked) {
+      if (!firstChecked && isDeskOwner) {
         firstChecked = true;
         const { data } = await supabase
           .from("piece_versions")
@@ -528,7 +573,7 @@ function EssayEditor({
       }
       if (!editor.isDestroyed) snapshot(true);
     };
-  }, [editor, live, supabase, pieceId, me.name, owner]);
+  }, [editor, live, supabase, pieceId, me.name, owner, isDeskOwner]);
 
   return <EditorContent editor={editor} />;
 }
@@ -782,3 +827,24 @@ function ChatbotCopy({ build }: { build: () => string }) {
   );
 }
 
+
+type EditMode = "editing" | "suggesting";
+const modeKey = (role: Role) => `desk:mode:${role}`;
+
+/** The Editing/Suggesting choice this browser made for this role, if any. */
+function readMode(role: Role): EditMode | null {
+  try {
+    const v = localStorage.getItem(modeKey(role));
+    return v === "editing" || v === "suggesting" ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeMode(role: Role, m: EditMode) {
+  try {
+    localStorage.setItem(modeKey(role), m);
+  } catch {
+    // Private mode: just don't remember.
+  }
+}

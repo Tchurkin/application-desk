@@ -189,7 +189,7 @@ export class PieceSync {
       this.doc,
       () => {
         if (loaded.state) Y.applyUpdate(this.doc, fromBase64(loaded.state), REMOTE);
-        for (const u of loaded.updates) Y.applyUpdate(this.doc, fromBase64(u.update), REMOTE);
+        for (const u of loaded.updates) applySafely(this.doc, u.update);
       },
       REMOTE,
     );
@@ -212,7 +212,7 @@ export class PieceSync {
   applyRemoteRow(row: { id: number; update: string }) {
     if (this.stopped) return;
     this.lastId = Math.max(this.lastId, row.id);
-    Y.applyUpdate(this.doc, fromBase64(row.update), REMOTE);
+    applySafely(this.doc, row.update);
   }
 
   /** Fetch anything missed while the live connection was down. */
@@ -300,5 +300,17 @@ export class PieceSync {
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
     this.doc.off("update", this.onUpdate);
+  }
+}
+
+/**
+ * Apply one row of the edit log. Several people may write to it, so a malformed row (a buggy
+ * client, or someone poking at the API) is skipped rather than stopping the piece from opening.
+ */
+function applySafely(doc: Y.Doc, update: string) {
+  try {
+    Y.applyUpdate(doc, fromBase64(update), REMOTE);
+  } catch {
+    // Not a Yjs update: ignore it.
   }
 }

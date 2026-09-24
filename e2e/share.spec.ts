@@ -215,7 +215,7 @@ test("passwords are checked, and revoking a link cuts access", async ({ page, br
   await expect(coach.getByText("This link doesn't work")).toBeVisible();
 });
 
-test("the database refuses a suggester who tries to write the text directly", async ({ page }) => {
+test("a suggester can't change a piece's settings or resolve suggestions, and a bad edit can't break the piece", async ({ page }) => {
   await studentWith(page, "direct", "Mine.");
   const url = await makeLink(page, { role: "suggest" });
   const token = url.split("/join/")[1];
@@ -231,9 +231,10 @@ test("the database refuses a suggester who tries to write the text directly", as
   // Can read the piece...
   const { data: rows } = await api.from("pieces").select("id").eq("id", pieceId);
   expect(rows).toHaveLength(1);
-  // ...but not write its text, its fields, or resolve suggestions.
+  // ...and may edit its text (Editing mode), but a malformed edit is skipped, not fatal...
   const { error: w1 } = await api.from("piece_updates").insert({ piece_id: pieceId, client_id: "x", update: "AAA=" });
-  expect(w1).not.toBeNull();
+  expect(w1).toBeNull();
+  // ...and can't change its fields or resolve suggestions.
   const { data: upd } = await api.from("pieces").update({ title: "hacked" }).eq("id", pieceId).select("id");
   expect(upd ?? []).toHaveLength(0);
   const sid = crypto.randomUUID();
@@ -277,4 +278,30 @@ test("two tabs of the student edit live", async ({ page, context }) => {
   await expectEssay(other, "Two says hi. Start. From one.");
   // Each sees the other's caret.
   await expect(page.locator(".collaboration-carets__label")).toHaveCount(1);
+});
+
+test("anyone who can suggest can switch to Editing, and the student can suggest too", async ({ page, browser }) => {
+  await studentWith(page, "modes", "Start.");
+  const mom = await join(browser, await makeLink(page, { role: "suggest" }), "Mom");
+  await openShared(mom, "Shared essay");
+
+  // Mom starts in Suggesting; in Editing her words go straight into the text.
+  await expect(mom.getByRole("radio", { name: "Suggesting" })).toHaveAttribute("aria-checked", "true");
+  await mom.getByRole("radio", { name: "Editing" }).click();
+  await essay(mom).click();
+  await mom.keyboard.press("Control+End");
+  await mom.keyboard.type(" Mom was here.");
+  await expectEssay(page, "Start. Mom was here.");
+  await expect(suggestions(page)).toHaveCount(0);
+
+  // The student switches to Suggesting, suggests, and accepts their own suggestion.
+  await page.getByRole("radio", { name: "Suggesting" }).click();
+  await essay(page).click();
+  await page.keyboard.press("Control+End");
+  await page.keyboard.type(" Maybe.");
+  await expect(suggestions(page)).toHaveCount(1);
+  await expectEssay(page, "Start. Mom was here.");
+  await suggestions(page).getByRole("button", { name: "Accept" }).click();
+  await expectEssay(page, "Start. Mom was here. Maybe.");
+  await expectEssay(mom, "Start. Mom was here. Maybe.");
 });
