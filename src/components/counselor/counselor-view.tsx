@@ -61,6 +61,8 @@ export function CounselorView({ deskId }: { deskId: string }) {
       <DeskThread
         deskId={deskId}
         kind="chat"
+        also={["interview"]}
+        startedLabel="You started the profile interview"
         title="Talk to your counselor"
         intro={
           <>

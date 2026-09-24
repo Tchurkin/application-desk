@@ -68,16 +68,18 @@ test("the profile: sections by hand and by Claude, read with every piece", async
   await client.close();
 });
 
-test("the interview runs through the desk, and the counselor picks each turn up once", async ({ page }) => {
+test("starting the interview opens the counselor chat, where it runs, and each turn is picked up once", async ({ page }) => {
   await signUp(page, "interview");
   const url = await makeConnector(page);
   const token = url.split("/api/mcp/")[1];
   const client = await connect(url);
   await page.goto("/desk/profile");
 
-  const interview = page.getByTestId("interview");
-  await interview.getByRole("button", { name: "Start the interview" }).click();
-  await expect(interview).toContainText("Waiting for Claude");
+  await page.getByTestId("interview").getByRole("button", { name: "Start the interview" }).click();
+  await expect(page).toHaveURL(/\/desk\/counselor$/);
+  const chat = page.getByTestId("counselor-chat");
+  await expect(chat).toContainText("You started the profile interview");
+  await expect(chat).toContainText("Waiting for Claude");
 
   // The counselor's watcher sees one new request, then nothing new.
   const api = apiClient();
@@ -96,11 +98,12 @@ test("the interview runs through the desk, and the counselor picks each turn up 
   expect(waiting.text).toContain("profile interview");
   const id = waiting.text.match(/request_id: ([0-9a-f-]{36})/)![1];
   expect((await call(client, "answer_request", { request_id: id, answer: "What got you into robotics?" })).isError).toBe(false);
-  await expect(interview).toContainText("What got you into robotics?");
+  await expect(chat).toContainText("What got you into robotics?");
 
-  await interview.getByLabel("Your answer").fill("Taking apart my dad's old radio.");
-  await interview.getByRole("button", { name: "Send answer" }).click();
-  await expect(interview).toContainText("Waiting for Claude");
+  // The answer is a chat message; the counselor is told to save it to the profile.
+  await chat.getByLabel("Message your counselor").fill("Taking apart my dad's old radio.");
+  await chat.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(chat).toContainText("Waiting for Claude");
   const next = await call(client, "list_desk_requests");
   expect(next.text).toContain("Taking apart my dad's old radio.");
   expect(next.text).toContain("save_profile_section");

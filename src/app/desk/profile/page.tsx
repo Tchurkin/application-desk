@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { InterviewPanel } from "@/components/profile/interview-panel";
+import { InterviewStart } from "@/components/profile/interview-start";
 import { ProfileEditor } from "@/components/profile/profile-editor";
 import { bridgeMissing } from "@/lib/bridge/requests";
 import { SECTION_COLS, type SectionRow } from "@/lib/profile/sections";
@@ -31,7 +31,7 @@ export default async function ProfilePage() {
         <div className="grid items-start gap-6 lg:grid-cols-[1fr_24rem]">
           <ProfileEditor deskId={desk.id} initial={(data ?? []) as SectionRow[]} />
           <div className="lg:sticky lg:top-4">
-            <InterviewPanel deskId={desk.id} />
+            <InterviewStart deskId={desk.id} />
           </div>
         </div>
       )}

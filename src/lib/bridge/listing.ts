@@ -142,7 +142,7 @@ function interviewSteps(r: PendingRequest, o: ListingOptions): string[] {
   const reply = r.prompt.trim();
   const lines = [`Sent: ${sentAt(r.created_at)}`];
   if (reply) lines.push("The student's answer to your last question:", cut(reply, MESSAGE_MAX, "answer cut"));
-  else lines.push("The student just started (or restarted) the interview from their Profile page.");
+  else lines.push("The student just started (or restarted) the interview from their Profile page. It continues in the chat on the Counselor page: their answers arrive as chat messages.");
   lines.push(
     `To do: ${o.included?.profile ? "Their profile is included below. " : "call read_profile. "}` +
       (reply
@@ -166,6 +166,7 @@ function chatSteps(r: PendingRequest, o: ListingOptions): string[] {
     cut(r.prompt.trim() || "(empty)", MESSAGE_MAX, "message cut"),
     "To do: reply as their counselor. If they ask you to do something on the desk (set up colleges, draft or edit a piece, estimate odds, update their profile), " +
       "do it with your tools, within what they allow, and say what you did. " +
+      "If you are interviewing them for their profile, this is their answer: save what it tells you with save_profile_section (in their words, with the concrete details), then ask your next question. " +
       (o.answer === "reply"
         ? "Your reply is posted to them on the Counselor page (don't call answer_request)."
         : `Reply with answer_request with request_id ${r.id}.`) +

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { AnswerText } from "@/components/ask/answer-text";
 import { PendingAnswer } from "@/components/ask/pending-answer";
 import { useConnectors, WatchStatus } from "@/components/ask/watch-status";
@@ -23,7 +23,10 @@ const NOT_YET = "Run the latest database update to use this.";
 
 export interface DeskThreadProps {
   deskId: string;
+  /** What a message sent here is. */
   kind: Extract<RequestKind, "interview" | "chat">;
+  /** Other kinds shown in the same conversation (the counselor chat shows the interview too). */
+  also?: RequestKind[];
   title: string;
   intro: ReactNode;
   /** Label and placeholder of the message box. */
@@ -52,7 +55,8 @@ export function DeskThread(p: DeskThreadProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
-  const kinds: RequestKind[] = [kind];
+  const shownKey = [kind, ...(p.also ?? [])].join(",");
+  const shown = useMemo(() => shownKey.split(",") as RequestKind[], [shownKey]);
 
   const load = useCallback(async () => {
     const { data, error } = await supabase
@@ -60,7 +64,7 @@ export function DeskThread(p: DeskThreadProps) {
       .select(REQUEST_COLS)
       .eq("desk_id", deskId)
       .is("piece_id", null)
-      .eq("kind", kind)
+      .in("kind", shown)
       .neq("status", "dismissed")
       .order("created_at", { ascending: false })
       .limit(THREAD_LIMIT);
@@ -69,17 +73,17 @@ export function DeskThread(p: DeskThreadProps) {
       setRows((r) => r ?? []);
       return;
     }
-    setRows(sortThread((data ?? []) as DeskRequest[], null, [kind]));
-  }, [supabase, deskId, kind]);
+    setRows(sortThread((data ?? []) as DeskRequest[], null, shown));
+  }, [supabase, deskId, shown]);
 
   useEffect(
     () =>
       subscribeDeskRequests(supabase, deskId, {
-        onRow: (row) => setRows((l) => mergeRequest(l ?? [], row, null, [kind])),
+        onRow: (row) => setRows((l) => mergeRequest(l ?? [], row, null, shown)),
         onDelete: (id) => setRows((l) => (l ? removeRequest(l, id) : l)),
         onReady: () => void load(),
       }),
-    [supabase, deskId, kind, load],
+    [supabase, deskId, shown, load],
   );
 
   // A backstop for a dropped realtime connection while an answer is due.
@@ -105,7 +109,7 @@ export function DeskThread(p: DeskThreadProps) {
     setError(null);
     try {
       const row = await queueRequest(supabase, { deskId, pieceId: null, kind, prompt: text });
-      setRows((l) => mergeRequest(l ?? [], row, null, kinds));
+      setRows((l) => mergeRequest(l ?? [], row, null, shown));
       setDraft("");
     } catch (e) {
       const err = e as { code?: string; message?: string };
@@ -116,7 +120,7 @@ export function DeskThread(p: DeskThreadProps) {
   }
 
   async function clear() {
-    const { error } = await supabase.from("desk_requests").delete().eq("desk_id", deskId).is("piece_id", null).eq("kind", kind);
+    const { error } = await supabase.from("desk_requests").delete().eq("desk_id", deskId).is("piece_id", null).in("kind", shown);
     if (error) return setError(`Couldn't clear it (${error.message}).`);
     setRows([]);
   }
