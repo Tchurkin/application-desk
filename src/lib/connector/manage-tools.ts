@@ -23,6 +23,7 @@ const PieceSpec = z.object({
   prompt: z.string().optional().describe("The prompt exactly as the college asks it."),
   limit_kind: LIMIT_KIND.optional(),
   limit_value: z.number().int().positive().optional(),
+  due: DATE.optional().describe("When the student wants this piece finished, YYYY-MM-DD (before the college's deadline)."),
 });
 
 const CollegeSpec = z.object({
@@ -61,8 +62,9 @@ export function registerManageTools(server: McpServer, token: string) {
     {
       title: "Set up colleges",
       description:
-        "Add colleges to the desk, each with its application details and a piece for every supplemental prompt. " +
-        "Colleges and pieces already on the desk (same name / same title) are kept, not duplicated, so this is safe to call again with more.",
+        "Add colleges to the desk, each with its application details and a piece for every supplemental prompt, with the prompt's exact wording and its word or character limit. " +
+        "Colleges and pieces already on the desk (same name / same title) are kept, not duplicated, and filled in with the details you send (prompts, limits, due dates, deadlines), " +
+        "so this is safe to call again with more, or to complete pieces the student added by hand.",
       inputSchema: z.object({ colleges: z.array(CollegeSpec).min(1).max(40) }),
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
@@ -73,8 +75,8 @@ export function registerManageTools(server: McpServer, token: string) {
           const made = c.pieces.filter((p) => p.created).length;
           const kept = c.pieces.length - made;
           return (
-            `- ${c.name} [college_id: ${c.college_id}] ${c.created ? "added" : "already on the desk"}` +
-            (c.pieces.length ? `; ${made} piece${made === 1 ? "" : "s"} added${kept ? `, ${kept} already there` : ""}` : "") +
+            `- ${c.name} [college_id: ${c.college_id}] ${c.created ? "added" : "already on the desk, details filled in"}` +
+            (c.pieces.length ? `; ${made} piece${made === 1 ? "" : "s"} added${kept ? `, ${kept} already there and updated` : ""}` : "") +
             c.pieces.map((p) => `\n    ${p.title} [piece_id: ${p.piece_id}]`).join("")
           );
         });
@@ -118,13 +120,14 @@ export function registerManageTools(server: McpServer, token: string) {
     {
       title: "Change a piece's details",
       description:
-        "Change a piece's title, prompt, limit, status (not_started, drafting, needs_review, final, submitted), notes, or move it to another college (college_id null for shared). To change its text, use write_piece or edit_piece.",
+        "Change a piece's title, prompt, word or character limit, due date, status (not_started, drafting, needs_review, final, submitted), notes, or move it to another college (college_id null for shared). To change its text, use write_piece or edit_piece.",
       inputSchema: z.object({
         piece_id: z.string().uuid(),
         title: z.string().min(1).max(300).optional(),
         prompt: z.string().optional(),
         limit_kind: LIMIT_KIND.optional(),
         limit_value: z.number().int().min(0).optional().describe("0 clears the limit."),
+        due: DATE.or(z.literal("")).optional().describe("When the student wants it finished, YYYY-MM-DD, or empty to clear."),
         status: z.enum(["not_started", "drafting", "needs_review", "final", "submitted"]).optional(),
         notes: z.string().optional(),
         college_id: z.string().uuid().nullable().optional(),

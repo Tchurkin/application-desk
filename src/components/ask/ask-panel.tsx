@@ -16,17 +16,20 @@ import {
 import { clip, hasWaiting, mergeRequest, removeRequest, sortThread, THREAD_KINDS, THREAD_LIMIT, whenLabel } from "@/lib/bridge/thread";
 import { useAssistant } from "@/lib/bridge/use-assistant";
 import { useNow } from "@/lib/bridge/use-now";
+import { isCounselor, WATCH_PHRASE, watcher } from "@/lib/bridge/watchers";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { AnswerText } from "./answer-text";
+import { useConnectors, WatchStatus } from "./watch-status";
 
 /**
  * The Ask panel: questions and "polish this passage" requests for the connected AI, answered
  * through the connector and shown here live.
  *
- * The website can't talk to Claude or ChatGPT itself. Asking queues a request on the desk and
- * opens the student's assistant with a message to handle it; the assistant answers through the
- * connector (answer_request, and suggest_edits for rewordings) and the answer arrives here over
- * realtime, with a refresh on focus and a slow poll while anything is waiting as a backstop.
+ * The website can't talk to Claude or ChatGPT itself. Asking queues a request on the desk; the
+ * counselor on the student's computer, or a chat they told to watch the desk, picks it up and
+ * answers through the connector (answer_request, and suggest_edits for rewordings). The answer
+ * arrives here over realtime, with a refresh on focus and a slow poll while anything is waiting
+ * as a backstop.
  *
  * Contract used by the Write workspace:
  *   <AskPanel deskId pieceId pieceTitle getSelection />
@@ -53,25 +56,8 @@ interface Thread {
   rows: DeskRequest[];
 }
 
-interface Connector {
-  label: string;
-  last_used_at: string | null;
-  /** When the assistant last checked the desk with watch_desk (migration 20260929). */
-  watched_at?: string | null;
-}
-
-/** What the student says once in their open Claude/ChatGPT chat. */
-export const WATCH_PHRASE = "Watch my Application Desk";
-/** watch_desk checks in at least every ~45s; allow for a slow answer in between. */
-const WATCH_FRESH_MS = 120_000;
-
-/** The assistant watching the desk right now, if any. */
-function watcher(connectors: Connector[] | null, now: number): Connector | null {
-  return connectors?.find((c) => c.watched_at && now - Date.parse(c.watched_at) < WATCH_FRESH_MS) ?? null;
-}
-
 type Notice =
-  | { kind: "queued"; watching: boolean; label: string; polish: boolean }
+  | { kind: "queued"; watching: boolean; counselor: boolean; label: string; polish: boolean }
   | { kind: "connect" }
   | { kind: "error"; text: string };
 
@@ -104,21 +90,12 @@ async function fetchThread(supabase: SupabaseClient, pieceId: string, epoch: { c
   }
 }
 
-/** The desk's live connector links; null when they can't be read (then nothing is assumed). */
-async function fetchConnectors(supabase: SupabaseClient, deskId: string): Promise<Connector[] | null> {
-  const query = (cols: string) => supabase.from("connector_links").select(cols).eq("desk_id", deskId).is("revoked_at", null);
-  let { data, error } = await query("label, last_used_at, watched_at");
-  // A database before migration 20260929 has no watched_at.
-  if (error?.code === "42703" || error?.code === "PGRST204") ({ data, error } = await query("label, last_used_at"));
-  return error ? null : ((data ?? []) as unknown as Connector[]);
-}
-
 export function AskPanel({ deskId, pieceId, pieceTitle, getSelection, collegeName = null, aiPolicy = "allowed" }: AskPanelProps) {
   const supabase = supabaseBrowser();
   const ids = useId();
   const now = useNow();
   const [thread, setThread] = useState<Thread>({ pieceId, phase: "loading", rows: [] });
-  const [connectors, setConnectors] = useState<Connector[] | null>(null);
+  const { connectors } = useConnectors(deskId);
   const onlyChatGPT = !!connectors?.length && connectors.every((c) => c.label === "ChatGPT");
   const [assistant, setAssistant] = useAssistant(onlyChatGPT ? "chatgpt" : "claude");
   const label = assistantLabel(assistant);
@@ -167,21 +144,15 @@ export function AskPanel({ deskId, pieceId, pieceTitle, getSelection, collegeNam
     return fetchThread(supabase, pieceId, epoch).then(apply);
   }, [supabase, pieceId, apply]);
 
-  const loadConnectors = useCallback(
-    () => fetchConnectors(supabase, deskId).then((c) => c && setConnectors(c)),
-    [supabase, deskId],
-  );
-
   // First load, and whenever the piece changes.
   useEffect(() => {
     let alive = true;
     lastLoad.current = Date.now();
     void fetchThread(supabase, pieceId, epoch).then((f) => alive && apply(f));
-    void fetchConnectors(supabase, deskId).then((c) => alive && c && setConnectors(c));
     return () => {
       alive = false;
     };
-  }, [supabase, pieceId, deskId, apply]);
+  }, [supabase, pieceId, apply]);
 
   // Live: the assistant's answers, and questions asked in another tab.
   useEffect(
@@ -200,12 +171,11 @@ export function AskPanel({ deskId, pieceId, pieceTitle, getSelection, collegeNam
     [supabase, deskId, pieceId, load],
   );
 
-  // Back from the assistant's tab (or Settings): catch up at once.
+  // Back from another tab (or Settings): catch up at once.
   useEffect(() => {
     const catchUp = () => {
       if (document.visibilityState !== "visible" || Date.now() - lastLoad.current < 1000) return;
       void load();
-      void loadConnectors();
     };
     window.addEventListener("focus", catchUp);
     document.addEventListener("visibilitychange", catchUp);
@@ -213,16 +183,7 @@ export function AskPanel({ deskId, pieceId, pieceTitle, getSelection, collegeNam
       window.removeEventListener("focus", catchUp);
       document.removeEventListener("visibilitychange", catchUp);
     };
-  }, [load, loadConnectors]);
-
-  // Whether the assistant is watching: re-check every 20s while the panel is open.
-  useEffect(() => {
-    const t = setInterval(() => {
-      if (document.visibilityState === "visible") void loadConnectors();
-    }, 20_000);
-    return () => clearInterval(t);
-  }, [loadConnectors]);
-  const watching = watcher(connectors, now);
+  }, [load]);
 
   // A backstop for a dropped realtime connection while an answer is due.
   const waiting = hasWaiting(rows);
@@ -294,7 +255,14 @@ export function AskPanel({ deskId, pieceId, pieceTitle, getSelection, collegeNam
       // Sending clears the pointer; a new highlight brings it back.
       if (selection) setIgnored(selection);
       if (!connected) say({ kind: "connect" });
-      else say({ kind: "queued", watching: !!watching, label: watching?.label ?? label, polish: kind === "polish" });
+      else
+        say({
+          kind: "queued",
+          watching: !!watching,
+          counselor: isCounselor(watching, Date.now()),
+          label: watching?.label ?? label,
+          polish: kind === "polish",
+        });
     } catch (e) {
       say({
         kind: "error",
@@ -347,8 +315,8 @@ export function AskPanel({ deskId, pieceId, pieceTitle, getSelection, collegeNam
           {collegeName && <span className="text-sm text-muted"> · {collegeName}</span>}
         </p>
         <p className="mt-1.5 text-xs text-muted">
-          This site can&apos;t talk to {label} directly. Your question waits on your desk, {label} opens in a new tab to
-          answer it through your connector, and the answer shows up here.
+          Your question waits on your desk; your counselor (or a {label} chat watching your desk) answers it through your
+          connector, and the answer shows up here.
         </p>
       </div>
 
@@ -356,34 +324,16 @@ export function AskPanel({ deskId, pieceId, pieceTitle, getSelection, collegeNam
         <div role="note" aria-label="Set up Ask" className="rounded-md border border-warn bg-warn-soft px-3 py-2 text-xs">
           <p className="mb-0.5 font-medium">First, connect Claude or ChatGPT to your desk</p>
           <p>
-            Make a connector link in{" "}
-            <Link href="/desk/settings" className="underline underline-offset-2">
+            Set up your counselor in{" "}
+            <Link href="/desk/settings#counselor" className="underline underline-offset-2">
               Settings
             </Link>{" "}
-            and add it to Claude or ChatGPT (one time). Then, in a chat with it, say &ldquo;{WATCH_PHRASE}&rdquo;: it answers
-            what you ask here, and the answers appear in this panel.
+            (one download), or make a connector link there, add it to Claude or ChatGPT, and say &ldquo;{WATCH_PHRASE}&rdquo;
+            in a chat. Either way, it answers what you ask here, and the answers appear in this panel.
           </p>
         </div>
       )}
-      {!!connectors?.length && (
-        <p role="status" data-testid="watch-status" className={`flex flex-wrap items-center gap-1.5 text-xs ${watching ? "text-accent" : "text-muted"}`}>
-          <span aria-hidden className={`inline-block h-2 w-2 rounded-full ${watching ? "bg-accent" : "bg-line"}`} />
-          {watching ? (
-            <>{watching.label} is watching your desk: ask away.</>
-          ) : (
-            <>
-              Not watching. In your Claude or ChatGPT chat, say &ldquo;{WATCH_PHRASE}&rdquo;.
-              <button
-                type="button"
-                className="underline underline-offset-2"
-                onClick={() => void navigator.clipboard?.writeText(WATCH_PHRASE)}
-              >
-                Copy
-              </button>
-            </>
-          )}
-        </p>
-      )}
+      <WatchStatus connectors={connectors} now={now} />
 
       {off && <p className="rounded-md bg-warn-soft px-3 py-2 text-xs text-warn">{NOT_YET}</p>}
 
@@ -566,12 +516,16 @@ function NoticeLine({ notice }: { notice: Notice }) {
     case "queued":
       return notice.watching ? (
         <p className="text-muted">
-          Sent to {notice.label}. {notice.polish ? "The rewordings arrive in your essay as suggestions." : "The answer appears here in a moment."}
+          Sent to {notice.counselor ? "your counselor" : notice.label}.{" "}
+          {notice.polish ? "The rewordings arrive in your essay as suggestions." : "The answer appears here in a moment."}
         </p>
       ) : (
         <p className="text-warn">
-          Saved. {notice.label} isn&apos;t watching your desk right now: in your {notice.label} chat, say &ldquo;{WATCH_PHRASE}&rdquo; and it
-          picks this up.
+          Saved. Nobody is watching your desk right now: turn on your counselor in{" "}
+          <Link className={link} href="/desk/settings#counselor">
+            Settings
+          </Link>
+          , or say &ldquo;{WATCH_PHRASE}&rdquo; in your {notice.label} chat, and it picks this up.
         </p>
       );
     case "connect":

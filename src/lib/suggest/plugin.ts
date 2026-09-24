@@ -1,9 +1,9 @@
 /*
  * Suggestions in the editor.
  *
- * Nobody but the student ever changes the student's text. In suggest mode, typing, deleting,
- * pasting and Enter become suggestions (rows in the store), and any other change to the
- * document is refused. Suggestions are drawn over the text with decorations: deletions struck
+ * In Suggesting mode (and for people who may only suggest), typing, deleting, pasting and Enter
+ * become suggestions (rows in the store), and any other change to the document is refused,
+ * except the student's own deliberate ones (DIRECT_EDIT: accepting, restoring a version). Suggestions are drawn over the text with decorations: deletions struck
  * through, insertions as a marked widget.
  *
  * Every suggestion is anchored with Yjs relative positions, so it stays on the same letters
@@ -35,6 +35,12 @@ export interface SuggestOptions {
 }
 
 export const suggestKey = new PluginKey<{ tick: number; picked: string | null }>("suggest");
+
+/**
+ * Marks a transaction as the student's own deliberate change (accepting a suggestion, restoring
+ * a version), which goes into the text even while they are in Suggesting mode.
+ */
+export const DIRECT_EDIT = "desk:direct-edit";
 
 // ─── anchors ────────────────────────────────────────────────────────────────
 
@@ -534,7 +540,7 @@ export function acceptInto(view: EditorView, s: Suggestion): boolean {
       insertLines(tr, at, s.body);
     }
   }
-  view.dispatch(tr);
+  view.dispatch(tr.setMeta(DIRECT_EDIT, true));
   return true;
 }
 
@@ -560,7 +566,7 @@ export function suggestPlugin(opts: SuggestOptions): Plugin {
     },
     // In suggest and view modes, only other people's edits (arriving through Yjs) reach the text.
     filterTransaction(tr) {
-      if (opts.mode === "owner" || !tr.docChanged) return true;
+      if (opts.mode === "owner" || !tr.docChanged || tr.getMeta(DIRECT_EDIT)) return true;
       return isChangeOrigin(tr);
     },
     props: {

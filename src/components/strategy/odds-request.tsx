@@ -135,8 +135,9 @@ export function OddsRequest({
         <div role="status" className="rounded-md border border-accent bg-accent-soft px-3 py-2">
           <p className="font-medium">Waiting for {whoName}…</p>
           <p className="mt-1">
-            If {whoName} is watching your desk it starts now, and your odds fill in here as it sets them. If not, say
-            &ldquo;Watch my Application Desk&rdquo; in your {whoName} chat.
+            If your counselor or a {whoName} chat is watching your desk it starts now, and your odds fill in here as it sets
+            them. If not, turn on your counselor in Settings, or say &ldquo;Watch my Application Desk&rdquo; in your {whoName}{" "}
+            chat.
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
             <button type="button" className="btn" onClick={cancel} disabled={queuing}>Cancel request</button>

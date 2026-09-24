@@ -110,6 +110,12 @@ body {
   text-decoration: line-through;
   cursor: pointer;
 }
+/* A passage still highlighted after the editor lost focus (e.g. while asking about it). */
+.essay .held-selection {
+  background: color-mix(in srgb, var(--warn) 28%, transparent);
+  border-radius: 2px;
+  box-shadow: 0 1px 0 var(--warn);
+}
 .essay .sugg-stale { outline: 1px dashed var(--warn); }
 .essay .sugg-picked { outline: 2px solid var(--accent); outline-offset: 1px; }
 

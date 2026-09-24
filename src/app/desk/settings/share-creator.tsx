@@ -1,6 +1,39 @@
 "use client";
 import { useActionState, useState } from "react";
-import { createShareLink, type CreateLinkState } from "../share-actions";
+import { SHARE_ROLES, shareRoleLabel, type ShareRole } from "@/lib/domain/share";
+import { createShareLink, setShareRole, type CreateLinkState } from "../share-actions";
+
+/** Change what everyone on an existing link can do. */
+export function ShareRoleSelect({ id, role, label }: { id: string; role: ShareRole; label: string }) {
+  const [value, setValue] = useState(role);
+  const [error, setError] = useState(false);
+  return (
+    <select
+      className="rounded-md border border-line bg-panel px-1.5 py-0.5 text-xs"
+      aria-label={`What ${label || "this link"} can do`}
+      value={value}
+      onChange={async (e) => {
+        const next = e.target.value as ShareRole;
+        const before = value;
+        setValue(next);
+        setError(false);
+        try {
+          await setShareRole(id, next);
+        } catch {
+          setValue(before);
+          setError(true);
+        }
+      }}
+      title={error ? "Couldn't change it. Try again." : undefined}
+    >
+      {SHARE_ROLES.map((r) => (
+        <option key={r.value} value={r.value}>
+          {r.short}
+        </option>
+      ))}
+    </select>
+  );
+}
 
 export function ShareCreator() {
   const [state, action, pending] = useActionState<CreateLinkState, FormData>(createShareLink, {});
@@ -17,8 +50,11 @@ export function ShareCreator() {
         <div>
           <label className="label" htmlFor="role">They can</label>
           <select className="field" id="role" name="role" defaultValue="suggest">
-            <option value="suggest">Read and suggest edits</option>
-            <option value="view">Only read</option>
+            {SHARE_ROLES.map((r) => (
+              <option key={r.value} value={r.value}>
+                {r.label}
+              </option>
+            ))}
           </select>
         </div>
         <div>
@@ -35,7 +71,7 @@ export function ShareCreator() {
       {url && (
         <div className="rounded-md border border-accent bg-accent-soft px-3 py-3 text-sm" data-testid="new-link">
           <p className="mb-2 font-medium">
-            Link{state.label ? ` for ${state.label}` : ""} ({state.role === "suggest" ? "can suggest" : "read only"}). Copy it now:
+            Link{state.label ? ` for ${state.label}` : ""} ({shareRoleLabel(state.role ?? "view")}). Copy it now:
             it won&apos;t be shown again.
           </p>
           <div className="flex gap-2">

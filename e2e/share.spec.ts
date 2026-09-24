@@ -2,7 +2,7 @@ import { expect, test, type Browser, type Page } from "@playwright/test";
 import { addCollege, addPiece, apiClient, essay, expectEssay, expectEssayContains, signUp, suggestLog, waitSaved } from "./helpers";
 
 /** The student makes a share link in Settings and returns its URL. */
-async function makeLink(page: Page, opts: { role: "suggest" | "view"; label?: string; password?: string }) {
+async function makeLink(page: Page, opts: { role: "suggest" | "view" | "edit"; label?: string; password?: string }) {
   const back = page.url();
   await page.goto("/desk/settings");
   if (opts.label) await page.getByLabel("Who is it for?").fill(opts.label);
@@ -215,9 +215,12 @@ test("passwords are checked, and revoking a link cuts access", async ({ page, br
   await expect(coach.getByText("This link doesn't work")).toBeVisible();
 });
 
-test("a suggester can't change a piece's settings or resolve suggestions, and a bad edit can't break the piece", async ({ page }) => {
+test("a suggester can't write the text, change a piece's settings or resolve suggestions; an editor's bad edit can't break the piece", async ({
+  page,
+}) => {
   await studentWith(page, "direct", "Mine.");
   const url = await makeLink(page, { role: "suggest" });
+  const editUrl = await makeLink(page, { role: "edit" });
   const token = url.split("/join/")[1];
   const pieceId = page.url().split("/").pop()!;
   await page.goto(`/desk/piece/${pieceId}`);
@@ -231,10 +234,10 @@ test("a suggester can't change a piece's settings or resolve suggestions, and a 
   // Can read the piece...
   const { data: rows } = await api.from("pieces").select("id").eq("id", pieceId);
   expect(rows).toHaveLength(1);
-  // ...and may edit its text (Editing mode), but a malformed edit is skipped, not fatal...
+  // ...but can't write its text...
   const { error: w1 } = await api.from("piece_updates").insert({ piece_id: pieceId, client_id: "x", update: "AAA=" });
-  expect(w1).toBeNull();
-  // ...and can't change its fields or resolve suggestions.
+  expect(w1).not.toBeNull();
+  // ...change its fields or resolve suggestions.
   const { data: upd } = await api.from("pieces").update({ title: "hacked" }).eq("id", pieceId).select("id");
   expect(upd ?? []).toHaveLength(0);
   const sid = crypto.randomUUID();
@@ -259,6 +262,14 @@ test("a suggester can't change a piece's settings or resolve suggestions, and a 
   });
   expect(w4).not.toBeNull();
 
+  // Someone on an edit link writes the text directly; a malformed edit is skipped, not fatal.
+  const editor = apiClient();
+  expect((await editor.auth.signInAnonymously()).error).toBeNull();
+  const { data: joinedEdit } = await editor.rpc("join_desk", { token: editUrl.split("/join/")[1], link_password: "", name: "Editor" });
+  expect((joinedEdit as { ok: boolean }).ok).toBe(true);
+  const { error: w5 } = await editor.from("piece_updates").insert({ piece_id: pieceId, client_id: "y", update: "AAA=" });
+  expect(w5).toBeNull();
+
   await page.reload();
   await expectEssay(page, "Mine.");
 });
@@ -280,9 +291,17 @@ test("two tabs of the student edit live", async ({ page, context }) => {
   await expect(page.locator(".collaboration-carets__label")).toHaveCount(1);
 });
 
-test("anyone who can suggest can switch to Editing, and the student can suggest too", async ({ page, browser }) => {
+test("people who can edit switch between Editing and Suggesting, suggesters only suggest, and the student can suggest too", async ({
+  page,
+  browser,
+}) => {
   await studentWith(page, "modes", "Start.");
-  const mom = await join(browser, await makeLink(page, { role: "suggest" }), "Mom");
+  const dad = await join(browser, await makeLink(page, { role: "suggest", label: "Dad" }), "Dad");
+  await openShared(dad, "Shared essay");
+  await expect(dad.getByText("Your changes show as suggestions")).toBeVisible();
+  await expect(dad.getByRole("radiogroup", { name: "Mode" })).toHaveCount(0);
+
+  const mom = await join(browser, await makeLink(page, { role: "edit" }), "Mom");
   await openShared(mom, "Shared essay");
 
   // Mom starts in Suggesting; in Editing her words go straight into the text.
@@ -304,4 +323,12 @@ test("anyone who can suggest can switch to Editing, and the student can suggest 
   await suggestions(page).getByRole("button", { name: "Accept" }).click();
   await expectEssay(page, "Start. Mom was here. Maybe.");
   await expectEssay(mom, "Start. Mom was here. Maybe.");
+
+  // The student lets Dad edit too: his link changes for him at once.
+  await page.goto("/desk/settings");
+  await page.getByRole("list", { name: "Share links" }).getByLabel("What Dad can do").selectOption("edit");
+  await expect(async () => {
+    await dad.reload();
+    await expect(dad.getByRole("radiogroup", { name: "Mode" })).toBeVisible({ timeout: 3_000 });
+  }).toPass({ timeout: 20_000 });
 });

@@ -3,13 +3,28 @@ import { requireDesk } from "@/lib/supabase/server";
 import { deleteMyAccount, updateProfile } from "../actions";
 import { revokeConnectorLink } from "../connector-actions";
 import { revokeShareLink } from "../share-actions";
+import { asEssayAccess, asShareRole } from "@/lib/domain/share";
 import { AcademicsForm } from "./academics-form";
-import { ConnectorCreator } from "./connector-creator";
-import { ShareCreator } from "./share-creator";
+import { ConnectorCreator, ConnectorPermissions, ConnectorStatus } from "./connector-creator";
+import { CounselorSetup } from "./counselor-setup";
+import { ShareCreator, ShareRoleSelect } from "./share-creator";
+
+interface ConnectorRow {
+  id: string;
+  label: string;
+  created_at: string;
+  last_used_at: string | null;
+  essay_access?: string;
+  can_manage?: boolean;
+  counselor_at?: string | null;
+}
+
 
 export default async function SettingsPage() {
   const { supabase, userId, desk } = await requireDesk();
-  const [{ data: profile }, { data: links }, { data: members }, { data: connectors }] = await Promise.all([
+  const connectorQuery = (cols: string) =>
+    supabase.from("connector_links").select(cols).eq("desk_id", desk.id).is("revoked_at", null).order("created_at", { ascending: false });
+  const [{ data: profile }, { data: links }, { data: members }, connectorResult] = await Promise.all([
     // "*" so the academic fields (migration 20260928) come back when the database has them.
     supabase.from("profiles").select("*").eq("id", userId).single(),
     supabase
@@ -19,13 +34,13 @@ export default async function SettingsPage() {
       .is("revoked_at", null)
       .order("created_at", { ascending: false }),
     supabase.from("desk_members").select("user_id, display_name, link_id, joined_at").eq("desk_id", desk.id),
-    supabase
-      .from("connector_links")
-      .select("id, label, created_at, last_used_at")
-      .eq("desk_id", desk.id)
-      .is("revoked_at", null)
-      .order("created_at", { ascending: false }),
+    connectorQuery("id, label, created_at, last_used_at, essay_access, can_manage, counselor_at"),
   ]);
+  // A database before migration 20261001 has no permissions or counselor yet.
+  const connectors = (
+    connectorResult.error ? (await connectorQuery("id, label, created_at, last_used_at")).data : connectorResult.data
+  ) as ConnectorRow[] | null;
+  const permissionsReady = !connectorResult.error;
 
   return (
     <main className="mx-auto w-full max-w-2xl px-4 py-8">
@@ -70,9 +85,9 @@ export default async function SettingsPage() {
       <section className="card mb-10 px-4 py-4" aria-labelledby="sharing">
         <h2 id="sharing" className="mb-1 font-serif text-xl">Sharing</h2>
         <p className="mb-4 text-sm text-muted">
-          Give a parent or mentor a link. They open it, type their name, and can read your desk, or also suggest edits that you
-          accept or decline. Nothing they do changes your text unless you accept it. Revoke a link to cut off everyone who
-          joined through it.
+          Give a parent or mentor a link. They open it, type their name, and can read your desk; suggest edits that you accept
+          or decline; or edit your text directly (and switch to suggesting when they want you to decide). Change what a link
+          can do at any time, and revoke it to cut off everyone who joined through it.
         </p>
         <ShareCreator />
         {links && links.length > 0 && (
@@ -83,7 +98,8 @@ export default async function SettingsPage() {
                 <li key={l.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-line px-3 py-2 text-sm">
                   <span>
                     <span className="font-medium">{l.label || "Untitled link"}</span>
-                    <span className="text-muted"> · {l.role === "suggest" ? "can suggest" : "read only"}</span>
+                    <span className="text-muted"> · </span>
+                    <ShareRoleSelect id={l.id} role={asShareRole(l.role)} label={l.label} />
                     <span className="block text-xs text-muted">
                       {joined.length ? `Joined: ${joined.map((m) => m.display_name).join(", ")}` : "Nobody has joined yet"}
                     </span>
@@ -105,9 +121,9 @@ export default async function SettingsPage() {
         <h2 id="connect" className="mb-1 font-serif text-xl">Connect Claude or ChatGPT</h2>
         <p className="mb-2 text-sm text-muted">
           Let Claude or ChatGPT work on your desk, on your own plan with no extra cost. Ask for feedback and its edits arrive
-          here as suggestions you accept or decline. Ask it to draft or rewrite and it writes straight into your pieces (it can
-          add new supplementals too). Before it changes a piece directly, your current text is saved in that piece&apos;s
-          History, so you can always restore it.
+          here as suggestions you accept or decline. Ask it to draft or rewrite and it writes straight into your pieces, and it
+          can set up your colleges with every prompt and word limit. You decide what each link may do. Before it changes a
+          piece directly, your current text is saved in that piece&apos;s History, so you can always restore it.
         </p>
         <p className="mb-4 text-sm text-muted">
           Anyone with a connector link can read and change your desk, so keep it private and revoke it when you&apos;re done.
@@ -116,24 +132,50 @@ export default async function SettingsPage() {
         <ConnectorCreator />
         {connectors && connectors.length > 0 && (
           <ul className="mt-6 flex flex-col gap-2" aria-label="Connector links">
-            {connectors.map((c) => (
-              <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-line px-3 py-2 text-sm">
-                <span>
-                  <span className="font-medium">{c.label}</span>
-                  <span className="block text-xs text-muted">
-                    {c.last_used_at ? `Last used ${new Date(c.last_used_at).toLocaleString()}` : "Not used yet"}
-                  </span>
-                </span>
-                <ConfirmButton
-                  label="Revoke"
-                  confirmLabel="Revoke"
-                  question={`Disconnect ${c.label}?`}
-                  onConfirm={revokeConnectorLink.bind(null, c.id)}
-                />
-              </li>
-            ))}
+            {connectors.map((c) => {
+              const counselor = !!c.counselor_at;
+              return (
+                <li key={c.id} className="rounded-md border border-line px-3 py-2 text-sm" data-testid="connector-link">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span>
+                      <span className="font-medium">{counselor ? `${c.label} · counselor on your computer` : c.label}</span>
+                      <ConnectorStatus counselorAt={c.counselor_at ?? null} lastUsedAt={c.last_used_at} />
+                    </span>
+                    <ConfirmButton
+                      label="Revoke"
+                      confirmLabel="Revoke"
+                      question={counselor ? "Turn off the counselor and disconnect it?" : `Disconnect ${c.label}?`}
+                      onConfirm={revokeConnectorLink.bind(null, c.id)}
+                    />
+                  </div>
+                  {permissionsReady && (
+                    <ConnectorPermissions
+                      id={c.id}
+                      label={c.label}
+                      essays={asEssayAccess(c.essay_access)}
+                      manage={c.can_manage !== false}
+                    />
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
+      </section>
+
+      <section className="card mb-10 px-4 py-4" aria-labelledby="counselor">
+        <h2 id="counselor" className="mb-1 font-serif text-xl">Your counselor</h2>
+        <p className="mb-2 text-sm text-muted">
+          Make Claude your counselor on this computer, so everything you ask on your desk (Ask, Polish, odds, the Profile
+          interview) gets answered on its own, with no chat or terminal to open. It&apos;s one download and a double-click: it
+          runs hidden, starts whenever you sign in, and wakes Claude only when you ask something. It remembers what you&apos;ve
+          told it from one question to the next.
+        </p>
+        <p className="mb-4 text-sm text-muted">
+          It uses your own Claude plan through Claude Code, which needs to be installed and signed in once
+          (claude.com/claude-code). Revoke its link above to turn it off.
+        </p>
+        <CounselorSetup />
       </section>
 
       <section className="rounded-lg border border-danger px-4 py-4">

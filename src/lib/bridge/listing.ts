@@ -28,6 +28,7 @@ const WHAT: Record<RequestKind, string> = {
   ask: "a question about a piece",
   polish: "rewordings of a passage",
   odds: "admission odds for every college",
+  interview: "the next question in the student's profile interview",
 };
 
 function sentAt(ts: string): string {
@@ -90,13 +91,35 @@ function oddsSteps(r: PendingRequest): string[] {
   return lines;
 }
 
-const STEPS: Record<RequestKind, (r: PendingRequest) => string[]> = { ask: askSteps, polish: polishSteps, odds: oddsSteps };
+function interviewSteps(r: PendingRequest): string[] {
+  const reply = r.prompt.trim();
+  const lines = [`Sent: ${sentAt(r.created_at)}`];
+  if (reply) lines.push("The student's answer to your last question:", cut(reply, PROMPT_MAX, "answer cut"));
+  else lines.push("The student just started (or restarted) the interview from their Profile page.");
+  lines.push(
+    "To do: call read_profile. " +
+      (reply
+        ? "Save what this answer tells you with save_profile_section: add to the right section or start a new one, in the student's own words, with the concrete details (moments, people, numbers, what changed). Never invent anything. "
+        : "") +
+      `Then call answer_request with request_id ${r.id} and your next question: one question, short and specific, that builds on what they said or opens a topic the profile is missing ` +
+      "(activities and roles, a story that shows who they are, challenges, values, what they want to study and why, family and community). " +
+      "When the profile is rich enough for their essays, say so and suggest what to work on next.",
+  );
+  return lines;
+}
+
+const STEPS: Record<RequestKind, (r: PendingRequest) => string[]> = {
+  ask: askSteps,
+  polish: polishSteps,
+  odds: oddsSteps,
+  interview: interviewSteps,
+};
 
 export function renderRequestList(rows: PendingRequest[]): string {
   if (!rows.length) {
     return (
       "Nothing is waiting from the desk right now. The student sends questions and polish requests from the Ask panel beside a piece, " +
-      "and odds requests from the Strategy page; if they just sent one, it may take a moment to arrive."
+      "odds requests from the Strategy page, and interview answers from the Profile page; if they just sent one, it may take a moment to arrive."
     );
   }
   const shown = rows.slice(0, LIST_MAX);

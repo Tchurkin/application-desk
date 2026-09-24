@@ -8,10 +8,13 @@ async function write(page: Page, text: string) {
   await waitSaved(page);
 }
 
-async function makeConnector(page: Page) {
+async function makeConnector(page: Page, opts: { essays?: "read" | "suggest" | "edit"; manage?: boolean } = {}) {
   const back = page.url();
   await page.goto("/desk/settings");
   await page.getByLabel("Assistant").selectOption("Claude");
+  const form = page.locator("form", { hasText: "Make a connector link" });
+  if (opts.essays) await form.getByLabel("With your essays it can").selectOption(opts.essays);
+  if (opts.manage === false) await form.getByLabel(/Can add, change and remove colleges/).uncheck();
   await page.getByRole("button", { name: "Make a connector link" }).click();
   const url = await page.getByRole("textbox", { name: "Connector link" }).inputValue();
   await page.goto(back);
@@ -192,6 +195,13 @@ test("the AI sets up the whole desk from a list, without duplicates, and manages
   expect(again.text).toContain("already on the desk");
   expect(again.text).toContain("1 piece added, 1 already there");
 
+  // Once more with a corrected prompt and a due date: the piece already there is filled in.
+  Object.assign(colleges[1].pieces[0], { prompt: "What will you build next?", due: "2030-12-01" });
+  expect((await call(client, "set_up_colleges", { colleges })).isError).toBe(false);
+  const filled = await call(client, "list_my_desk");
+  expect(filled.text).toContain("Prompt: What will you build next?");
+  expect(filled.text).toContain("due 2030-12-01");
+
   await page.goto("/desk");
   const board = page.getByRole("list", { name: "Colleges by deadline" });
   await expect(board.locator("[data-college]")).toHaveCount(2);
@@ -223,6 +233,46 @@ test("the AI sets up the whole desk from a list, without duplicates, and manages
 
   const bad = await call(client, "update_college", { college_id: northfield, deadline: "Nov 1" });
   expect(bad.isError).toBe(true);
+  await client.close();
+});
+
+test("the student decides what each connector may do", async ({ page }) => {
+  await signUp(page, "connperm");
+  await addCollege(page, "Perm College");
+  const pieceId = await addPiece(page, "Why us", 500);
+  await write(page, "I like robots.");
+  const client = await connect(await makeConnector(page, { essays: "suggest", manage: false }));
+
+  const desk = await call(client, "list_my_desk");
+  expect(desk.text).toContain("suggest edits (not change their text directly)");
+  const written = await call(client, "write_piece", { piece_id: pieceId, text: "Replaced." });
+  expect(written.isError).toBe(true);
+  expect(written.text).toContain("suggest_edits");
+  expect((await call(client, "suggest_edits", { piece_id: pieceId, edits: [{ find: "robots", replace_with: "rockets" }] })).isError).toBe(false);
+  const managed = await call(client, "update_piece", { piece_id: pieceId, due: "2030-10-01" });
+  expect(managed.isError).toBe(true);
+  expect(managed.text).toContain("add, change or remove colleges and pieces");
+
+  // Read only: not even suggestions.
+  await page.goto("/desk/settings");
+  const row = page.getByRole("list", { name: "Connector links" }).getByTestId("connector-link");
+  await row.getByLabel("With your essays it can").selectOption("read");
+  await expect
+    .poll(async () => (await call(client, "suggest_edits", { piece_id: pieceId, edits: [{ find: "like", replace_with: "love" }] })).text)
+    .toContain("not to suggest edits");
+
+  // Everything: writes and changes go through, with a due date and a word limit.
+  await row.getByLabel("With your essays it can").selectOption("edit");
+  await row.getByLabel(/Can add, change and remove colleges/).check();
+  await expect.poll(async () => (await call(client, "list_my_desk")).text).toContain("write essays directly");
+  expect((await call(client, "write_piece", { piece_id: pieceId, text: "Replaced." })).isError).toBe(false);
+  expect((await call(client, "update_piece", { piece_id: pieceId, due: "2030-10-01", limit_value: 650 })).isError).toBe(false);
+  const after = await call(client, "list_my_desk");
+  expect(after.text).toContain("due 2030-10-01");
+  expect(after.text).toContain("limit 650 words");
+
+  await page.goto(`/desk/piece/${pieceId}`);
+  await expectEssay(page, "Replaced.");
   await client.close();
 });
 

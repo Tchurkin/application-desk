@@ -5,15 +5,25 @@ import type { DeskRequest, RequestKind } from "./requests";
  * realtime row changes. Pure, so the merge rules are tested without a database.
  */
 
-/** Kinds shown beside a piece. Odds requests belong to the Strategy page. */
+/** Kinds shown beside a piece. Odds requests belong to the Strategy page, interviews to Profile. */
 export const THREAD_KINDS: RequestKind[] = ["ask", "polish"];
+
+/** The Profile page's interview: on the desk, not on a piece. */
+export const INTERVIEW_KINDS: RequestKind[] = ["interview"];
 
 /** How many of a piece's most recent requests the panel loads. */
 export const THREAD_LIMIT = 100;
 
-/** Whether a request belongs in this piece's thread. Dismissed ones leave it. */
-export function inThread(r: Pick<DeskRequest, "piece_id" | "kind" | "status">, pieceId: string): boolean {
-  return r.piece_id === pieceId && THREAD_KINDS.includes(r.kind) && r.status !== "dismissed";
+/**
+ * Whether a request belongs in this thread: a piece's (pieceId) or the desk's (null), of these
+ * kinds. Dismissed ones leave it.
+ */
+export function inThread(
+  r: Pick<DeskRequest, "piece_id" | "kind" | "status">,
+  pieceId: string | null,
+  kinds: RequestKind[] = THREAD_KINDS,
+): boolean {
+  return (r.piece_id ?? null) === pieceId && kinds.includes(r.kind) && r.status !== "dismissed";
 }
 
 /**
@@ -33,14 +43,19 @@ function byCreated(a: DeskRequest, b: DeskRequest) {
 }
 
 /** A thread from a fetch (any order), oldest first, without anything that doesn't belong. */
-export function sortThread(rows: DeskRequest[], pieceId: string): DeskRequest[] {
-  return rows.filter((r) => inThread(r, pieceId)).sort(byCreated);
+export function sortThread(rows: DeskRequest[], pieceId: string | null, kinds: RequestKind[] = THREAD_KINDS): DeskRequest[] {
+  return rows.filter((r) => inThread(r, pieceId, kinds)).sort(byCreated);
 }
 
 /** Apply an inserted or updated row: add it, replace it, or drop it once dismissed or moved. */
-export function mergeRequest(list: DeskRequest[], row: DeskRequest, pieceId: string): DeskRequest[] {
+export function mergeRequest(
+  list: DeskRequest[],
+  row: DeskRequest,
+  pieceId: string | null,
+  kinds: RequestKind[] = THREAD_KINDS,
+): DeskRequest[] {
   const rest = list.filter((r) => r.id !== row.id);
-  if (!inThread(row, pieceId)) return rest.length === list.length ? list : rest;
+  if (!inThread(row, pieceId, kinds)) return rest.length === list.length ? list : rest;
   return [...rest, row].sort(byCreated);
 }
 

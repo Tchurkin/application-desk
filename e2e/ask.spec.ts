@@ -95,7 +95,7 @@ test("a question asked beside a piece is answered through the connector and appe
   await expect(askBox(page)).toHaveValue("");
   // No new tab: the question waits for the Claude chat that is watching the desk.
   expect(await opened(page)).toEqual([]);
-  await expect(panel(page).getByText("isn't watching your desk")).toBeVisible();
+  await expect(panel(page).getByText("Nobody is watching your desk")).toBeVisible();
 
   // Claude, told to watch, gets the waiting questions straight away; the panel shows it watching.
   const watched = await call(client, "watch_desk");

@@ -10,7 +10,7 @@ export default async function SharedLayout(props: LayoutProps<"/shared/[deskId]"
         <Link href={`/shared/${deskId}`} className="font-serif text-lg">{desk.title}</Link>
         <span className="text-sm text-muted">
           {name ? `${name} · ` : ""}
-          {role === "owner" ? "your desk" : role === "suggest" ? "can suggest" : "read only"}
+          {role === "owner" ? "your desk" : role === "edit" ? "can edit" : role === "suggest" ? "can suggest" : "read only"}
         </span>
       </header>
       <div className="flex-1">{props.children}</div>

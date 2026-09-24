@@ -5,6 +5,7 @@ import type * as Y from "yjs";
 import { z } from "zod";
 import { APP_SYSTEMS, labelOf, PIECE_STATUSES, ROUNDS } from "@/lib/domain/colleges";
 import { countChars, countWords } from "@/lib/domain/count";
+import { profileForPiece, type ProfileInfo } from "@/lib/profile/render";
 import { anchorEdit, docFromRows, flatten, type AnchoredRow } from "@/lib/suggest/anchor-text";
 import { supabaseEnv } from "@/lib/supabase/env";
 import { applyEdits, writeWhole, type WriteResult } from "./write";
@@ -21,11 +22,14 @@ You can work in two ways; follow what the student asks for:
 - Write: write_piece drafts or replaces a whole piece, and edit_piece applies specific changes directly. Use these when they ask you to draft, rewrite, or just make the changes (for example, "draft all my supplementals so I can go through them"). Before any direct write, the desk saves the current text in the piece's History, so the student can always restore it.
 You can also set up and manage the whole desk:
 - When the student gives you a list of colleges, look up each one's application system, round, deadlines and current supplemental essay prompts with word limits (search the web if you can; say which details you couldn't confirm), then call set_up_colleges once with all of them. It adds each college with a piece for every prompt, and never duplicates a college or piece already on the desk.
-- create_piece adds one essay or short answer; update_college and update_piece change any detail (deadlines, prompts, limits, status, notes, research); delete_college and delete_piece remove them; update_my_profile sets the student's name and "about me".
+- create_piece adds one essay or short answer; update_college and update_piece change any detail (deadlines, prompts, word or character limits, due dates, status, notes, research); delete_college and delete_piece remove them. When pieces are missing their prompt or limit, fill them in (set_up_colleges again, or update_piece).
+The student decides what you may do: list_my_desk says whether you may write essays directly or only suggest (or only advise), and whether you may manage colleges and pieces. Stay within it; if something isn't allowed, say what you would do and that they can allow it in Settings.
+
+Profile: the student's Profile page holds sections about them (background, activities, stories, values, goals), written by them or by you. read_profile shows them; save_profile_section adds or rewrites one; order_profile_sections and delete_profile_section organize them; update_my_profile sets their name and "about me". read_piece includes the profile, so use it for every essay. When the student asks you to interview them, ask one question at a time, follow up on specifics (moments, people, numbers, what changed), and after each answer save what you learned into well-organized sections in the student's own words; never invent details.
 
 Strategy: read_strategy shows each college's admission odds, fit, cost and the published baseline (admission rate, SAT/ACT, cost), plus the student's academic profile. When asked to estimate odds, judge the student's profile against each college's admitted class and set them with set_college_strategy, with your reasoning in chance_note. update_academics records GPA, test scores and intended major.
 
-Requests from the website: the student can ask questions, request rewordings ("polish") or odds estimates from inside the website, without leaving it. They wait in a queue. When the student says to watch their desk, call watch_desk: it waits for the next request and returns it; answer it on the desk (answer_request; suggest_edits for polish; set_college_strategy for odds), then call watch_desk again, and keep watching until the student says to stop. Keep this chat quiet while watching (a one-line note per request). list_desk_requests shows what's waiting at any time.
+Requests from the website: the student can ask questions, request rewordings ("polish") or odds estimates from inside the website, without leaving it. They wait in a queue. Interview requests come from the Profile page: each carries the student's latest answer; save what you learned, then reply with your next question. When the student says to watch their desk, call watch_desk: it waits for the next request and returns it; answer it on the desk (answer_request; suggest_edits for polish; set_college_strategy for odds), then call watch_desk again, and keep watching until the student says to stop. Keep this chat quiet while watching (a one-line note per request). list_desk_requests shows what's waiting at any time.
 
 Start with list_my_desk to see the colleges and pieces, and read_piece before working on a piece: it has the prompt, the word or character limit, the current text, the student's notes, their research on the college, and their other essays for that college. Use what the student has written about themselves; when a draft needs a specific detail you don't have, ask or leave a clear [bracketed placeholder]. Mind the limit. Some colleges have an AI policy noted on the desk; tell the student if what they ask for would go against it.`;
 
@@ -44,8 +48,16 @@ type Text = { content: { type: "text"; text: string }[]; isError?: boolean };
 export const text = (t: string): Text => ({ content: [{ type: "text", text: t }] });
 export const fail = (t: string): Text => ({ content: [{ type: "text", text: t }], isError: true });
 
+export interface Permissions {
+  essays: "read" | "suggest" | "edit";
+  manage: boolean;
+}
+
 interface DeskInfo {
   desk_title: string;
+  /** What the student allows this connector to do (migration 20261001). */
+  permissions?: Permissions;
+  profile_sections?: number;
   student: { name: string; about: string } | null;
   colleges: {
     id: string;
@@ -67,7 +79,22 @@ interface DeskInfo {
     word_count: number;
     limit_kind: "words" | "chars" | "none";
     limit_value: number | null;
+    due?: string | null;
   }[];
+}
+
+/** One line telling the assistant what it may do on this desk. */
+export function permissionsLine(p: Permissions): string {
+  const essays =
+    p.essays === "edit"
+      ? "read, suggest edits to, and write essays directly"
+      : p.essays === "suggest"
+        ? "read essays and suggest edits (not change their text directly)"
+        : "read essays and give advice (not suggest or make edits)";
+  const manage = p.manage
+    ? "add, change and remove colleges and pieces (details, prompts, limits, due dates)"
+    : "not add, change or remove colleges and pieces: tell the student what you would change instead";
+  return `What the student allows you to do: ${essays}; ${manage}. Answering questions, the profile and odds estimates are always allowed.`;
 }
 
 interface PieceInfo {
@@ -97,9 +124,14 @@ export function renderDesk(d: DeskInfo): string {
   const lines = [`# ${d.desk_title}`];
   if (d.student?.name) lines.push(`Student: ${d.student.name}`);
   if (d.student?.about) lines.push(`About the student (in their words): ${d.student.about}`);
+  if (d.profile_sections) {
+    lines.push(`Profile: ${d.profile_sections} section${d.profile_sections === 1 ? "" : "s"} about the student (read_profile).`);
+  }
+  if (d.permissions) lines.push(permissionsLine(d.permissions));
   const piecesFor = (id: string | null) => d.pieces.filter((p) => p.college_id === id);
   const pieceLine = (p: DeskInfo["pieces"][number]) =>
     `  - ${p.title} [piece_id: ${p.id}] ${labelOf(PIECE_STATUSES, p.status)}, ${p.word_count} words, limit ${limitLine(p.limit_kind, p.limit_value)}` +
+    (p.due ? `, due ${p.due}` : "") +
     (p.prompt ? `\n    Prompt: ${p.prompt.length > 160 ? `${p.prompt.slice(0, 160)}…` : p.prompt}` : "\n    Prompt: (none entered)");
   lines.push("", "## Colleges (by deadline)");
   if (!d.colleges.length) lines.push("None yet.");
@@ -222,10 +254,16 @@ export function registerTools(server: McpServer, token: string) {
       annotations: { readOnlyHint: true },
     },
     async ({ piece_id }) => {
+      const sb = db();
       try {
-        const { p, doc, flat } = await loadPiece(db(), token, piece_id);
+        const [{ p, doc, flat }, profile] = await Promise.all([
+          loadPiece(sb, token, piece_id),
+          // The profile is extra context: a database without it (before migration 20261001) still reads the piece.
+          sb.rpc("connector_profile", { token }).then(({ data }) => (data as ProfileInfo | null) ?? null, () => null),
+        ]);
         doc.destroy();
-        return text(renderPiece(p, flat.text));
+        const extra = profile ? profileForPiece(profile) : "";
+        return text(renderPiece(p, flat.text) + (extra ? `\n\n${extra}` : ""));
       } catch (e) {
         return fail((e as Error).message);
       }
@@ -359,11 +397,12 @@ export function registerTools(server: McpServer, token: string) {
         prompt: z.string().optional().describe("The question exactly as the college asks it."),
         limit_kind: z.enum(["words", "chars", "none"]).optional(),
         limit_value: z.number().int().positive().optional(),
+        due: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD").optional().describe("When the student wants it finished."),
         text: z.string().optional().describe("A first draft; paragraphs separated by line breaks."),
       }),
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
-    async ({ college_id, title, prompt, limit_kind, limit_value, text: body }) => {
+    async ({ college_id, title, prompt, limit_kind, limit_value, due, text: body }) => {
       const sb = db();
       try {
         const { data: id, error } = await sb.rpc("connector_create_piece", {
@@ -375,6 +414,10 @@ export function registerTools(server: McpServer, token: string) {
           piece_limit_value: limit_value ?? null,
         });
         if (error) return fail(error.message);
+        if (due) {
+          const { error: dueError } = await sb.rpc("connector_update_piece", { token, piece: id, fields: { due } });
+          if (dueError) return fail(`Added "${title}" [piece_id: ${id}], but couldn't set its due date: ${dueError.message}`);
+        }
         let drafted = "";
         if (body?.trim()) {
           const { doc } = await loadPiece(sb, token, id as string);

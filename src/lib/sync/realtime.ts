@@ -13,7 +13,7 @@ import { fromBase64, toBase64 } from "./base64";
 export interface Person {
   name: string;
   color: string;
-  role: "owner" | "suggest" | "view";
+  role: "owner" | "edit" | "suggest" | "view";
 }
 
 export interface PieceChannelHandlers {

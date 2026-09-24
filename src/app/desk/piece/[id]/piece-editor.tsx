@@ -14,7 +14,8 @@ import { MakeVersion, WriteWorkspace } from "./write-workspace";
 import { ConfirmButton } from "@/components/confirm-button";
 import { PIECE_STATUSES, labelOf, type PieceStatus } from "@/lib/domain/colleges";
 import { countChars, countWords, limitState, type LimitKind } from "@/lib/domain/count";
-import { acceptInto, resolveSuggestion, suggestKey, suggestPlugin, type SuggestMode } from "@/lib/suggest/plugin";
+import { HeldSelection } from "@/lib/editor/held-selection";
+import { acceptInto, DIRECT_EDIT, resolveSuggestion, suggestKey, suggestPlugin, type SuggestMode } from "@/lib/suggest/plugin";
 import { SuggestionStore, type Suggestion } from "@/lib/suggest/store";
 import { SupabaseSuggestionBackend } from "@/lib/suggest/supabase-backend";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -36,7 +37,7 @@ export interface PieceMeta {
   notes: string;
 }
 
-export type Role = "owner" | "suggest" | "view";
+export type Role = "owner" | "edit" | "suggest" | "view";
 
 const STATUS_TEXT: Record<SyncStatus, string> = {
   loading: "Opening…",
@@ -117,11 +118,13 @@ export function PieceEditor({
   const [text, setText] = useState("");
   const [editor, setEditor] = useState<Editor | null>(null);
   const meta = useMetaSaver(piece.id);
-  // Editing or Suggesting. The student starts in Editing, people they share with in Suggesting;
-  // either can switch, and the choice is remembered per browser. Read-only links only read.
+  // Editing or Suggesting. The student and people on a "can edit" link switch between them (the
+  // student starts in Editing, others in Suggesting; the choice is remembered per browser).
+  // "Can suggest" links only suggest, and read-only links only read.
   const canWrite = role !== "view";
+  const canEdit = role === "owner" || role === "edit";
   const [editMode, setEditMode] = useState<EditMode>(owner ? "editing" : "suggesting");
-  const editorMode: SuggestMode = !canWrite ? "view" : editMode === "editing" ? "owner" : "suggest";
+  const editorMode: SuggestMode = !canWrite ? "view" : canEdit && editMode === "editing" ? "owner" : "suggest";
   const chooseMode = (m: EditMode) => {
     setEditMode(m);
     writeMode(role, m);
@@ -133,7 +136,7 @@ export function PieceEditor({
     const clientId = tabClientId();
     const storage = safeLocalStorage();
     const sync = new PieceSync(piece.id, new SupabaseUpdateStore(supabase), storage, clientId, {
-      readOnly: role === "view",
+      readOnly: role !== "owner" && role !== "edit",
       onStatus: (st) => alive && setStatus(st),
     });
     const store = new SuggestionStore(piece.id, new SupabaseSuggestionBackend(supabase), storage, clientId);
@@ -245,21 +248,23 @@ export function PieceEditor({
 
         {canWrite && (
           <div className="mt-3 flex flex-wrap items-center gap-3">
-            <div role="radiogroup" aria-label="Mode" className="inline-flex rounded-md border border-line bg-panel p-0.5 text-sm">
-              {(["editing", "suggesting"] as const).map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  role="radio"
-                  aria-checked={editMode === m}
-                  onClick={() => chooseMode(m)}
-                  className={`rounded px-3 py-1 ${editMode === m ? "bg-accent text-accent-ink" : "text-muted hover:text-ink"}`}
-                >
-                  {m === "editing" ? "Editing" : "Suggesting"}
-                </button>
-              ))}
-            </div>
-            {editMode === "suggesting" && (
+            {canEdit && (
+              <div role="radiogroup" aria-label="Mode" className="inline-flex rounded-md border border-line bg-panel p-0.5 text-sm">
+                {(["editing", "suggesting"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    role="radio"
+                    aria-checked={editMode === m}
+                    onClick={() => chooseMode(m)}
+                    className={`rounded px-3 py-1 ${editMode === m ? "bg-accent text-accent-ink" : "text-muted hover:text-ink"}`}
+                  >
+                    {m === "editing" ? "Editing" : "Suggesting"}
+                  </button>
+                ))}
+              </div>
+            )}
+            {editorMode === "suggest" && (
               <p className="text-sm text-muted">
                 Your changes show as suggestions{owner ? " you can accept or decline" : " for the writer to accept or decline"}. Ctrl+Z
                 undoes your last suggestions.
@@ -485,6 +490,7 @@ function EssayEditor({
       CollaborationCaret.configure({ provider: { awareness: channel.awareness }, user }),
       Placeholder.configure({ placeholder: mode === "owner" ? "Start writing…" : "Nothing written yet." }),
       UndoCaret,
+      HeldSelection,
       Suggestions,
     ];
   }, [live, mode, me, pieceId]);
@@ -510,9 +516,10 @@ function EssayEditor({
     return () => onEditor(null);
   }, [editor, onEditor]);
 
-  // After each save: refresh the board's derived fields, and take a version now and then.
+  // After each save: refresh the board's derived fields, and take a version now and then. The
+  // student's own saves count in Suggesting mode too (accepting a suggestion changes the text).
   useEffect(() => {
-    if (!editor || !owner) return;
+    if (!editor || !(owner || isDeskOwner)) return;
     const { sync } = live;
     let derivedTimer: ReturnType<typeof setTimeout> | null = null;
     let firstChecked = false;
@@ -679,7 +686,7 @@ function SuggestionsPanel({ live, editor, role, me }: { live: Live; editor: Edit
                     </button>
                   </>
                 )}
-                {role === "suggest" && s.author_id === me && (
+                {role !== "owner" && role !== "view" && s.author_id === me && (
                   <button type="button" className="btn" onClick={() => store.remove(s.id)}>
                     Withdraw
                   </button>
@@ -750,7 +757,14 @@ function History({ pieceId, editor, inPanel = false }: { pieceId: string; editor
                     className="btn btn-primary"
                     onClick={() => {
                       // Restoring is an ordinary edit: today's text stays in history, and the change syncs.
-                      editor.commands.setContent(preview.content);
+                      editor
+                        .chain()
+                        .command(({ tr }) => {
+                          tr.setMeta(DIRECT_EDIT, true);
+                          return true;
+                        })
+                        .setContent(preview.content)
+                        .run();
                       setPreview(null);
                       setOpen(false);
                     }}

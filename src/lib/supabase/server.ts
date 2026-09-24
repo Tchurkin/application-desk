@@ -37,7 +37,7 @@ export async function requireDesk() {
   return { supabase, userId, desk };
 }
 
-export type DeskRole = "owner" | "suggest" | "view";
+export type DeskRole = "owner" | "edit" | "suggest" | "view";
 
 /** A desk the caller owns or was shared, with their role on it; 404 otherwise. */
 export async function requireDeskAccess(deskId: string) {
@@ -51,7 +51,7 @@ export async function requireDeskAccess(deskId: string) {
   let name = "";
   if (desk.owner_id !== userId) {
     const { data: r } = await supabase.rpc("member_role", { d: deskId });
-    if (r !== "view" && r !== "suggest") notFound();
+    if (r !== "view" && r !== "suggest" && r !== "edit") notFound();
     role = r;
     const { data: m } = await supabase
       .from("desk_members")

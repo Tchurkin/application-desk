@@ -10,6 +10,8 @@ export function DeskNav({ base, owner }: { base: string; owner: boolean }) {
     { href: base, label: "Board", match: (p: string) => p === base || p.startsWith(`${base}/college/`) },
     { href: `${base}/progress`, label: "Progress", match: (p: string) => p.startsWith(`${base}/progress`) },
     { href: `${base}/strategy`, label: "Strategy", match: (p: string) => p.startsWith(`${base}/strategy`) },
+    // Only the student's: the people they share with don't see it.
+    ...(owner ? [{ href: `${base}/profile`, label: "Profile", match: (p: string) => p.startsWith(`${base}/profile`) }] : []),
   ];
   return (
     <nav aria-label="Desk" className="flex items-center gap-1 rounded-lg bg-bg p-0.5 text-sm">
