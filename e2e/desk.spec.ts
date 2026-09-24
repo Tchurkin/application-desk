@@ -20,7 +20,9 @@ test("a student sets up a college, writes a piece, and it survives a reload", as
   await expect(page.getByTestId("count")).toContainText("6 / 5 words");
 
   await page.goto("/desk");
-  await expect(page.getByRole("link", { name: /Why Northfield\?/ })).toBeVisible();
+  const board = page.getByRole("list", { name: "Colleges by deadline" });
+  // Typing moved the piece from "Not started" to "Drafting".
+  await expect(board.getByRole("link", { name: /Why Northfield\?/ })).toContainText("Drafting");
 });
 
 test("a letter typed just before a reload is not lost", async ({ page }) => {
@@ -89,7 +91,7 @@ test("warns past 20 Common App colleges and suggests the no-letter ones", async 
   await signUp(page, "cap");
   for (let i = 1; i <= 21; i++) await addCollege(page, `Cap College ${i}`, { letters: i !== 7 });
   await page.goto("/desk");
-  const alert = page.getByRole("alert");
+  const alert = page.getByRole("alert").filter({ hasText: "Common App" });
   await expect(alert).toContainText("21 colleges use the Common App");
   await expect(alert).toContainText("Cap College 7");
 });
@@ -107,7 +109,7 @@ test("history keeps the first save and restores an old version", async ({ page }
   await waitSaved(page);
   // Leaving records a version of the latest text.
   await page.goto("/desk");
-  await page.getByRole("link", { name: /Drafts/ }).click();
+  await page.getByRole("list", { name: "Colleges by deadline" }).getByRole("link", { name: /Drafts/ }).click();
 
   await page.getByRole("button", { name: /History/ }).click();
   const list = page.getByRole("list", { name: "Saved versions" });

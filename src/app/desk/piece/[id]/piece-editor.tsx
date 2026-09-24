@@ -58,7 +58,7 @@ function useMetaSaver(pieceId: string) {
     [flush],
   );
   useEffect(() => () => void flush(), [flush]);
-  return { save, flush };
+  return useMemo(() => ({ save, flush }), [save, flush]);
 }
 
 export function PieceEditor({
@@ -110,6 +110,21 @@ export function PieceEditor({
     };
   }, [piece.id, supabase, userId]);
 
+  // The first words move a piece out of "Not started".
+  const onText = useCallback(
+    (t: string) => {
+      setText(t);
+      if (t.trim()) {
+        setPieceStatus((st) => {
+          if (st !== "not_started") return st;
+          meta.save({ status: "drafting" }, 0);
+          return "drafting";
+        });
+      }
+    },
+    [meta],
+  );
+
   const limit = limitState(text, limitKind, limitValue);
 
   return (
@@ -146,7 +161,7 @@ export function PieceEditor({
           ) : status === "gone" ? (
             <p className="text-danger">{STATUS_TEXT.gone}</p>
           ) : sync ? (
-            <EssayEditor sync={sync} pieceId={piece.id} author={author} onText={setText} onEditor={setEditor} />
+            <EssayEditor sync={sync} pieceId={piece.id} author={author} onText={onText} onEditor={setEditor} />
           ) : (
             <p className="text-muted">{STATUS_TEXT.loading}</p>
           )}
