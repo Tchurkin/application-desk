@@ -38,6 +38,18 @@ export class SupabaseUpdateStore implements UpdateStore {
     return "retry";
   }
 
+  async since(pieceId: string, afterId: number) {
+    const { data, error } = await this.supabase
+      .from("piece_updates")
+      .select("id, update, created_at")
+      .eq("piece_id", pieceId)
+      .gt("id", afterId)
+      .order("id")
+      .limit(PAGE);
+    if (error) throw error;
+    return data as StoredUpdate[];
+  }
+
   async compact(pieceId: string, state: string, throughId: number, cutoff: string) {
     const { error } = await this.supabase.rpc("compact_piece", {
       p: pieceId,

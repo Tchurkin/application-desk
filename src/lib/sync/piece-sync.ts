@@ -27,6 +27,8 @@ export interface UpdateStore {
   load(pieceId: string): Promise<{ state: string; updates: StoredUpdate[] } | null>;
   push(pieceId: string, clientId: string, update: string): Promise<PushResult>;
   compact(pieceId: string, state: string, throughId: number, cutoff: string): Promise<void>;
+  /** Rows after `afterId`, to catch up after a dropped connection. */
+  since?(pieceId: string, afterId: number): Promise<StoredUpdate[]>;
 }
 
 export interface KeyValue {
@@ -46,6 +48,8 @@ interface Parked {
 const ORPHAN_MS = 5_000;
 
 export interface PieceSyncOptions {
+  /** Load and follow the document, but never save to it (people the piece is shared with). */
+  readOnly?: boolean;
   flushDelayMs?: number;
   /** Compact once the log holds more than this many rows. */
   compactAfter?: number;
@@ -66,6 +70,7 @@ export class PieceSync {
   private inFlight: Promise<void> | null = null;
   private stopped = false;
   private retryMs = 500;
+  private lastId = 0;
   private opts: Required<Omit<PieceSyncOptions, "onSaved" | "onGone" | "onStatus">> &
     Pick<PieceSyncOptions, "onSaved" | "onGone" | "onStatus">;
 
@@ -80,6 +85,7 @@ export class PieceSync {
     this.doc = doc ?? new Y.Doc();
     this.parkedKey = `desk:parked:${pieceId}:${clientId}`;
     this.opts = {
+      readOnly: false,
       flushDelayMs: 300,
       compactAfter: 100,
       settleMs: 60_000,
@@ -163,7 +169,7 @@ export class PieceSync {
   }
 
   private onUpdate = (update: Uint8Array, origin: unknown) => {
-    if (origin === REMOTE || this.stopped) return;
+    if (origin === REMOTE || this.stopped || this.opts.readOnly) return;
     this.setParked([...this.parked(), toBase64(update)]);
     this.status("saving");
     this.schedule(this.opts.flushDelayMs);
@@ -178,7 +184,7 @@ export class PieceSync {
       this.status("gone");
       return "gone";
     }
-    this.adoptOrphans();
+    if (!this.opts.readOnly) this.adoptOrphans();
     Y.transact(
       this.doc,
       () => {
@@ -187,18 +193,37 @@ export class PieceSync {
       },
       REMOTE,
     );
-    const parked = this.parked();
+    this.lastId = loaded.updates.reduce((m, u) => Math.max(m, u.id), 0);
+    const parked = this.opts.readOnly ? [] : this.parked();
     for (const u of parked) Y.applyUpdate(this.doc, fromBase64(u), REMOTE);
     this.doc.on("update", this.onUpdate);
     if (parked.length) this.schedule(0);
     else this.status("saved");
-    void this.maybeCompact(loaded.updates);
+    if (!this.opts.readOnly) void this.maybeCompact(loaded.updates);
     return "ok";
   }
 
   /** Apply an update that came from someone else. */
   applyRemote(update: Uint8Array) {
     Y.applyUpdate(this.doc, update, REMOTE);
+  }
+
+  /** A row of the edit log arrived live (ours echoing back is harmless: Yjs ignores it). */
+  applyRemoteRow(row: { id: number; update: string }) {
+    if (this.stopped) return;
+    this.lastId = Math.max(this.lastId, row.id);
+    Y.applyUpdate(this.doc, fromBase64(row.update), REMOTE);
+  }
+
+  /** Fetch anything missed while the live connection was down. */
+  async catchUp() {
+    if (this.stopped || !this.store.since) return;
+    try {
+      const rows = await this.store.since(this.pieceId, this.lastId);
+      for (const r of rows) this.applyRemoteRow(r);
+    } catch {
+      // The next reconnect tries again.
+    }
   }
 
   private schedule(ms: number) {

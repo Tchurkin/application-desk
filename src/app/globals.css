@@ -92,3 +92,48 @@ body {
   height: 0;
   pointer-events: none;
 }
+
+/* Suggestions */
+.essay .sugg-ins {
+  color: var(--accent);
+  background: var(--accent-soft);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  border-radius: 2px;
+  cursor: pointer;
+  white-space: pre-wrap;
+}
+.essay .sugg-del {
+  color: var(--danger);
+  background: var(--danger-soft);
+  text-decoration: line-through;
+  cursor: pointer;
+}
+.essay .sugg-stale { outline: 1px dashed var(--warn); }
+.essay .sugg-picked { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* Other people's carets */
+.collaboration-carets__caret {
+  position: relative;
+  margin-left: -1px;
+  margin-right: -1px;
+  border-left: 1px solid;
+  border-right: 1px solid;
+  word-break: normal;
+  pointer-events: none;
+}
+.collaboration-carets__label {
+  position: absolute;
+  top: -1.35em;
+  left: -1px;
+  padding: 0.05rem 0.35rem;
+  border-radius: 3px 3px 3px 0;
+  color: #fff;
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: normal;
+  white-space: nowrap;
+  user-select: none;
+}

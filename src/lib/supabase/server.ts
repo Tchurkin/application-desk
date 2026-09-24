@@ -1,7 +1,7 @@
 import "server-only";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { supabaseEnv } from "./env";
 
 export async function supabaseServer() {
@@ -27,7 +27,39 @@ export async function requireDesk() {
   const { data: claims } = await supabase.auth.getClaims();
   const userId = claims?.claims?.sub;
   if (!userId) redirect("/login");
-  const { data: desk } = await supabase.from("desks").select("id, title").eq("owner_id", userId).single();
-  if (!desk) redirect("/login?error=no-desk");
+  const { data: desk } = await supabase.from("desks").select("id, title").eq("owner_id", userId).maybeSingle();
+  if (!desk) {
+    // Someone who only joined through a share link has no desk of their own.
+    const { data: shared } = await supabase.rpc("my_shared_desks");
+    const first = (shared as { desk_id: string }[] | null)?.[0];
+    redirect(first ? `/shared/${first.desk_id}` : "/login?error=no-desk");
+  }
   return { supabase, userId, desk };
+}
+
+export type DeskRole = "owner" | "suggest" | "view";
+
+/** A desk the caller owns or was shared, with their role on it; 404 otherwise. */
+export async function requireDeskAccess(deskId: string) {
+  const supabase = await supabaseServer();
+  const { data: claims } = await supabase.auth.getClaims();
+  const userId = claims?.claims?.sub;
+  if (!userId) redirect("/login");
+  const { data: desk } = await supabase.from("desks").select("id, title, owner_id").eq("id", deskId).maybeSingle();
+  if (!desk) notFound();
+  let role: DeskRole = "owner";
+  let name = "";
+  if (desk.owner_id !== userId) {
+    const { data: r } = await supabase.rpc("member_role", { d: deskId });
+    if (r !== "view" && r !== "suggest") notFound();
+    role = r;
+    const { data: m } = await supabase
+      .from("desk_members")
+      .select("display_name")
+      .eq("desk_id", deskId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    name = m?.display_name ?? "";
+  }
+  return { supabase, userId, desk, role, name };
 }

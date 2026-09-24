@@ -1,9 +1,21 @@
+import { ConfirmButton } from "@/components/confirm-button";
 import { requireDesk } from "@/lib/supabase/server";
 import { deleteMyAccount, updateProfile } from "../actions";
+import { revokeShareLink } from "../share-actions";
+import { ShareCreator } from "./share-creator";
 
 export default async function SettingsPage() {
   const { supabase, userId, desk } = await requireDesk();
-  const { data: profile } = await supabase.from("profiles").select("display_name, about").eq("id", userId).single();
+  const [{ data: profile }, { data: links }, { data: members }] = await Promise.all([
+    supabase.from("profiles").select("display_name, about").eq("id", userId).single(),
+    supabase
+      .from("share_links")
+      .select("id, role, label, created_at")
+      .eq("desk_id", desk.id)
+      .is("revoked_at", null)
+      .order("created_at", { ascending: false }),
+    supabase.from("desk_members").select("user_id, display_name, link_id, joined_at").eq("desk_id", desk.id),
+  ]);
 
   return (
     <main className="mx-auto w-full max-w-2xl px-4 py-8">
@@ -31,6 +43,40 @@ export default async function SettingsPage() {
         </div>
         <div><button className="btn btn-primary" type="submit">Save</button></div>
       </form>
+
+      <section className="card mb-10 px-4 py-4" aria-labelledby="sharing">
+        <h2 id="sharing" className="mb-1 font-serif text-xl">Sharing</h2>
+        <p className="mb-4 text-sm text-muted">
+          Give a parent or mentor a link. They open it, type their name, and can read your desk, or also suggest edits that you
+          accept or decline. Nothing they do changes your text unless you accept it. Revoke a link to cut off everyone who
+          joined through it.
+        </p>
+        <ShareCreator />
+        {links && links.length > 0 && (
+          <ul className="mt-6 flex flex-col gap-2" aria-label="Share links">
+            {links.map((l) => {
+              const joined = (members ?? []).filter((m) => m.link_id === l.id);
+              return (
+                <li key={l.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-line px-3 py-2 text-sm">
+                  <span>
+                    <span className="font-medium">{l.label || "Untitled link"}</span>
+                    <span className="text-muted"> · {l.role === "suggest" ? "can suggest" : "read only"}</span>
+                    <span className="block text-xs text-muted">
+                      {joined.length ? `Joined: ${joined.map((m) => m.display_name).join(", ")}` : "Nobody has joined yet"}
+                    </span>
+                  </span>
+                  <ConfirmButton
+                    label="Revoke"
+                    confirmLabel="Revoke"
+                    question={`Revoke this link${joined.length ? ` and cut off ${joined.map((m) => m.display_name).join(", ")}` : ""}?`}
+                    onConfirm={revokeShareLink.bind(null, l.id)}
+                  />
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
 
       <section className="rounded-lg border border-danger px-4 py-4">
         <h2 className="mb-2 font-medium text-danger">Delete my data</h2>

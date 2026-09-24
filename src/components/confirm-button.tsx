@@ -26,7 +26,7 @@ export function ConfirmButton({
     <span role="alertdialog" aria-label={question} className="inline-flex flex-wrap items-center gap-2 rounded-md bg-danger-soft px-3 py-1.5 text-sm">
       <span>{question}</span>
       <button type="button" className="btn btn-danger" disabled={pending} onClick={() => start(onConfirm)}>
-        {pending ? "Deleting…" : confirmLabel}
+        {pending ? `${confirmLabel}…` : confirmLabel}
       </button>
       <button type="button" className="btn" disabled={pending} onClick={() => setAsking(false)}>
         Cancel

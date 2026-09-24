@@ -13,7 +13,11 @@ export default async function Home() {
       const { data: piece } = await supabase.from("pieces").select("id").eq("id", profile.last_piece_id).maybeSingle();
       if (piece) redirect(`/desk/piece/${piece.id}`);
     }
-    redirect("/desk");
+    if (data?.claims?.is_anonymous) {
+      const { data: shared } = await supabase.rpc("my_shared_desks");
+      const first = (shared as { desk_id: string }[] | null)?.[0];
+      if (first) redirect(`/shared/${first.desk_id}`);
+    } else redirect("/desk");
   }
 
   return (
