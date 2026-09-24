@@ -4,8 +4,9 @@ import { counselorInstaller, WAKE_PROMPT, type InstallerConfig } from "./install
 const CONFIG: InstallerConfig = {
   site: "https://desk.example.com/",
   supabaseUrl: "https://abcd.supabase.co",
-  supabaseKey: "sb_publishable_AbC-123_xyz",
-  token: "tok_ABCdef-123456789012345",
+  // Obviously fake, low-entropy values (the secret scan flags anything that looks real).
+  supabaseKey: "example_key",
+  token: "example-token-aaaaaaaaaaaa",
 };
 
 describe("counselorInstaller", () => {

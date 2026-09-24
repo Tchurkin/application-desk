@@ -4,8 +4,9 @@ A free, open-source place for a high school senior to write every college essay 
 answer: one desk, every college, every prompt, a live word count against the limit, and a
 version history back to the first draft.
 
-Parents can be invited to read along and suggest edits, and an optional Claude counselor can
-ask questions. **Nothing anyone else does changes your text unless you accept it.**
+Parents can be invited to read along, suggest edits or edit, and Claude or ChatGPT can work on
+the desk as a counselor, on the student's own plan. **The student decides what each person and
+each assistant may do**, and every direct change is kept in the piece's history.
 
 > Status: early. Milestones 1 (one student), 2 (parents) and 3 (Claude and ChatGPT as
 > counselors) are in place. See [Roadmap](#roadmap).
@@ -25,19 +26,32 @@ ask questions. **Nothing anyone else does changes your text unless you accept it
   and the newest. Restore any of them.
 - **Reopens the piece you were last on.**
 - **Delete my data** in Settings removes your account and everything in it.
-- **Share links** (Settings → Sharing): read-only or can-suggest, with an optional password,
-  revocable at any time. The person opening it just types their name; no account needed.
-- **Suggestions / track changes**: someone with a can-suggest link types, deletes and pastes
+- **Write, Board, Progress and Strategy** pages: a writing workspace with a college rail and
+  tabs, a board of every college, progress by status, and a Strategy page that sorts colleges
+  into reach / target / likely bands by chance of admission (an AI estimate, your own, or the
+  college's published rate from the College Scorecard).
+- **Share links** (Settings → Sharing): read only, can suggest, or can edit, with an optional
+  password; change a link's level or revoke it at any time. The person opening it just types
+  their name; no account needed.
+- **Editing and Suggesting**: you, and anyone on a can-edit link, switch between changing the
+  text directly and suggesting. Someone on a can-suggest link types, deletes and pastes
   normally, and it all shows as suggestions you accept or decline. Ctrl+Z undoes their last
-  burst; you can undo an accept or decline. The database itself refuses to let anyone but
-  you change your text.
+  burst; you can undo an accept or decline. The database enforces who may change the text.
 - **Live**: edits, suggestions and everyone's cursor (with their name) appear as they happen.
 - **Claude and ChatGPT as counselors** (Settings → Connect Claude or ChatGPT): a secret
   connector link turns Application Desk into a connector (an MCP server) for Claude (any
-  plan, including free) or ChatGPT (Plus and up, developer mode). The assistant can read your
-  colleges and pieces and suggest edits, which arrive as suggestions you accept or decline.
-  It runs on your own plan, so there's no API key and no per-token bill. Colleges marked
-  "no AI drafting" refuse edits. A **Copy for a chatbot** button covers any other chatbot.
+  plan, including free) or ChatGPT (Plus and up, developer mode). Depending on what you allow
+  for that link, the assistant reads, suggests edits, or writes directly (your text is saved
+  in History first), and can set up and manage your colleges and pieces, with every prompt,
+  word limit and due date. It runs on your own plan, so there's no API key and no per-token
+  bill.
+- **Ask from the desk**: questions, "polish this passage" and odds estimates are asked on the
+  website and answered there, by a Claude or ChatGPT chat told to "Watch my Application Desk",
+  or by the **counselor**: a one-file Windows setup (Settings → Your counselor) that runs
+  Claude Code hidden on your own computer and wakes it only when you ask something.
+- **Profile**: sections about you (activities, stories, values, goals) that you write or that
+  Claude writes while interviewing you, one question at a time. Claude reads your profile
+  before helping with any essay.
 
 ## Run it on your computer
 
@@ -112,9 +126,9 @@ These are minors' essays.
 1. ✅ One student, working alone.
 2. ✅ Parents: share links (view or suggest, optional password, revocable), suggestions / track
    changes the student accepts or declines, live cursors.
-3. ✅ Claude and ChatGPT as counselors, through a connector on the student's own plan: edits
-   land as suggestions, never in the text; per-college "no AI drafting" policy; no invented
-   facts (in the connector's instructions).
+3. ✅ Claude and ChatGPT as counselors, through a connector on the student's own plan, with
+   per-link permissions; questions from the website; a counselor on the student's computer; a
+   profile and interview; no invented facts (in the connector's instructions).
 4. Polish: tabs side by side, a second version of a piece with compare, a five-minute setup.
 
 ## License
