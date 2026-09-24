@@ -222,9 +222,24 @@ function moveCaret(view: EditorView, pos: number) {
   view.dispatch(tr.setMeta("addToHistory", false));
 }
 
+/** In test builds, a record of each suggesting keystroke (see e2e/). */
+function trace(entry: Record<string, unknown>) {
+  if (process.env.NEXT_PUBLIC_E2E !== "1" || typeof window === "undefined") return;
+  const w = window as unknown as { __suggestLog?: unknown[] };
+  (w.__suggestLog ??= []).push(entry);
+}
+
 export function suggestText(view: EditorView, opts: SuggestOptions, from: number, to: number, text: string) {
   const { state } = view;
   const { store } = opts;
+  trace({
+    text,
+    from,
+    to,
+    sel: [state.selection.from, state.selection.to],
+    size: state.doc.content.size,
+    mine: mine(opts).map((s) => ({ body: s.body, kind: s.kind, at: resolveSuggestion(state, s).at })),
+  });
   if (from === to) {
     const s = myInsertAt(state, opts, from);
     if (s) {
@@ -277,6 +292,7 @@ function step(state: EditorState, pos: number, dir: -1 | 1): number | null {
 export function suggestBackspace(view: EditorView, opts: SuggestOptions) {
   const { state } = view;
   const sel = state.selection;
+  trace({ key: "Backspace", sel: [sel.from, sel.to], size: state.doc.content.size });
   if (!sel.empty) return suggestDelete(view, opts, sel.from, sel.to, sel.from);
   const pos = sel.from;
   const ins = myInsertAt(state, opts, pos);

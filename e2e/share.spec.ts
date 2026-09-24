@@ -1,5 +1,5 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
-import { addCollege, addPiece, apiClient, essay, expectEssay, expectEssayContains, signUp, waitSaved } from "./helpers";
+import { addCollege, addPiece, apiClient, essay, expectEssay, expectEssayContains, signUp, suggestLog, waitSaved } from "./helpers";
 
 /** The student makes a share link in Settings and returns its URL. */
 async function makeLink(page: Page, opts: { role: "suggest" | "view"; label?: string; password?: string }) {
@@ -56,7 +56,7 @@ test("a parent suggests, the student sees it live and accepts it", async ({ page
   await mom.keyboard.press("Control+End");
   await mom.keyboard.type(" Quietly.");
   // Her text is a suggestion, not an edit.
-  await expect(mom.locator(".sugg-ins")).toHaveText(" Quietly.");
+  await expect(mom.locator(".sugg-ins"), await suggestLog(mom)).toHaveText(" Quietly.");
 
   // The student sees it without reloading, and accepts it.
   await expect(suggestions(page)).toHaveCount(1);
@@ -87,7 +87,7 @@ test("replace, delete and decline; the student's text only changes on accept", a
 
   await expect(suggestions(page)).toHaveCount(2);
   await expect(suggestions(page).nth(0)).toContainText("Replace “cat” with “dog”");
-  await expect(suggestions(page).nth(1)).toContainText("Delete “sat”");
+  await expect(suggestions(page).nth(1), await suggestLog(mom)).toContainText("Delete “sat”");
   await expectEssay(page, "The cat sat.");
 
   await suggestions(page).nth(0).getByRole("button", { name: "Accept" }).click();

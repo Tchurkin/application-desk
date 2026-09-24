@@ -74,3 +74,8 @@ export async function expectEssay(page: Page, text: string) {
 export async function expectEssayContains(page: Page, text: string) {
   await expect.poll(() => essayText(page), { timeout: 10_000 }).toContain(text);
 }
+
+/** The suggest plugin's keystroke log (test builds only), for failure messages. */
+export async function suggestLog(page: Page) {
+  return JSON.stringify(await page.evaluate(() => (window as unknown as { __suggestLog?: unknown[] }).__suggestLog ?? []));
+}

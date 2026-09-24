@@ -53,6 +53,8 @@ jobs:
           echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=${PUBLISHABLE_KEY:-$ANON_KEY}" >> "$GITHUB_ENV"
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+        env:
+          NEXT_PUBLIC_E2E: "1"
       - uses: actions/upload-artifact@v5
         if: failure()
         with:
