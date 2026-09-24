@@ -116,7 +116,7 @@ test("history keeps the first save and restores an old version", async ({ page }
   await waitSaved(page);
   await page.waitForTimeout(1500); // the version is written just after the save
 
-  await page.getByRole("button", { name: /History/ }).click();
+  await page.getByRole("button", { name: "History", exact: true }).click();
   const list = page.getByRole("list", { name: "Saved versions" });
   await expect(list.getByRole("button")).toHaveCount(2);
   await list.getByRole("button").first().click();

@@ -8,7 +8,9 @@ import { UndoCaret } from "@/lib/editor/undo-caret";
 import { EditorContent, useEditor, type Editor, type JSONContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { AskPanel, type AskPanelProps } from "@/components/ask/ask-panel";
+import { FormatToolbar } from "@/components/write/format-toolbar";
+import { countLabel, type RailGroup, type RailPiece } from "@/lib/write/rail";
+import { MakeVersion, WriteWorkspace } from "./write-workspace";
 import { ConfirmButton } from "@/components/confirm-button";
 import { PIECE_STATUSES, labelOf, type PieceStatus } from "@/lib/domain/colleges";
 import { countChars, countWords, limitState, type LimitKind } from "@/lib/domain/count";
@@ -86,8 +88,11 @@ export function PieceEditor({
   aiPolicy = "allowed",
   research = "",
   deskId,
+  workspace,
 }: {
   deskId?: string;
+  /** The owner's Write workspace: the college rail and this college's pieces as tabs. */
+  workspace?: { groups: RailGroup[]; tabs: RailPiece[] };
   piece: PieceMeta;
   userId: string;
   author: string;
@@ -180,8 +185,8 @@ export function PieceEditor({
 
   const limit = limitState(text, limitKind, limitValue);
 
-  return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
+  const body = (
+    <div className={`grid gap-6 lg:grid-cols-[1fr_20rem] ${workspace ? "p-4" : ""}`}>
       <section className="min-w-0">
         {owner ? (
           <input
@@ -235,6 +240,11 @@ export function PieceEditor({
         )}
         {role === "view" && <p className="mt-3 text-sm text-muted">You can read this piece. You can&apos;t change it.</p>}
 
+        {editor && live && (role === "owner" || role === "suggest") && (
+          <div className="mt-3">
+            <FormatToolbar editor={editor} mode={role} store={live.store} />
+          </div>
+        )}
         <div className="card essay mt-4 px-5 py-4 sm:px-8 sm:py-6">
           {loadError ? (
             <p className="text-danger">Couldn&apos;t open this piece: {loadError}</p>
@@ -364,19 +374,8 @@ export function PieceEditor({
             }
           />
         )}
-        {owner && deskId && (
-          <AskToggle
-            deskId={deskId}
-            pieceId={piece.id}
-            pieceTitle={title}
-            getSelection={() => {
-              if (!editor) return "";
-              const { from, to } = editor.state.selection;
-              return editor.state.doc.textBetween(from, to, "\n");
-            }}
-          />
-        )}
-        <History pieceId={piece.id} editor={owner ? editor : null} />
+        {owner && workspace && <MakeVersion pieceId={piece.id} />}
+        {!workspace && <History pieceId={piece.id} editor={owner ? editor : null} />}
         {owner && (
           <div>
             <ConfirmButton
@@ -391,6 +390,22 @@ export function PieceEditor({
         )}
       </aside>
     </div>
+  );
+  if (!workspace) return body;
+  return (
+    <WriteWorkspace
+      workspace={workspace}
+      pieceId={piece.id}
+      deskId={deskId ?? ""}
+      title={title}
+      countNow={countLabel({ words: countWords(text), chars: countChars(text), kind: limitKind, limit: limitValue })}
+      status={pieceStatus}
+      editor={editor}
+      history={<History pieceId={piece.id} editor={editor} inPanel />}
+      onDeleteCurrent={() => live?.sync.discard()}
+    >
+      {body}
+    </WriteWorkspace>
   );
 }
 
@@ -633,9 +648,11 @@ function SuggestionsPanel({ live, editor, role, me }: { live: Live; editor: Edit
   );
 }
 
-function History({ pieceId, editor }: { pieceId: string; editor: Editor | null }) {
+function History({ pieceId, editor, inPanel = false }: { pieceId: string; editor: Editor | null; inPanel?: boolean }) {
   const supabase = supabaseBrowser();
-  const [open, setOpen] = useState(false);
+  const [openState, setOpen] = useState(false);
+  // In the side panel it is always open (the tool button opens and closes the panel).
+  const open = inPanel || openState;
   const [versions, setVersions] = useState<VersionRow[] | null>(null);
   const [preview, setPreview] = useState<{ id: string; text: string; content: JSONContent } | null>(null);
 
@@ -645,10 +662,12 @@ function History({ pieceId, editor }: { pieceId: string; editor: Editor | null }
   }, [open, supabase, pieceId]);
 
   return (
-    <div>
-      <button type="button" className="label cursor-pointer" onClick={() => setOpen(!open)} aria-expanded={open}>
-        History {open ? "▾" : "▸"}
-      </button>
+    <div className={inPanel ? "p-3" : ""}>
+      {!inPanel && (
+        <button type="button" className="label cursor-pointer" onClick={() => setOpen(!open)} aria-expanded={open}>
+          History {open ? "▾" : "▸"}
+        </button>
+      )}
       {open && (
         <div className="flex flex-col gap-2">
           {versions === null ? (
@@ -763,15 +782,3 @@ function ChatbotCopy({ build }: { build: () => string }) {
   );
 }
 
-/** Ask Claude or ChatGPT about this piece: questions queued on the desk, answered through the connector. */
-function AskToggle(props: AskPanelProps) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div>
-      <button type="button" className="label cursor-pointer" onClick={() => setOpen(!open)} aria-expanded={open} aria-label="Ask">
-        Ask {open ? "▾" : "▸"}
-      </button>
-      {open && <AskPanel {...props} />}
-    </div>
-  );
-}

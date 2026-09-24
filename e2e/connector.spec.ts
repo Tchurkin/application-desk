@@ -124,7 +124,7 @@ test("the AI writes, edits and adds pieces directly; the old text stays in Histo
   await expectEssayContains(page, "Sentence 40 of a long rewrite");
 
   // History has the student's words from before the AI's first write.
-  await page.getByRole("button", { name: /History/ }).click();
+  await page.getByRole("button", { name: "History", exact: true }).click();
   const versions = page.getByRole("list", { name: "Saved versions" }).getByRole("button");
   await expect(versions.first()).toBeVisible();
   let found = false;
