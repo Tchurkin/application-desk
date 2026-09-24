@@ -1,0 +1,94 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #f7f5f0;
+  --panel: #ffffff;
+  --ink: #1d1c1a;
+  --muted: #6b675f;
+  --line: #e3dfd6;
+  --accent: #2f5d50;
+  --accent-ink: #ffffff;
+  --accent-soft: #e4efe9;
+  --warn: #9a6400;
+  --warn-soft: #fbf0d9;
+  --danger: #a3302a;
+  --danger-soft: #f9e3e1;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #151514;
+    --panel: #1e1e1c;
+    --ink: #ecebe6;
+    --muted: #a19d94;
+    --line: #34332f;
+    --accent: #7fbfa9;
+    --accent-ink: #0f1a16;
+    --accent-soft: #1f302a;
+    --warn: #e2b25a;
+    --warn-soft: #33291a;
+    --danger: #ef8a82;
+    --danger-soft: #3a211f;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --font-sans: var(--font-geist-sans);
+  --font-serif: var(--font-serif);
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md border border-line bg-panel px-3 py-1.5 text-sm font-medium text-ink transition hover:border-muted disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply border-accent bg-accent text-accent-ink hover:opacity-90;
+  }
+  .btn-danger {
+    @apply border-danger text-danger hover:bg-danger-soft;
+  }
+  .field {
+    @apply w-full rounded-md border border-line bg-panel px-2.5 py-1.5 text-sm text-ink outline-none focus:border-accent;
+  }
+  .label {
+    @apply mb-1 block text-xs font-medium tracking-wide text-muted uppercase;
+  }
+  .card {
+    @apply rounded-lg border border-line bg-panel;
+  }
+}
+
+/* The essay editor */
+.essay .ProseMirror {
+  font-family: var(--font-serif), Georgia, serif;
+  font-size: 1.08rem;
+  line-height: 1.7;
+  min-height: 50vh;
+  outline: none;
+}
+.essay .ProseMirror p { margin: 0 0 0.9em; }
+.essay .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--muted);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}

@@ -1,0 +1,107 @@
+# Application Desk
+
+A free, open-source place for a high school senior to write every college essay and short
+answer: one desk, every college, every prompt, a live word count against the limit, and a
+version history back to the first draft.
+
+Parents can be invited to read along and suggest edits, and an optional Claude counselor can
+ask questions. **Nothing anyone else does changes your text unless you accept it.**
+
+> Status: early. Milestone 1 (one student working alone) is in place. Parents, suggestions
+> and the counselor are next. See [Roadmap](#roadmap).
+
+## What it does today
+
+- **Colleges** with application system (Common App, UC, UCAS, own portal…), round, deadline
+  and materials deadline. It warns you past the Common App's 20-college limit and suggests
+  which schools to move (the ones that don't need letters).
+- **Pieces of writing** per college, or shared across colleges: prompt, word or character
+  limit, status (not started → submitted), and live count against the limit.
+- **A board** of every college in deadline order with progress per piece. Fully submitted
+  colleges sink to the bottom.
+- **Notes** per piece, kept outside the essay and never counted.
+- **Version history** thinned by age: everything from the last hour, then one an hour back to
+  a day, one a day back to a week, one a week before that, always keeping the first version
+  and the newest. Restore any of them.
+- **Reopens the piece you were last on.**
+- **Delete my data** in Settings removes your account and everything in it.
+
+## Run it on your computer
+
+You need [Node.js](https://nodejs.org) 20.9 or newer, and either Docker (to run the database
+locally) or a free [Supabase](https://supabase.com) project.
+
+```bash
+git clone https://github.com/Tchurkin/application-desk.git
+cd application-desk
+npm install
+cp .env.example .env.local
+```
+
+**Database, option A: local (needs Docker).**
+
+```bash
+npx supabase start          # prints an API URL and a publishable key
+```
+
+Put those two values in `.env.local`.
+
+**Database, option B: a free hosted Supabase project.**
+
+1. Create a project at [supabase.com](https://supabase.com).
+2. Copy the project URL and publishable key (Project Settings → API) into `.env.local`.
+3. Apply the schema: `npx supabase link --project-ref <your-ref>` then `npx supabase db push`.
+4. For a quick start, turn off Authentication → Sign In / Providers → Email → **Confirm
+   email**, or set up SMTP. Supabase's built-in email is rate-limited to a few messages an hour.
+
+Then:
+
+```bash
+npm run dev                 # http://localhost:3000
+```
+
+## Tests
+
+```bash
+npm test                    # unit tests: version thinning, counts, the board, the sync engine
+npm run test:e2e            # browser tests; needs the local Supabase from option A
+```
+
+CI runs lint, types, unit tests, a secret scan, and the browser tests against a local
+Supabase on every push.
+
+## How saving works
+
+Each piece is a [Yjs](https://yjs.dev) document edited with [TipTap](https://tiptap.dev).
+Every browser tab appends only its own edits to an append-only log (`piece_updates`), and Yjs
+merges any set of edits, in any order and with duplicates, into the same document. There is
+no read-modify-write, so there is no "last save wins".
+
+Edits are parked in the browser's local storage the moment they happen and cleared only once
+the server has them, so a reload, a crash, or leaving a piece right after typing replays
+them on the next load instead of losing them. A deleted piece refuses late writes (the
+foreign key is gone), so it can't come back as a ghost. See `src/lib/sync/`.
+
+## Privacy
+
+These are minors' essays.
+
+- Every table has row-level security; a student can only ever read their own desk.
+- No analytics, and nothing logs essay text.
+- The AI counselor (coming) is off unless the student turns it on, and uses the student's own
+  Anthropic API key.
+- **Delete my data** really deletes.
+
+## Roadmap
+
+1. ✅ One student, working alone.
+2. Parents: share links (view or suggest, optional password, revocable), suggestions / track
+   changes the student accepts or declines, live cursors.
+3. The Claude counselor: an Ask panel and "suggest edits" that land as suggestions, never in
+   the text. Per-college "no AI drafting" policy, no invented facts, provenance for anything
+   that started as AI text. Bring your own Anthropic API key.
+4. Polish: tabs side by side, a second version of a piece with compare, a five-minute setup.
+
+## License
+
+[MIT](LICENSE)
