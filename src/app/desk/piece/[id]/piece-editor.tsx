@@ -4,6 +4,7 @@ import { Extension } from "@tiptap/core";
 import Collaboration from "@tiptap/extension-collaboration";
 import CollaborationCaret from "@tiptap/extension-collaboration-caret";
 import Placeholder from "@tiptap/extension-placeholder";
+import { UndoCaret } from "@/lib/editor/undo-caret";
 import { EditorContent, useEditor, type Editor, type JSONContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -412,6 +413,7 @@ function EssayEditor({
       Collaboration.configure({ document: sync.doc, field: "default" }),
       CollaborationCaret.configure({ provider: { awareness: channel.awareness }, user }),
       Placeholder.configure({ placeholder: mode === "owner" ? "Start writing…" : "Nothing written yet." }),
+      UndoCaret,
       Suggestions,
     ];
   }, [live, mode, me, pieceId]);
