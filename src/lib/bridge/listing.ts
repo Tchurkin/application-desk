@@ -45,7 +45,7 @@ export const MESSAGE_MAX = 20_000;
 
 export const WHAT: Record<RequestKind, string> = {
   ask: "a question about a piece",
-  polish: "rewordings of a passage",
+  polish: "rewrites of a highlighted passage",
   odds: "admission odds for every college",
   interview: "the next question in the student's profile interview",
   chat: "a message from the student",
@@ -107,19 +107,28 @@ function askSteps(r: PendingRequest, o: ListingOptions): string[] {
   return lines;
 }
 
+/** The versions of a passage go between these tags; the desk shows them in place of it. */
+export const OPTION_FORMAT = "<option>…</option>";
+
 function polishSteps(r: PendingRequest, o: ListingOptions): string[] {
   const lines = [pieceLine(r), `Sent: ${sentAt(r.created_at)}`];
-  if (r.selection.trim()) lines.push("Passage to reword (use it exactly as `find`):", ...fenced(r.selection));
-  else lines.push("Passage to reword: none was selected. Answer the request asking the student to highlight a passage first.");
-  if (r.prompt.trim()) lines.push(`What the student wants: ${cut(r.prompt.trim(), PROMPT_MAX, "note cut")}`);
-  const read = pieceIncluded(r, o) ? "The piece is included below. Call" : `call read_piece with piece_id ${r.piece_id}. Then call`;
+  if (r.selection.trim()) lines.push("The student highlighted this passage:", ...fenced(r.selection));
+  else lines.push("No passage was highlighted: reply asking the student to highlight the words they want changed.");
+  lines.push(`What they asked: ${cut(r.prompt.trim() || "(nothing typed: make it better)", PROMPT_MAX, "note cut")}`);
+  const read = pieceIncluded(r, o)
+    ? "The whole piece, with its prompt, limit, the student's profile and their desk, is included below."
+    : `First call read_piece with piece_id ${r.piece_id}.`;
   lines.push(
-    `To do: ${read} suggest_edits once on that piece with 2 or 3 edits: each has find set to the passage above, ` +
-      "replace_with set to a different rewording, and a short reason saying what that version does better. " +
-      "Keep the student's voice, change as little as needed, add no new facts, keep about the same length (shorter if the piece is over its limit), and fit the sentence around it. " +
-      "If the passage occurs more than once, extend find with a few neighbouring words (kept unchanged in replace_with) so it is unique. " +
-      closeWith(r, o, "a one-line summary: the rewordings are waiting in the essay as suggestions for the student to accept or decline"),
-    "If the piece's college doesn't allow AI help with drafting (the piece says so), don't reword: explain why instead.",
+    `To do: ${read} If they asked for a change (or typed nothing), write 2 or 3 different versions of the highlighted passage that do it, ` +
+      "each a drop-in replacement for exactly that passage: keep the student's voice, add no facts they haven't given you, keep about the same length " +
+      "(shorter if the piece is over its limit), and make it read naturally with the sentences around it. " +
+      `Put each version inside ${OPTION_FORMAT} tags, in order, with nothing else inside the tags; then one short line on how they differ. ` +
+      "The desk shows each version in place of the passage and the student keeps one. " +
+      "If they asked a question about the passage rather than for a change, just answer it, without options. " +
+      (o.answer === "reply"
+        ? "Your reply is posted to the student as the answer (don't call answer_request)."
+        : `Then call answer_request with request_id ${r.id} and that reply.`),
+    "If the piece's college doesn't allow AI help with drafting (the piece says so), write no versions: explain why, and ask questions that help them revise it themselves.",
   );
   return lines;
 }

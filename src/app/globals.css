@@ -121,6 +121,28 @@ body {
   50% { opacity: 0; }
 }
 
+/* A rewrite showing in place of the passage it would replace (src/lib/editor/rewrites.ts). */
+.essay .rewrite-old {
+  display: none;
+}
+.essay .rewrite-new {
+  background: color-mix(in srgb, var(--warn) 22%, transparent);
+  border-radius: 2px;
+  box-shadow: 0 1px 0 var(--warn);
+}
+.essay .rewrite-hint {
+  margin-left: 0.5em;
+  padding: 0 0.4em;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--muted);
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 0.7rem;
+  white-space: nowrap;
+  user-select: none;
+}
+
 /* A passage still highlighted after the editor lost focus (e.g. while asking about it). */
 .essay .held-selection {
   background: color-mix(in srgb, var(--warn) 28%, transparent);

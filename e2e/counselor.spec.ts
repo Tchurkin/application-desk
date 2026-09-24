@@ -58,7 +58,7 @@ test("talking to the counselor: live drafts, models, pause, and removing it from
   // An older counselor shows up with an update on offer.
   expect(await c.poll("1")).toMatchObject({ fresh: 1, waiting: 1, speed: "balanced", model: "sonnet", effort: "medium", paused: false, remove: false });
   await page.goto("/desk/counselor");
-  await expect(card(page)).toContainText("A faster counselor is ready");
+  await expect(card(page).getByTestId("counselor-update")).toBeVisible();
   expect((await c.poll()).fresh).toBe(0);
   await page.reload();
   await expect(card(page).getByTestId("counselor-update")).toHaveCount(0);

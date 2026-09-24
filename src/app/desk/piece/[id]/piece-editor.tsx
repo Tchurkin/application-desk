@@ -15,6 +15,7 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { PIECE_STATUSES, labelOf, type PieceStatus } from "@/lib/domain/colleges";
 import { countChars, countWords, limitState, type LimitKind } from "@/lib/domain/count";
 import { HeldSelection } from "@/lib/editor/held-selection";
+import { Rewrites } from "@/lib/editor/rewrites";
 import { acceptInto, DIRECT_EDIT, resolveSuggestion, suggestKey, suggestPlugin, type SuggestMode } from "@/lib/suggest/plugin";
 import { SuggestionStore, type Suggestion } from "@/lib/suggest/store";
 import { SupabaseSuggestionBackend } from "@/lib/suggest/supabase-backend";
@@ -491,6 +492,7 @@ function EssayEditor({
       Placeholder.configure({ placeholder: mode === "owner" ? "Start writing…" : "Nothing written yet." }),
       UndoCaret,
       HeldSelection,
+      Rewrites(pieceId),
       Suggestions,
     ];
   }, [live, mode, me, pieceId]);

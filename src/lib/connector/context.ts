@@ -2,14 +2,15 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { head, renderRequest, renderRequestList, type ListingOptions, type PendingRequest } from "@/lib/bridge/listing";
 import type { RequestKind } from "@/lib/bridge/requests";
-import { profileForPiece, renderProfile, type ProfileInfo } from "@/lib/profile/render";
+import { renderProfile, type ProfileInfo } from "@/lib/profile/render";
 import { catalogCandidates, matchCollege } from "@/lib/strategy/catalog";
 import { renderStrategy, type StrategyInfo } from "@/lib/strategy/render";
-import { loadPiece, renderPiece } from "./tools";
+import { loadPiece, renderDesk, renderPiece } from "./tools";
 
 /*
- * Requests from the desk together with what answering them needs: the piece a question is
- * about, the college list for odds, the profile for an interview. Sending it along saves the
+ * Requests from the desk together with what answering them needs: the piece a question is about
+ * (with the student's whole profile and an overview of their desk, so the answer knows who they
+ * are and what else they're writing), the college list for odds, the profile for an interview. Sending it along saves the
  * assistant a round of reading tools before it can answer, which is most of the wait on a
  * quick question.
  */
@@ -24,6 +25,7 @@ class Context {
   private pieces = new Map<string, Promise<string | null>>();
   private profile: Promise<ProfileInfo | null> | null = null;
   private strategy: Promise<string | null> | null = null;
+  private desk: Promise<string | null> | null = null;
 
   constructor(
     private sb: SupabaseClient,
@@ -43,10 +45,14 @@ class Context {
     if (!p) {
       p = (async () => {
         try {
-          const [{ p: info, doc, flat }, profile] = await Promise.all([loadPiece(this.sb, this.token, id), this.loadProfile()]);
+          const [{ p: info, doc, flat }, profile, desk] = await Promise.all([
+            loadPiece(this.sb, this.token, id),
+            this.profileText(),
+            this.deskText(),
+          ]);
           doc.destroy();
-          const extra = profile ? profileForPiece(profile) : "";
-          return clip(renderPiece(info, flat.text) + (extra ? `\n\n${extra}` : ""));
+          // The piece first: past the size limit, the overview is what gets cut.
+          return clip([renderPiece(info, flat.text), profile, desk].filter(Boolean).join("\n\n"));
         } catch {
           return null;
         }
@@ -65,6 +71,15 @@ class Context {
     return this.strategy;
   }
 
+  /** The desk at a glance: every college, deadline and piece. */
+  deskText(): Promise<string | null> {
+    this.desk ??= Promise.resolve(this.sb.rpc("connector_desk", { token: this.token })).then(
+      ({ data, error }) => (error ? null : `# Their whole desk, for context\n${renderDesk(data as Parameters<typeof renderDesk>[0])}`),
+      () => null,
+    );
+    return this.desk;
+  }
+
   async profileText(): Promise<string | null> {
     const p = await this.loadProfile();
     return p ? clip(renderProfile(p)) : null;
@@ -77,6 +92,10 @@ class Context {
       polish: async () => ({ key: `piece:${r.piece_id}`, text: r.piece_id ? await this.piece(r.piece_id) : null }),
       odds: async () => ({ key: "strategy", text: await this.strategyText() }),
       interview: async () => ({ key: "profile", text: await this.profileText() }),
+      chat: async () => ({
+        key: "overview",
+        text: [await this.profileText(), await this.deskText()].filter(Boolean).join("\n\n") || null,
+      }),
     };
     const got = await needs[r.kind]?.();
     return got?.text ? { key: got.key, text: got.text } : null;

@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { ConfirmButton } from "@/components/confirm-button";
 import { subscribeDeskRequests } from "@/lib/bridge/live";
+import { parseOptions } from "@/lib/bridge/options";
 import {
   assistantLabel,
   bridgeMissing,
@@ -16,28 +17,32 @@ import {
 import { clip, hasWaiting, mergeRequest, removeRequest, sortThread, THREAD_KINDS, THREAD_LIMIT, whenLabel } from "@/lib/bridge/thread";
 import { useAssistant } from "@/lib/bridge/use-assistant";
 import { useNow } from "@/lib/bridge/use-now";
-import { activityOn, isCounselor, WATCH_PHRASE, watcher } from "@/lib/bridge/watchers";
+import { activityOn, counselors, isCounselor, WATCH_PHRASE, watcher } from "@/lib/bridge/watchers";
+import { offerRewrites, onRewriteEvent } from "@/lib/editor/rewrites";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { AnswerText } from "./answer-text";
+import { ModelPicker, useModelChoice } from "./model-picker";
 import { PendingAnswer } from "./pending-answer";
 import { useConnectors, WatchStatus } from "./watch-status";
 
 /**
- * The Ask panel: questions and "polish this passage" requests for the connected AI, answered
- * through the connector and shown here live.
+ * The Ask panel: questions about a piece, answered through the connector and shown here live.
+ * With a passage highlighted, a message asks for rewrites of it: the counselor answers with a
+ * few versions, and the first one shows in the essay in place of the passage (← → to switch,
+ * Enter to keep, Esc to go back; see src/lib/editor/rewrites.ts).
  *
  * The website can't talk to Claude or ChatGPT itself. Asking queues a request on the desk; the
  * counselor on the student's computer, or a chat they told to watch the desk, picks it up and
- * answers through the connector (answer_request, and suggest_edits for rewordings). The answer
+ * answers through the connector (answer_request). The answer
  * arrives here over realtime, with a refresh on focus and a slow poll while anything is waiting
  * as a backstop.
  *
  * Contract used by the Write workspace:
  *   <AskPanel deskId pieceId pieceTitle getSelection />
  * - getSelection() returns the text currently selected in the editor ("" if none), used to
- *   point the AI at a passage or to ask for rewordings of it.
+ *   point the AI at a passage and ask for rewrites of it.
  * - collegeName and aiPolicy are optional extras: the header names the college, and a college
- *   that doesn't allow AI help with drafting turns Polish off.
+ *   that doesn't allow AI help with drafting gets advice instead of rewrites.
  */
 export interface AskPanelProps {
   deskId: string;
@@ -59,6 +64,7 @@ interface Thread {
 
 type Notice =
   | { kind: "queued"; watching: boolean; counselor: boolean; paused: boolean; label: string; polish: boolean }
+  | { kind: "info"; text: string }
   | { kind: "connect" }
   | { kind: "error"; text: string };
 
@@ -106,6 +112,12 @@ export function AskPanel({ deskId, pieceId, pieceTitle, getSelection, collegeNam
   const [ignored, setIgnored] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<(Notice & { pieceId: string }) | null>(null);
+  const [model, setModel] = useModelChoice("ask");
+  // Rewrites showing in the essay (which request, which version), and ones already kept.
+  const [showing, setShowing] = useState<{ requestId: string; index: number } | null>(null);
+  const [kept, setKept] = useState<Record<string, number>>({});
+  // A rewrite request sent from here: its versions show in the essay as soon as they arrive.
+  const awaiting = useRef<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -226,31 +238,53 @@ export function AskPanel({ deskId, pieceId, pieceTitle, getSelection, collegeNam
     };
   }, []);
 
+  // The versions of a passage, shown in the essay once they arrive.
+  useEffect(() => {
+    const id = awaiting.current;
+    const r = id ? rows.find((x) => x.id === id) : null;
+    if (!r || r.status !== "answered") return;
+    awaiting.current = null;
+    const { options } = parseOptions(r.answer);
+    if (options.length && r.selection) offerRewrites({ pieceId, requestId: r.id, passage: r.selection, options, index: 0 });
+  }, [rows, pieceId]);
+
+  useEffect(
+    () =>
+      onRewriteEvent((e) => {
+        if (e.type === "shown") setShowing({ requestId: e.requestId, index: e.index });
+        else if (e.type === "accepted") {
+          setShowing(null);
+          setKept((k) => ({ ...k, [e.requestId]: e.index }));
+        } else if (e.type === "closed") setShowing(null);
+        else setNotice({ kind: "info", text: "That passage isn't in your essay as it was any more, so the versions are only here to copy.", pieceId });
+      }),
+    [pieceId],
+  );
+
   // Keep the newest exchange in view.
-  const signature = rows.map((r) => `${r.id}:${r.status}`).join();
+  const signature = rows.map((r) => `${r.id}:${r.status}:${r.answer.length}`).join();
   useEffect(() => {
     const el = logRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [signature]);
 
-  async function send(kind: "ask" | "polish") {
+  async function send() {
     if (busy) return;
     const prompt = draft.trim();
     const passage = readSelection() || pointed;
     const selection = passage && passage !== ignored ? passage : "";
+    // A highlighted passage asks for rewrites of it (or answers a question about it).
+    const kind = selection ? "polish" : "ask";
     if (kind === "ask" && !prompt) {
       inputRef.current?.focus();
-      return;
-    }
-    if (kind === "polish" && !selection) {
-      say({ kind: "error", text: "Highlight a passage in your essay first, then Polish." });
       return;
     }
     const connected = connectors === null || connectors.length > 0;
     const watching = watcher(connectors, Date.now());
     setBusy(true);
     try {
-      const row = await queueRequest(supabase, { deskId, pieceId, kind, prompt, selection });
+      const row = await queueRequest(supabase, { deskId, pieceId, kind, prompt, selection, model });
+      if (kind === "polish") awaiting.current = row.id;
       epoch.current++;
       setThread((t) => (t.pieceId === pieceId ? { ...t, phase: "ready", rows: mergeRequest(t.rows, row, pieceId) } : t));
       setDraft("");
@@ -303,11 +337,12 @@ export function AskPanel({ deskId, pieceId, pieceTitle, getSelection, collegeNam
     // Enter sends, Shift+Enter starts a new line.
     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
-      void send("ask");
+      void send();
     }
   }
 
   const off = phase === "missing";
+  const defaultModel = counselors(connectors)[0]?.counselor_model;
 
   return (
     <div ref={panelRef} data-testid="ask-panel" className="flex h-full min-h-0 flex-col gap-3">
@@ -383,6 +418,9 @@ export function AskPanel({ deskId, pieceId, pieceTitle, getSelection, collegeNam
                 waitingFor={label}
                 doing={r.status === "pending" ? activityOn(connectors, r.id, now) : null}
                 onDismiss={() => void dismiss(r)}
+                showing={showing?.requestId === r.id ? showing.index : null}
+                kept={kept[r.id] ?? null}
+                onShow={(options, index) => offerRewrites({ pieceId, requestId: r.id, passage: r.selection, options, index })}
               />
             ))}
           </ol>
@@ -404,7 +442,7 @@ export function AskPanel({ deskId, pieceId, pieceTitle, getSelection, collegeNam
         className="flex flex-col gap-2 border-t border-line pt-3"
         onSubmit={(e) => {
           e.preventDefault();
-          void send("ask");
+          void send();
         }}
       >
         {pointing && (
@@ -432,23 +470,15 @@ export function AskPanel({ deskId, pieceId, pieceTitle, getSelection, collegeNam
           rows={3}
           value={draft}
           disabled={off}
-          placeholder={pointing ? "Ask about the highlighted passage…" : "Ask about this piece…"}
+          placeholder={pointing ? "How should it change? (or ask about it)" : "Ask about this piece…"}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={onKeyDown}
         />
         <div className="flex flex-wrap items-center gap-2">
-          <button type="submit" className="btn btn-primary" disabled={busy || off || !draft.trim()}>
-            Ask {label}
+          <button type="submit" className="btn btn-primary" disabled={busy || off || (!draft.trim() && !pointing)} aria-describedby={`${ids}-how`}>
+            Send
           </button>
-          <button
-            type="button"
-            className="btn"
-            disabled={busy || off || noDrafting || !pointing}
-            aria-describedby={`${ids}-polish`}
-            onClick={() => void send("polish")}
-          >
-            Polish selection
-          </button>
+          <ModelPicker value={model} onChange={setModel} defaultModel={defaultModel} />
           <label className="ml-auto flex items-center gap-1 text-xs text-muted">
             Answer with
             <select
@@ -461,12 +491,12 @@ export function AskPanel({ deskId, pieceId, pieceTitle, getSelection, collegeNam
             </select>
           </label>
         </div>
-        <p id={`${ids}-polish`} className="text-xs text-muted">
-          {noDrafting
-            ? "Polish is off: this college doesn't allow AI help with drafting."
-            : pointing
-              ? `Polish asks ${label} for 2 or 3 rewordings of the highlighted passage. They arrive in your essay as suggestions to accept or decline.`
-              : "Highlight a passage in your essay to ask about just that part, or to Polish it into suggested rewordings."}
+        <p id={`${ids}-how`} className="text-xs text-muted">
+          {pointing
+            ? noDrafting
+              ? "This college doesn't allow AI help with drafting, so you'll get advice on the highlighted passage rather than rewrites."
+              : "Say how it should change (or send as is): a few versions appear in place of the highlighted text. ← → switch between them, Enter keeps one, Esc goes back."
+            : "Ask about the whole piece, or highlight a passage to get rewrites of just that part."}
         </p>
         <div role="status" aria-live="polite" className="text-xs">
           {shownNotice && <NoticeLine notice={shownNotice} />}
@@ -482,21 +512,30 @@ function RequestItem({
   waitingFor,
   doing,
   onDismiss,
+  showing,
+  kept,
+  onShow,
 }: {
   r: DeskRequest;
   now: number;
   waitingFor: string;
   doing: string | null;
   onDismiss: () => void;
+  /** The version showing in the essay, if it's one of this request's. */
+  showing: number | null;
+  /** The version kept, if one was. */
+  kept: number | null;
+  onShow: (options: string[], index: number) => void;
 }) {
   const asked = whenLabel(r.created_at, now);
   const answered = whenLabel(r.answered_at, now);
-  const question = r.prompt || (r.kind === "polish" ? "Suggest a few rewordings of this passage." : "");
+  const question = r.prompt || (r.kind === "polish" ? "Make this better." : "");
+  const { options, note } = r.kind === "polish" ? parseOptions(r.answer) : { options: [], note: r.answer };
   return (
     <li data-testid="request" className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between gap-2">
         <span className="font-mono text-[11px] tracking-wide text-muted uppercase">
-          {r.kind === "polish" ? "You · Polish" : "You"}
+          {r.kind === "polish" ? "You · Rewrite" : "You"}
           {asked && ` · ${asked}`}
         </span>
         <button
@@ -522,9 +561,30 @@ function RequestItem({
             {r.answered_by || "Assistant"}
             {answered && ` · ${answered}`}
           </p>
-          <AnswerText text={r.answer} />
-          {r.kind === "polish" && (
-            <p className="mt-1.5 text-xs text-muted">The rewordings are in your essay as suggestions: accept the one you like.</p>
+          {note && <AnswerText text={note} />}
+          {options.length > 0 && (
+            <ol className="mt-1.5 flex flex-col gap-1.5" aria-label="Versions">
+              {options.map((o, i) => (
+                <li
+                  key={i}
+                  data-testid="rewrite-option"
+                  className={`rounded-md border px-2 py-1.5 text-sm ${showing === i ? "border-warn bg-warn-soft" : kept === i ? "border-accent bg-accent-soft" : "border-line"}`}
+                >
+                  <p className="break-words whitespace-pre-wrap">{o}</p>
+                  <p className="mt-1 flex flex-wrap gap-3 text-xs text-muted">
+                    {kept === i ? (
+                      <span>Kept in your essay</span>
+                    ) : showing === i ? (
+                      <span>Showing in your essay: Enter keeps it</span>
+                    ) : (
+                      <button type="button" className="underline underline-offset-2 hover:text-ink" onClick={() => onShow(options, i)}>
+                        Show in essay
+                      </button>
+                    )}
+                  </p>
+                </li>
+              ))}
+            </ol>
           )}
         </div>
       )}
@@ -550,7 +610,7 @@ function NoticeLine({ notice }: { notice: Notice }) {
       return notice.watching ? (
         <p className="text-muted">
           Sent to {notice.counselor ? "your counselor" : notice.label}.{" "}
-          {notice.polish ? "The rewordings arrive in your essay as suggestions." : "The answer appears here in a moment."}
+          {notice.polish ? "The rewrites appear in your essay in place of the highlighted text." : "The answer appears here in a moment."}
         </p>
       ) : (
         <p className="text-warn">
@@ -571,6 +631,8 @@ function NoticeLine({ notice }: { notice: Notice }) {
           , then ask it to handle your desk requests and the answer appears here.
         </p>
       );
+    case "info":
+      return <p className="text-warn">{notice.text}</p>;
     default:
       return <p className="text-danger">{notice.text}</p>;
   }

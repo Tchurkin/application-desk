@@ -1,9 +1,9 @@
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { expect, test, type Page } from "@playwright/test";
-import { addCollege, addPiece, essay, signUp, waitSaved } from "./helpers";
+import { addCollege, addPiece, essay, expectEssayContains, essayText, signUp, waitSaved } from "./helpers";
 
 /*
- * Ask: the student queues a question (or a polish request) beside a piece, the connected AI
+ * Ask: the student queues a question (or asks for rewrites of a highlighted passage) beside a piece, the connected AI
  * picks it up through the connector and answers, and the answer shows up in the panel live.
  * The assistant's new tab is stubbed: window.open only records the URL it was given.
  */
@@ -77,7 +77,7 @@ test("a question asked beside a piece is answered through the connector and appe
   await openAsk(page);
   await expect(panel(page).getByRole("note", { name: "Set up Ask" })).toContainText("Settings");
   await askBox(page).fill("Is my opening strong enough?");
-  await panel(page).getByRole("button", { name: "Ask Claude" }).click();
+  await panel(page).getByRole("button", { name: "Send", exact: true }).click();
   const first = requests(page).filter({ hasText: "Is my opening strong enough?" });
   await expect(first).toContainText("Waiting for Claude");
   await expect(panel(page).getByRole("status")).toContainText("Connect Claude or ChatGPT in Settings");
@@ -136,11 +136,11 @@ test("a question asked beside a piece is answered through the connector and appe
   await client.close();
 });
 
-test("Polish sends the highlighted passage, and the rewordings come back as suggestions", async ({ page }) => {
+test("highlight and send: rewrites show in place of the passage, arrows switch them, Enter keeps one", async ({ page }) => {
   await stubWindowOpen(page);
   await signUp(page, "polish");
   await addCollege(page, "Northfield University");
-  const pieceId = await addPiece(page, "Community");
+  await addPiece(page, "Community");
   await essay(page).click();
   await page.keyboard.insertText("My robot sorted cans.");
   await page.keyboard.press("Enter");
@@ -149,8 +149,8 @@ test("Polish sends the highlighted passage, and the rewordings come back as sugg
   const client = await connect(await makeConnector(page));
 
   await openAsk(page);
-  const polish = panel(page).getByRole("button", { name: "Polish selection" });
-  await expect(polish).toBeDisabled();
+  // One button: there is no separate Polish any more.
+  await expect(panel(page).getByRole("button", { name: /Polish/ })).toHaveCount(0);
 
   // Highlight the second paragraph: the panel points at it.
   await essay(page).click();
@@ -158,8 +158,7 @@ test("Polish sends the highlighted passage, and the rewordings come back as sugg
   await page.keyboard.press("Shift+Home");
   await expect(panel(page).getByTestId("pointing")).toContainText("It was very good at it.");
   await askBox(page).fill("Make it less plain.");
-  await expect(polish).toBeEnabled();
-  await polish.click();
+  await panel(page).getByRole("button", { name: "Send", exact: true }).click();
 
   const item = requests(page).filter({ hasText: "Make it less plain." });
   await expect(item.getByLabel("Highlighted passage")).toContainText("It was very good at it.");
@@ -171,23 +170,33 @@ test("Polish sends the highlighted passage, and the rewordings come back as sugg
   const list = await call(client, "list_desk_requests");
   expect(list.text).toContain("(kind: polish)");
   expect(list.text).toContain('"""\nIt was very good at it.\n"""');
-  expect(list.text).toContain("What the student wants: Make it less plain.");
+  expect(list.text).toContain("What they asked: Make it less plain.");
+  expect(list.text).toContain("<option>");
   const id = list.text.match(REQUEST_ID)![1];
 
-  // The route the listing describes: rewordings as suggestions on that passage, then a summary.
-  const s = await call(client, "suggest_edits", {
-    piece_id: pieceId,
-    edits: [
-      { find: "It was very good at it.", replace_with: "It never missed a can.", reason: "Concrete." },
-      { find: "It was very good at it.", replace_with: "It sorted faster than I could.", reason: "Shows it." },
-    ],
-  });
-  expect(s.isError).toBe(false);
-  expect(s.text).toContain("2 suggestions added");
-  expect((await call(client, "answer_request", { request_id: id, answer: "Two rewordings are waiting in your essay." })).isError).toBe(false);
+  const answer = "<option>It never missed a can.</option>\n<option>It sorted faster than I could.</option>\nThe first is punchier; the second shows it.";
+  expect((await call(client, "answer_request", { request_id: id, answer })).isError).toBe(false);
 
-  await expect(item).toContainText("Two rewordings are waiting in your essay.", { timeout: 15_000 });
-  await expect(item).toContainText("accept the one you like");
+  // The first version shows in the essay, in place of the passage.
+  const preview = page.getByTestId("rewrite-preview");
+  await expect(preview).toContainText("It never missed a can.", { timeout: 15_000 });
+  await expect(preview).toContainText("1/2");
+  await expect(item.getByTestId("rewrite-option")).toHaveCount(2);
+  await expect(item).toContainText("The first is punchier");
+  await page.keyboard.press("ArrowRight");
+  await expect(preview).toContainText("It sorted faster than I could.");
+  await page.keyboard.press("Enter");
+  await expect(preview).toHaveCount(0);
+  await expectEssayContains(page, "It sorted faster than I could.");
+  expect(await essayText(page)).not.toContain("It was very good at it.");
+  await expect(item.getByTestId("rewrite-option").nth(1)).toContainText("Kept in your essay");
+
+  // Another version can be shown from the panel; Esc puts the text back as it was.
+  await item.getByTestId("rewrite-option").nth(0).getByRole("button", { name: "Show in essay" }).click();
+  await expect(preview).toContainText("It never missed a can.");
+  await page.keyboard.press("Escape");
+  await expect(preview).toHaveCount(0);
+  await expectEssayContains(page, "It sorted faster than I could.");
   await client.close();
 });
 
@@ -202,11 +211,11 @@ test("dismiss withdraws a request, Clear deletes the thread, and the assistant c
 
   await panel(page).getByLabel("Answer with").selectOption("chatgpt");
   await askBox(page).fill("Too long?");
-  await panel(page).getByRole("button", { name: "Ask ChatGPT" }).click();
+  await panel(page).getByRole("button", { name: "Send", exact: true }).click();
   await expect(requests(page)).toHaveCount(1);
   expect(await opened(page)).toEqual([]);
   await askBox(page).fill("Too plain?");
-  await panel(page).getByRole("button", { name: "Ask ChatGPT" }).click();
+  await panel(page).getByRole("button", { name: "Send", exact: true }).click();
   await expect(requests(page)).toHaveCount(2);
 
   // Dismissing takes it off the panel and out of the assistant's queue.
@@ -221,7 +230,7 @@ test("dismiss withdraws a request, Clear deletes the thread, and the assistant c
   await page.reload();
   await openAsk(page);
   await expect(requests(page)).toHaveCount(1);
-  await expect(panel(page).getByRole("button", { name: "Ask ChatGPT" })).toBeVisible();
+  await expect(panel(page).getByLabel("Answer with")).toHaveValue("chatgpt");
 
   // Clear deletes the whole thread.
   await panel(page).getByRole("button", { name: "Clear", exact: true }).click();

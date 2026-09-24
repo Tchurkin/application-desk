@@ -49,7 +49,7 @@ export function registerBridgeTools(server: McpServer, token: string) {
       description:
         "Wait for the student to ask something on the Application Desk website (a question about a piece, a passage to polish, an odds estimate), " +
         "up to about 45 seconds, and return it the moment it arrives. Use this when the student says to watch their desk: " +
-        "answer each request (answer_request; suggest_edits for polish; set_college_strategy for odds), then call watch_desk again, and keep going until the student says to stop. " +
+        "answer each request (answer_request; for a highlighted passage, versions in <option> tags; set_college_strategy for odds), then call watch_desk again, and keep going until the student says to stop. " +
         "Keep answers on the desk, not in this chat, apart from a one-line note of what you did.",
       inputSchema: z.object({}),
       annotations: { readOnlyHint: true },

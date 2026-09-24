@@ -32,18 +32,19 @@ describe("renderRequestList", () => {
     expect(t).toContain("Sent: 2026-09-23 14:02 UTC");
   });
 
-  it("tells the assistant to polish through suggest_edits with the passage as find", () => {
+  it("asks for versions of a highlighted passage, each between option tags", () => {
     const t = renderRequestList([row("p1", { kind: "polish", prompt: "", selection: "My robot sorted cans." })]);
-    expect(t).toContain("rewordings of a passage [request_id: p1] (kind: polish)");
-    expect(t).toContain("use it exactly as `find`");
-    expect(t).toContain("My robot sorted cans.");
-    expect(t).toContain("suggest_edits once on that piece with 2 or 3 edits");
+    expect(t).toContain("rewrites of a highlighted passage [request_id: p1] (kind: polish)");
+    expect(t).toContain('"""\nMy robot sorted cans.\n"""');
+    expect(t).toContain("(nothing typed: make it better)");
+    expect(t).toContain("2 or 3 different versions");
+    expect(t).toContain("<option>…</option>");
     expect(t).toContain("answer_request with request_id p1");
-    expect(t).not.toContain("What the student wants");
+    expect(t).not.toContain("suggest_edits");
   });
 
   it("asks for a highlight when a polish request has no passage", () => {
-    expect(renderRequestList([row("p2", { kind: "polish", selection: " " })])).toContain("none was selected");
+    expect(renderRequestList([row("p2", { kind: "polish", selection: " " })])).toContain("No passage was highlighted");
   });
 
   it("sends odds requests to read_strategy and set_college_strategy", () => {
