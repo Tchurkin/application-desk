@@ -57,3 +57,20 @@ export function apiClient() {
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
   return createClient(url, key, { auth: { persistSession: false } });
 }
+
+/** The essay's own text: other people's carets and suggestion widgets left out. */
+export async function essayText(page: Page) {
+  return essay(page).evaluate((el) => {
+    const c = el.cloneNode(true) as HTMLElement;
+    c.querySelectorAll(".ProseMirror-widget, .collaboration-carets__caret").forEach((n) => n.remove());
+    return c.textContent ?? "";
+  });
+}
+
+export async function expectEssay(page: Page, text: string) {
+  await expect.poll(() => essayText(page), { timeout: 10_000 }).toBe(text);
+}
+
+export async function expectEssayContains(page: Page, text: string) {
+  await expect.poll(() => essayText(page), { timeout: 10_000 }).toContain(text);
+}

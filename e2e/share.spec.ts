@@ -1,5 +1,5 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
-import { addCollege, addPiece, apiClient, essay, signUp, waitSaved } from "./helpers";
+import { addCollege, addPiece, apiClient, essay, expectEssay, expectEssayContains, signUp, waitSaved } from "./helpers";
 
 /** The student makes a share link in Settings and returns its URL. */
 async function makeLink(page: Page, opts: { role: "suggest" | "view"; label?: string; password?: string }) {
@@ -50,7 +50,7 @@ test("a parent suggests, the student sees it live and accepts it", async ({ page
   const url = await makeLink(page, { role: "suggest", label: "Mom" });
   const mom = await join(browser, url, "Mom");
   await openShared(mom, "Shared essay");
-  await expect(essay(mom)).toHaveText("The cat sat.");
+  await expectEssay(mom, "The cat sat.");
 
   await essay(mom).click();
   await mom.keyboard.press("Control+End");
@@ -63,9 +63,9 @@ test("a parent suggests, the student sees it live and accepts it", async ({ page
   await expect(suggestions(page)).toContainText("Mom");
   await expect(page.locator(".sugg-ins")).toHaveText(" Quietly.");
   await suggestions(page).getByRole("button", { name: "Accept" }).click();
-  await expect(essay(page)).toHaveText("The cat sat. Quietly.");
+  await expectEssay(page, "The cat sat. Quietly.");
   await waitSaved(page);
-  await expect(essay(mom)).toHaveText("The cat sat. Quietly.");
+  await expectEssay(mom, "The cat sat. Quietly.");
   await expect(mom.locator(".sugg-ins")).toHaveCount(0);
 });
 
@@ -88,13 +88,13 @@ test("replace, delete and decline; the student's text only changes on accept", a
   await expect(suggestions(page)).toHaveCount(2);
   await expect(suggestions(page).nth(0)).toContainText("Replace “cat” with “dog”");
   await expect(suggestions(page).nth(1)).toContainText("Delete “sat”");
-  await expect(essay(page)).toHaveText("The cat sat.");
+  await expectEssay(page, "The cat sat.");
 
   await suggestions(page).nth(0).getByRole("button", { name: "Accept" }).click();
-  await expect(essay(page)).toHaveText("The dog sat.");
+  await expectEssay(page, "The dog sat.");
   await suggestions(page).nth(0).getByRole("button", { name: "Decline" }).click();
   await expect(suggestions(page)).toHaveCount(0);
-  await expect(essay(page)).toHaveText("The dog sat.");
+  await expectEssay(page, "The dog sat.");
   // Undo the decline: it comes back.
   await page.getByRole("status").getByRole("button", { name: "Undo" }).click();
   await expect(suggestions(page)).toHaveCount(1);
@@ -110,10 +110,10 @@ test("suggesting into an empty piece, then accepting it", async ({ page, browser
   await expect(suggestions(page)).toHaveCount(1);
   await expect(page.locator(".sugg-ins")).toHaveText("Start here");
   await suggestions(page).getByRole("button", { name: "Accept" }).click();
-  await expect(essay(page)).toHaveText("Start here");
+  await expectEssay(page, "Start here");
   await waitSaved(page);
   await page.reload();
-  await expect(essay(page)).toHaveText("Start here");
+  await expectEssay(page, "Start here");
 });
 
 test("suggesting while the student types elsewhere: the suggestion stays whole", async ({ page, browser }) => {
@@ -139,11 +139,11 @@ test("suggesting while the student types elsewhere: the suggestion stays whole",
   await typing;
   await waitSaved(page);
   await expect(mom.locator(".sugg-ins")).toHaveText(" Really.");
-  await expect(essay(page)).toContainText("One. Two. Three. Four. Five.");
-  await expect(essay(mom)).toContainText("Three. Four. Five.");
+  await expectEssayContains(page, "One. Two. Three. Four. Five.");
+  await expectEssayContains(mom, "Three. Four. Five.");
   await expect(suggestions(page)).toHaveCount(1);
   await suggestions(page).getByRole("button", { name: "Accept" }).click();
-  await expect(essay(page)).toHaveText("One. Really. Two. Three. Four. Five.");
+  await expectEssay(page, "One. Really. Two. Three. Four. Five.");
 });
 
 test("a suggestion made just before leaving or reloading is kept, and Ctrl+Z undoes a burst", async ({ page, browser }) => {
@@ -172,14 +172,14 @@ test("read-only links can't change anything", async ({ page, browser }) => {
   await studentWith(page, "viewonly", "Read me.");
   const reader = await join(browser, await makeLink(page, { role: "view" }), "Grandpa");
   await openShared(reader, "Shared essay");
-  await expect(essay(reader)).toHaveText("Read me.");
+  await expectEssay(reader, "Read me.");
   await essay(reader).click();
   await reader.keyboard.type("scribble");
   await reader.keyboard.press("Backspace");
-  await expect(essay(reader)).toHaveText("Read me.");
+  await expectEssay(reader, "Read me.");
   await expect(reader.locator(".sugg-ins")).toHaveCount(0);
   await page.reload();
-  await expect(essay(page)).toHaveText("Read me.");
+  await expectEssay(page, "Read me.");
   await expect(suggestions(page)).toHaveCount(0);
 });
 
@@ -259,22 +259,22 @@ test("the database refuses a suggester who tries to write the text directly", as
   expect(w4).not.toBeNull();
 
   await page.reload();
-  await expect(essay(page)).toHaveText("Mine.");
+  await expectEssay(page, "Mine.");
 });
 
 test("two tabs of the student edit live", async ({ page, context }) => {
   await studentWith(page, "twotabs", "Start.");
   const other = await context.newPage();
   await other.goto(page.url());
-  await expect(essay(other)).toHaveText("Start.");
+  await expectEssay(other, "Start.");
   await essay(page).click();
   await page.keyboard.press("Control+End");
   await page.keyboard.type(" From one.");
   await essay(other).click();
   await other.keyboard.press("Control+Home");
   await other.keyboard.type("Two says hi. ");
-  await expect(essay(page)).toHaveText("Two says hi. Start. From one.");
-  await expect(essay(other)).toHaveText("Two says hi. Start. From one.");
+  await expectEssay(page, "Two says hi. Start. From one.");
+  await expectEssay(other, "Two says hi. Start. From one.");
   // Each sees the other's caret.
   await expect(page.locator(".collaboration-carets__label")).toHaveCount(1);
 });

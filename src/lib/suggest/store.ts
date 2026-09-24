@@ -65,6 +65,9 @@ export class SuggestionStore {
   private redoStack: { at: number; entries: UndoEntry[] }[] = [];
   private key: string;
   private retryMs = 500;
+  /** Local changes are numbered, so a reload can tell what changed here while it was in flight. */
+  private seq = 0;
+  private touched = new Map<string, number>();
 
   constructor(
     private pieceId: string,
@@ -152,6 +155,7 @@ export class SuggestionStore {
   }
 
   private queue(id: string, p: Pending) {
+    this.touched.set(id, ++this.seq);
     this.pending.set(id, p);
     this.writeParked();
     this.emit();
@@ -274,19 +278,30 @@ export class SuggestionStore {
     return this.flushing;
   }
 
-  /** Throw away local state for rows the server owns, and take the server's copy. */
+  /**
+   * Take the server's copy, except for anything changed here since the reload started (its
+   * answer may predate those changes) or still waiting to be sent.
+   */
   async reload() {
+    const startedAt = this.seq;
     try {
       const list = await this.backend.list(this.pieceId);
-      const keep = new Map([...this.pending.keys()].map((id) => [id, this.rows.get(id)] as const));
-      this.rows = new Map(list.map((s) => [s.id, s]));
-      for (const [id, s] of keep) {
-        if (s) this.rows.set(id, s);
-        else this.rows.delete(id);
+      const next = new Map(list.map((s) => [s.id, s] as const));
+      for (const [id, at] of this.touched) {
+        if (at <= startedAt && !this.pending.has(id)) continue;
+        const local = this.rows.get(id);
+        if (local) next.set(id, local);
+        else next.delete(id);
       }
+      for (const id of this.pending.keys()) {
+        const local = this.rows.get(id);
+        if (local) next.set(id, local);
+        else next.delete(id);
+      }
+      this.rows = next;
       this.emit();
     } catch {
-      // Next event will bring it up to date.
+      // The next event brings it up to date.
     }
   }
 

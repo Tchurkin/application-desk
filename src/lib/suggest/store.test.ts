@@ -195,6 +195,27 @@ describe("SuggestionStore", () => {
     expect(be.rows.get(s.id)?.status).toBe("declined");
   });
 
+  it("a reload whose answer predates my latest typing never drops it", async () => {
+    const be = new FakeBackend();
+    const st = new SuggestionStore("p", be, new MemoryStorage(), "tab", { flushDelayMs: 0 });
+    await st.start();
+    // The server answers the reload with a snapshot taken now, delivered later.
+    const snapshot = [...be.rows.values()];
+    let release: () => void = () => {};
+    be.list = () => new Promise((r) => (release = () => r(snapshot)));
+    const reloading = st.reload();
+    const s = sugg({ body: " " });
+    st.put(s);
+    await st.flush(); // saved and no longer pending
+    release();
+    await reloading;
+    expect(st.get(s.id)?.body).toBe(" ");
+    st.put({ ...st.get(s.id)!, body: " W" });
+    await st.flush();
+    expect(be.rows.get(s.id)?.body).toBe(" W");
+    expect(be.rows.size).toBe(1);
+  });
+
   it("someone else's new suggestion appears; their withdrawal removes it", async () => {
     const be = new FakeBackend();
     const st = new SuggestionStore("p", be, new MemoryStorage(), "owner", { flushDelayMs: 0 });
