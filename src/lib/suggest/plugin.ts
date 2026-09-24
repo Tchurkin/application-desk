@@ -219,7 +219,39 @@ function myDeleteWhere(state: EditorState, opts: SuggestOptions, test: (r: Resol
 
 function moveCaret(view: EditorView, pos: number) {
   const tr = view.state.tr.setSelection(TextSelection.create(view.state.doc, pos));
-  view.dispatch(tr.setMeta("addToHistory", false));
+  view.dispatch(tr.setMeta("addToHistory", false).setMeta(suggestKey, { refresh: true }));
+}
+
+/**
+ * The caret as the browser has it right now. ProseMirror learns about caret moves from
+ * "selectionchange" events, which can arrive after the next keystroke; suggest mode never lets
+ * the browser change the text, so it must not act on a stale caret.
+ */
+function liveSelection(view: EditorView): { from: number; to: number } {
+  const fallback = { from: view.state.selection.from, to: view.state.selection.to };
+  const root = view.root as Document | ShadowRoot;
+  const sel = "getSelection" in root && root.getSelection ? root.getSelection() : null;
+  if (!sel || !sel.anchorNode || !sel.focusNode || !view.dom.contains(sel.anchorNode)) return fallback;
+  try {
+    const a = view.posAtDOM(sel.anchorNode, sel.anchorOffset);
+    const b = view.posAtDOM(sel.focusNode, sel.focusOffset);
+    return { from: Math.min(a, b), to: Math.max(a, b) };
+  } catch {
+    return fallback;
+  }
+}
+
+/** Bring ProseMirror's selection up to date with the browser's before acting on it. */
+function syncSelection(view: EditorView) {
+  const { from, to } = liveSelection(view);
+  const cur = view.state.selection;
+  if (cur.from === from && cur.to === to) return;
+  try {
+    const tr = view.state.tr.setSelection(TextSelection.create(view.state.doc, from, to));
+    view.dispatch(tr.setMeta("addToHistory", false));
+  } catch {
+    // A position outside text: leave the selection alone.
+  }
 }
 
 /** In test builds, a record of each suggesting keystroke (see e2e/). */
@@ -247,6 +279,8 @@ export function suggestText(view: EditorView, opts: SuggestOptions, from: number
     } else {
       store.put({ ...base(opts, "insert"), anchor_from: anchorAt(state, from, -1), body: text });
     }
+    // The text doesn't change, so the caret stays; say so, so a redraw can't move it.
+    moveCaret(view, from);
     return;
   }
   store.put({
@@ -415,6 +449,7 @@ export function suggestPlugin(opts: SuggestOptions): Plugin {
         if (opts.mode === "owner") return false;
         const mod = event.metaKey || event.ctrlKey;
         if (!suggesting) return !isNavigation(event, mod);
+        syncSelection(view);
         if (mod && event.key.toLowerCase() === "z") {
           event.preventDefault();
           if (event.shiftKey) opts.store.redo();
@@ -442,6 +477,20 @@ export function suggestPlugin(opts: SuggestOptions): Plugin {
         // Formatting shortcuts would change the text.
         if (mod && !isNavigation(event, mod)) return true;
         return false;
+      },
+      handleDOMEvents: {
+        // Take typed text before the browser puts it in the page: the page's text must not change.
+        beforeinput(view, event) {
+          if (opts.mode === "owner") return false;
+          const e = event as InputEvent;
+          if (e.inputType !== "insertText" && e.inputType !== "insertReplacementText") return false;
+          e.preventDefault();
+          if (!suggesting) return true;
+          const text = e.data ?? e.dataTransfer?.getData("text/plain") ?? "";
+          const { from, to } = liveSelection(view);
+          if (text) suggestText(view, opts, from, to, text);
+          return true;
+        },
       },
       handlePaste(view, _event, slice) {
         if (opts.mode === "owner") return false;
