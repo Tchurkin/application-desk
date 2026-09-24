@@ -69,12 +69,47 @@ export function resolveAnchor(state: EditorState, anchor: string): number | null
   if (!y) return null;
   let pos: number | null;
   try {
-    pos = relativePositionToAbsolutePosition(y.doc, y.type, Y.decodeRelativePosition(fromBase64(anchor)), y.mapping as never);
+    const rel = Y.decodeRelativePosition(fromBase64(anchor));
+    // y-prosemirror discards any text position that lands at the very start of the document
+    // as "misresolved" (a guard meant for carets), which would lose an anchor on the first
+    // word. When it gives up, resolve through the document structure instead.
+    pos = relativePositionToAbsolutePosition(y.doc, y.type, rel, y.mapping as never) ?? resolveInText(state, y, rel);
   } catch {
     return null;
   }
   if (pos === null) return null;
   return clampToText(state.doc, pos);
+}
+
+/** A position inside a paragraph's text, found through the paragraph's node. */
+function resolveInText(state: EditorState, y: YCtx, rel: Y.RelativePosition): number | null {
+  const abs = Y.createAbsolutePositionFromRelativePosition(rel, y.doc);
+  if (!abs || !(abs.type instanceof Y.XmlText)) return null;
+  const parent = abs.type.parent;
+  if (!(parent instanceof Y.XmlElement)) return null;
+  const node = y.mapping.get(parent);
+  if (!node) return null;
+  let nodePos = -1;
+  state.doc.descendants((n, p) => {
+    if (nodePos >= 0) return false;
+    if (n === node) {
+      nodePos = p;
+      return false;
+    }
+    return true;
+  });
+  if (nodePos < 0) return null;
+  let offset = 0;
+  for (const k of parent.toArray()) {
+    if (k === abs.type) break;
+    if (k instanceof Y.XmlText) offset += k.length;
+    else {
+      const mapped = y.mapping.get(k) as PMNode | undefined;
+      if (!mapped) return null;
+      offset += mapped.nodeSize;
+    }
+  }
+  return nodePos + 1 + offset + abs.index;
 }
 
 /** An empty document has no text node yet: put positions inside the first paragraph. */
