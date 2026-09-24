@@ -93,11 +93,17 @@ test("a question asked beside a piece is answered through the connector and appe
   await askBox(page).press("Enter");
   await expect(requests(page)).toHaveCount(2);
   await expect(askBox(page)).toHaveValue("");
-  await expect.poll(() => opened(page)).toHaveLength(1);
-  const url = (await opened(page))[0];
-  expect(url).toContain("https://claude.ai/new?q=");
-  expect(decodeURIComponent(url)).toContain("list_desk_requests");
-  await expect(panel(page).getByRole("status")).toContainText("Claude opened in a new tab");
+  // No new tab: the question waits for the Claude chat that is watching the desk.
+  expect(await opened(page)).toEqual([]);
+  await expect(panel(page).getByText("isn't watching your desk")).toBeVisible();
+
+  // Claude, told to watch, gets the waiting questions straight away; the panel shows it watching.
+  const watched = await call(client, "watch_desk");
+  expect(watched.isError).toBe(false);
+  expect(watched.text).toContain("call watch_desk again");
+  await page.reload();
+  await openAsk(page);
+  await expect(page.getByTestId("watch-status")).toContainText("is watching your desk");
 
   // The assistant finds both, oldest first, with the piece and what to do.
   const list = await call(client, "list_desk_requests");
@@ -160,7 +166,7 @@ test("Polish sends the highlighted passage, and the rewordings come back as sugg
   await expect(item).toContainText("Waiting for Claude");
   // Sending clears the pointer.
   await expect(panel(page).getByTestId("pointing")).toHaveCount(0);
-  await expect.poll(() => opened(page)).toHaveLength(1);
+  expect(await opened(page)).toEqual([]);
 
   const list = await call(client, "list_desk_requests");
   expect(list.text).toContain("(kind: polish)");
@@ -198,8 +204,7 @@ test("dismiss withdraws a request, Clear deletes the thread, and the assistant c
   await askBox(page).fill("Too long?");
   await panel(page).getByRole("button", { name: "Ask ChatGPT" }).click();
   await expect(requests(page)).toHaveCount(1);
-  await expect.poll(() => opened(page)).toHaveLength(1);
-  expect((await opened(page))[0]).toContain("https://chatgpt.com/?q=");
+  expect(await opened(page)).toEqual([]);
   await askBox(page).fill("Too plain?");
   await panel(page).getByRole("button", { name: "Ask ChatGPT" }).click();
   await expect(requests(page)).toHaveCount(2);

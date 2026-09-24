@@ -5,7 +5,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { ConfirmButton } from "@/components/confirm-button";
 import { subscribeDeskRequests } from "@/lib/bridge/live";
-import { copyHandoff, openAssistant } from "@/lib/bridge/open";
 import {
   assistantLabel,
   bridgeMissing,
@@ -57,11 +56,22 @@ interface Thread {
 interface Connector {
   label: string;
   last_used_at: string | null;
+  /** When the assistant last checked the desk with watch_desk (migration 20260929). */
+  watched_at?: string | null;
+}
+
+/** What the student says once in their open Claude/ChatGPT chat. */
+export const WATCH_PHRASE = "Watch my Application Desk";
+/** watch_desk checks in at least every ~45s; allow for a slow answer in between. */
+const WATCH_FRESH_MS = 120_000;
+
+/** The assistant watching the desk right now, if any. */
+function watcher(connectors: Connector[] | null, now: number): Connector | null {
+  return connectors?.find((c) => c.watched_at && now - Date.parse(c.watched_at) < WATCH_FRESH_MS) ?? null;
 }
 
 type Notice =
-  | { kind: "sent"; url: string; label: string; polish: boolean }
-  | { kind: "blocked"; url: string; label: string; copied: boolean }
+  | { kind: "queued"; watching: boolean; label: string; polish: boolean }
   | { kind: "connect" }
   | { kind: "error"; text: string };
 
@@ -96,12 +106,11 @@ async function fetchThread(supabase: SupabaseClient, pieceId: string, epoch: { c
 
 /** The desk's live connector links; null when they can't be read (then nothing is assumed). */
 async function fetchConnectors(supabase: SupabaseClient, deskId: string): Promise<Connector[] | null> {
-  const { data, error } = await supabase
-    .from("connector_links")
-    .select("label, last_used_at")
-    .eq("desk_id", deskId)
-    .is("revoked_at", null);
-  return error ? null : ((data ?? []) as Connector[]);
+  const query = (cols: string) => supabase.from("connector_links").select(cols).eq("desk_id", deskId).is("revoked_at", null);
+  let { data, error } = await query("label, last_used_at, watched_at");
+  // A database before migration 20260929 has no watched_at.
+  if (error?.code === "42703" || error?.code === "PGRST204") ({ data, error } = await query("label, last_used_at"));
+  return error ? null : ((data ?? []) as unknown as Connector[]);
 }
 
 export function AskPanel({ deskId, pieceId, pieceTitle, getSelection, collegeName = null, aiPolicy = "allowed" }: AskPanelProps) {
@@ -206,6 +215,15 @@ export function AskPanel({ deskId, pieceId, pieceTitle, getSelection, collegeNam
     };
   }, [load, loadConnectors]);
 
+  // Whether the assistant is watching: re-check every 20s while the panel is open.
+  useEffect(() => {
+    const t = setInterval(() => {
+      if (document.visibilityState === "visible") void loadConnectors();
+    }, 20_000);
+    return () => clearInterval(t);
+  }, [loadConnectors]);
+  const watching = watcher(connectors, now);
+
   // A backstop for a dropped realtime connection while an answer is due.
   const waiting = hasWaiting(rows);
   useEffect(() => {
@@ -265,9 +283,8 @@ export function AskPanel({ deskId, pieceId, pieceTitle, getSelection, collegeNam
       say({ kind: "error", text: "Highlight a passage in your essay first, then Polish." });
       return;
     }
-    // Open the assistant now, inside the click: after an await, popup blockers may stop it.
     const connected = connectors === null || connectors.length > 0;
-    const handoff = connected ? openAssistant(assistant, kind) : null;
+    const watching = watcher(connectors, Date.now());
     setBusy(true);
     try {
       const row = await queueRequest(supabase, { deskId, pieceId, kind, prompt, selection });
@@ -276,9 +293,8 @@ export function AskPanel({ deskId, pieceId, pieceTitle, getSelection, collegeNam
       setDraft("");
       // Sending clears the pointer; a new highlight brings it back.
       if (selection) setIgnored(selection);
-      if (!handoff) say({ kind: "connect" });
-      else if (handoff.opened) say({ kind: "sent", url: handoff.url, label, polish: kind === "polish" });
-      else say({ kind: "blocked", url: handoff.url, label, copied: await copyHandoff(handoff.message) });
+      if (!connected) say({ kind: "connect" });
+      else say({ kind: "queued", watching: !!watching, label: watching?.label ?? label, polish: kind === "polish" });
     } catch (e) {
       say({
         kind: "error",
@@ -344,10 +360,29 @@ export function AskPanel({ deskId, pieceId, pieceTitle, getSelection, collegeNam
             <Link href="/desk/settings" className="underline underline-offset-2">
               Settings
             </Link>{" "}
-            and add it to Claude or ChatGPT (one time). After that, asking here opens {label} with your question ready, and
-            its answer appears in this panel.
+            and add it to Claude or ChatGPT (one time). Then, in a chat with it, say &ldquo;{WATCH_PHRASE}&rdquo;: it answers
+            what you ask here, and the answers appear in this panel.
           </p>
         </div>
+      )}
+      {!!connectors?.length && (
+        <p role="status" data-testid="watch-status" className={`flex flex-wrap items-center gap-1.5 text-xs ${watching ? "text-accent" : "text-muted"}`}>
+          <span aria-hidden className={`inline-block h-2 w-2 rounded-full ${watching ? "bg-accent" : "bg-line"}`} />
+          {watching ? (
+            <>{watching.label} is watching your desk: ask away.</>
+          ) : (
+            <>
+              Not watching. In your Claude or ChatGPT chat, say &ldquo;{WATCH_PHRASE}&rdquo;.
+              <button
+                type="button"
+                className="underline underline-offset-2"
+                onClick={() => void navigator.clipboard?.writeText(WATCH_PHRASE)}
+              >
+                Copy
+              </button>
+            </>
+          )}
+        </p>
       )}
 
       {off && <p className="rounded-md bg-warn-soft px-3 py-2 text-xs text-warn">{NOT_YET}</p>}
@@ -528,24 +563,15 @@ function RequestItem({ r, now, waitingFor, onDismiss }: { r: DeskRequest; now: n
 function NoticeLine({ notice }: { notice: Notice }) {
   const link = "font-medium underline underline-offset-2";
   switch (notice.kind) {
-    case "sent":
-      return (
+    case "queued":
+      return notice.watching ? (
         <p className="text-muted">
-          Sent. {notice.label} opened in a new tab: send the message there and{" "}
-          {notice.polish ? "the rewordings arrive in your essay as suggestions" : "the answer appears here"}.{" "}
-          <a className={link} href={notice.url} target="_blank" rel="noopener noreferrer">
-            Open {notice.label} again
-          </a>
+          Sent to {notice.label}. {notice.polish ? "The rewordings arrive in your essay as suggestions." : "The answer appears here in a moment."}
         </p>
-      );
-    case "blocked":
-      return (
+      ) : (
         <p className="text-warn">
-          Your browser blocked the new tab.{" "}
-          <a className={link} href={notice.url} target="_blank" rel="noopener noreferrer">
-            Open {notice.label}
-          </a>{" "}
-          and send the message there{notice.copied ? " (it's also copied, so you can paste it)" : ""}.
+          Saved. {notice.label} isn&apos;t watching your desk right now: in your {notice.label} chat, say &ldquo;{WATCH_PHRASE}&rdquo; and it
+          picks this up.
         </p>
       );
     case "connect":

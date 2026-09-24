@@ -128,16 +128,12 @@ test("the connected AI estimates odds: the page waits for it and shows its numbe
   const url = await makeConnector(page);
   await page.goto("/desk/strategy");
 
-  // The link opens Claude with the handoff message, and queues the request on the desk.
-  await context.route(/^https:\/\/claude\.ai\//, (r) => r.fulfill({ contentType: "text/html", body: "<title>Claude</title>" }));
-  const [claude] = await Promise.all([
-    context.waitForEvent("page"),
-    estimate.getByRole("link", { name: "Estimate my odds with Claude" }).click(),
-  ]);
-  await claude.waitForURL(/claude\.ai\/new\?q=/);
-  expect(claude.url()).toContain("set_college_strategy");
-  await claude.close();
+  // The button queues the request on the desk (no new tab); a watching Claude picks it up.
+  let tabs = 0;
+  context.on("page", () => tabs++);
+  await estimate.getByRole("button", { name: "Estimate my odds with Claude" }).click();
   await expect(estimate.getByRole("status")).toContainText("Waiting for Claude");
+  expect(tabs).toBe(0);
 
   const client = await connect(url);
   const read = await call(client, "read_strategy");
@@ -206,7 +202,7 @@ test("the connected AI estimates odds: the page waits for it and shows its numbe
   // The answer is remembered after a reload.
   await page.reload();
   await expect(estimate).toContainText("Last estimated");
-  await expect(estimate.getByRole("link", { name: "Estimate my odds with Claude" })).toBeVisible();
+  await expect(estimate.getByRole("button", { name: "Estimate my odds with Claude" })).toBeVisible();
   await client.close();
 });
 

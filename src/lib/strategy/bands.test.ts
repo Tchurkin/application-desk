@@ -111,7 +111,7 @@ describe("buildStrategy", () => {
     expect(s.bands[0].rows[0].chance).toEqual({ value: 12, source: "student" });
   });
 
-  it("sorts a band by fit rank, then by the higher chance, then by name", () => {
+  it("sorts a band by the lowest chance first, then fit rank, then name", () => {
     const s = buildStrategy(
       [
         college("c", { name: "Zeta", chance_percent: 30 }),
@@ -122,7 +122,7 @@ describe("buildStrategy", () => {
       ],
       () => null,
     );
-    expect(s.bands[1].rows.map((r) => r.college.name)).toEqual(["Delta", "Gamma", "Beta", "Alpha", "Zeta"]);
+    expect(s.bands[1].rows.map((r) => r.college.name)).toEqual(["Gamma", "Alpha", "Zeta", "Delta", "Beta"]);
   });
 
   it("keeps empty bands so the page can say so", () => {

@@ -3,8 +3,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
-  assistantUrl,
-  handoffMessage,
   queueRequest,
   REQUEST_COLS,
   setPreferredAssistant,
@@ -130,7 +128,6 @@ export function OddsRequest({
 
   const who = chosen ?? (assistants.length === 1 ? assistants[0] : null);
   const whoName = who ? NAME[who] : "your assistant";
-  const url = (a: Assistant) => assistantUrl(a, handoffMessage("odds"));
 
   return (
     <div className="flex flex-col gap-3 text-sm">
@@ -138,30 +135,19 @@ export function OddsRequest({
         <div role="status" className="rounded-md border border-accent bg-accent-soft px-3 py-2">
           <p className="font-medium">Waiting for {whoName}…</p>
           <p className="mt-1">
-            Send the message in the {whoName} tab. Your odds fill in here as it sets them.
+            If {whoName} is watching your desk it starts now, and your odds fill in here as it sets them. If not, say
+            &ldquo;Watch my Application Desk&rdquo; in your {whoName} chat.
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
-            {(who ? [who] : assistants).map((a) => (
-              <a key={a} className="btn" href={url(a)} target="_blank" rel="noopener noreferrer">
-                Open {NAME[a]} again
-              </a>
-            ))}
             <button type="button" className="btn" onClick={cancel} disabled={queuing}>Cancel request</button>
           </div>
         </div>
       ) : (
         <div className="flex flex-wrap gap-2">
           {assistants.map((a) => (
-            <a
-              key={a}
-              className="btn btn-primary"
-              href={url(a)}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => void queue(a)}
-            >
+            <button key={a} type="button" className="btn btn-primary" onClick={() => void queue(a)}>
               Estimate my odds with {NAME[a]}
-            </a>
+            </button>
           ))}
         </div>
       )}

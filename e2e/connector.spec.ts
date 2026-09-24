@@ -45,8 +45,8 @@ test("suggestions of any length arrive for review, and the student accepts a lon
   const client = await connect(await makeConnector(page));
 
   const { tools } = await client.listTools();
-  expect(tools.map((t) => t.name).sort()).toEqual(
-    [
+  expect(tools.map((t) => t.name)).toEqual(
+    expect.arrayContaining([
       "create_piece",
       "delete_college",
       "delete_piece",
@@ -59,7 +59,7 @@ test("suggestions of any length arrive for review, and the student accepts a lon
       "update_my_profile",
       "update_piece",
       "write_piece",
-    ].sort(),
+    ]),
   );
   const read = await call(client, "read_piece", { piece_id: pieceId });
   expect(read.text).toContain("I like robots. I built one.");

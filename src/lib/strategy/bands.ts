@@ -147,13 +147,14 @@ export function costOf(c: StrategyCollege, baseline: Baseline | null): Cost | nu
 }
 
 /** Best fit first (unranked last), then the higher chance, then by name. */
+/** Lowest chance first (the long shots lead), then best fit, then name. */
 function compareRows(a: StrategyRow, b: StrategyRow): number {
+  const ca = a.chance?.value ?? Infinity;
+  const cb = b.chance?.value ?? Infinity;
+  if (ca !== cb) return ca - cb;
   const fa = num(a.college.fit_rank) ?? Infinity;
   const fb = num(b.college.fit_rank) ?? Infinity;
   if (fa !== fb) return fa - fb;
-  const ca = a.chance?.value ?? -Infinity;
-  const cb = b.chance?.value ?? -Infinity;
-  if (ca !== cb) return cb - ca;
   return a.college.name.localeCompare(b.college.name);
 }
 

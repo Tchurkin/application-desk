@@ -23,7 +23,47 @@ async function pending(token: string): Promise<PendingRequest[]> {
   return (data as PendingRequest[] | null) ?? [];
 }
 
+/** How long one watch_desk call waits for a request before returning (the route allows 60s). */
+const WATCH_MS = 45_000;
+const WATCH_POLL_MS = 2_000;
+const KEEP_WATCHING =
+  "Then call watch_desk again right away to keep watching: the student is working on the website and sees that you're watching.";
+
+async function watch(token: string): Promise<PendingRequest[]> {
+  const until = Date.now() + WATCH_MS;
+  for (;;) {
+    const { data, error } = await db().rpc("connector_watch", { token });
+    if (error) throw new Error(bridgeMissing(error) ? NOT_YET : error.message);
+    const list = (data as PendingRequest[] | null) ?? [];
+    if (list.length || Date.now() + WATCH_POLL_MS > until) return list;
+    await new Promise((r) => setTimeout(r, WATCH_POLL_MS));
+  }
+}
+
 export function registerBridgeTools(server: McpServer, token: string) {
+  server.registerTool(
+    "watch_desk",
+    {
+      title: "Watch the desk for questions",
+      description:
+        "Wait for the student to ask something on the Application Desk website (a question about a piece, a passage to polish, an odds estimate), " +
+        "up to about 45 seconds, and return it the moment it arrives. Use this when the student says to watch their desk: " +
+        "answer each request (answer_request; suggest_edits for polish; set_college_strategy for odds), then call watch_desk again, and keep going until the student says to stop. " +
+        "Keep answers on the desk, not in this chat, apart from a one-line note of what you did.",
+      inputSchema: z.object({}),
+      annotations: { readOnlyHint: true },
+    },
+    async () => {
+      try {
+        const list = await watch(token);
+        if (!list.length) return text(`No new requests yet. ${KEEP_WATCHING}`);
+        return text(`${renderRequestList(list)}\n\nAnswer each one on the desk. ${KEEP_WATCHING}`);
+      } catch (e) {
+        return fail((e as Error).message);
+      }
+    },
+  );
+
   server.registerTool(
     "list_desk_requests",
     {
