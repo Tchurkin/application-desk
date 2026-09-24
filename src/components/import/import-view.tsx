@@ -140,7 +140,7 @@ export function ImportView({ colleges, pieces }: { colleges: DeskCollege[]; piec
   }
 
   const chosen = rows.filter((r) => r.include).length;
-  const collegeName = (id: string | null) => colleges.find((c) => c.id === id)?.name ?? "Shared across colleges";
+  const collegeName = (id: string | null) => colleges.find((c) => c.id === id)?.name ?? "independent";
 
   return (
     <div className="flex flex-col gap-6">
@@ -277,7 +277,7 @@ export function ImportView({ colleges, pieces }: { colleges: DeskCollege[]; piec
                         aria-label={`College for ${r.title}`}
                         onChange={(e) => setCollege(r, e.target.value || null)}
                       >
-                        <option value="">Shared across colleges</option>
+                        <option value="">Independent (no college)</option>
                         {colleges.map((c) => (
                           <option key={c.id} value={c.id}>
                             {c.name}

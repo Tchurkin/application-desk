@@ -90,14 +90,14 @@ describe("buildLanes order", () => {
     expect(lanes[0]).toMatchObject({ due: "2030-10-15", submitted: false, pieces: [] });
   });
 
-  it("gathers pieces without a college into a Shared pieces lane", () => {
+  it("gathers pieces without a college into an Independent pieces lane", () => {
     const lanes = buildLanes([college("a", "2030-11-01")], [piece("s1", null), piece("a1", "a")], TODAY);
     expect(lanes.map((l) => l.key)).toEqual(["a", SHARED_LANE]);
-    expect(lanes[1]).toMatchObject({ name: "Shared pieces", college: null, due: null });
+    expect(lanes[1]).toMatchObject({ name: "Independent pieces", college: null, due: null });
     expect(lanes[1].pieces.map((p) => p.id)).toEqual(["s1"]);
   });
 
-  it("has no Shared pieces lane when every piece has a college", () => {
+  it("has no Independent pieces lane when every piece has a college", () => {
     expect(order([college("a")], [piece("a1", "a")])).toEqual(["a"]);
   });
 

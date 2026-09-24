@@ -17,7 +17,7 @@ export default async function SharedBoard(props: PageProps<"/shared/[deskId]">) 
       <Board colleges={colleges} pieces={pieces} today={todayISO()} pieceHref={href} />
       {shared.length > 0 && (
         <section className="mt-10">
-          <h2 className="mb-3 font-serif text-xl">Shared pieces</h2>
+          <h2 className="mb-3 font-serif text-xl">Independent pieces</h2>
           <PieceChips pieces={shared} pieceHref={href} />
         </section>
       )}

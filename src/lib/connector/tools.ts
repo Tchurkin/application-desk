@@ -147,7 +147,7 @@ export function renderDesk(d: DeskInfo): string {
   }
   const shared = piecesFor(null);
   if (shared.length) {
-    lines.push("", "## Pieces shared across colleges");
+    lines.push("", "## Independent pieces (not tied to one college, like a personal statement)");
     for (const p of shared) lines.push(pieceLine(p));
   }
   return lines.join("\n");
@@ -157,7 +157,7 @@ export function renderPiece(p: PieceInfo, body: string): string {
   const used = p.limit_kind === "chars" ? countChars(body) : countWords(body);
   const lines = [
     `# ${p.title} [piece_id: ${p.id}]`,
-    p.college ? `College: ${p.college.name}${p.college.deadline ? `, deadline ${p.college.deadline}` : ""}` : "Shared across colleges",
+    p.college ? `College: ${p.college.name}${p.college.deadline ? `, deadline ${p.college.deadline}` : ""}` : "Independent piece (not tied to one college)",
   ];
   if (p.college?.ai_policy === "no_drafting") lines.push(`AI policy: ${POLICY_NOTE}.`);
   lines.push(
@@ -390,9 +390,9 @@ export function registerTools(server: McpServer, token: string) {
     {
       title: "Add a piece",
       description:
-        "Add a new essay or short answer for one of the student's colleges (or shared across colleges when college_id is omitted), optionally with its prompt, limit and a first draft.",
+        "Add a new essay or short answer for one of the student's colleges (or an independent piece, not tied to a college, when college_id is omitted), optionally with its prompt, limit and a first draft.",
       inputSchema: z.object({
-        college_id: z.string().uuid().optional().describe("The college_id from list_my_desk; omit for a piece shared across colleges."),
+        college_id: z.string().uuid().optional().describe("The college_id from list_my_desk; omit for an independent piece (not tied to a college)."),
         title: z.string().min(1).max(300),
         prompt: z.string().optional().describe("The question exactly as the college asks it."),
         limit_kind: z.enum(["words", "chars", "none"]).optional(),

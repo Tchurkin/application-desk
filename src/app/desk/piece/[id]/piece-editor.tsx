@@ -120,6 +120,9 @@ export function PieceEditor({
   const [text, setText] = useState("");
   const [editor, setEditor] = useState<Editor | null>(null);
   const meta = useMetaSaver(piece.id);
+  // Prompt, Notes and More open above the writing; the prompt starts open when there is one.
+  const [panels, setPanels] = useState({ prompt: !!piece.prompt, notes: false, more: false });
+  const togglePanel = (k: keyof typeof panels) => setPanels((p) => ({ ...p, [k]: !p[k] }));
   // Editing or Suggesting. The student and people on a "can edit" link switch between them (the
   // student starts in Editing, others in Suggesting; the choice is remembered per browser).
   // "Can suggest" links only suggest, and read-only links only read.
@@ -202,7 +205,7 @@ export function PieceEditor({
   const limit = limitState(text, limitKind, limitValue);
 
   const body = (
-    <div className={`grid gap-6 lg:grid-cols-[1fr_20rem] ${workspace ? "p-4" : ""}`}>
+    <div className={`grid gap-6 lg:grid-cols-[1fr_18rem] ${workspace ? "p-4" : ""}`}>
       <section className="min-w-0">
         {owner ? (
           <input
@@ -217,8 +220,66 @@ export function PieceEditor({
         ) : (
           <h1 className="font-serif text-3xl">{title}</h1>
         )}
-        <div className="flex flex-wrap items-center gap-2 text-sm text-muted">
+
+        {/* The piece's details, above the writing: the margin is for suggestions. */}
+        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted">
           {collegeName && <span>{collegeName}</span>}
+          {owner ? (
+            <>
+              <span className="flex items-center gap-1">
+                <label htmlFor={`${piece.id}-status`}>Status</label>
+                <select
+                  id={`${piece.id}-status`}
+                  className="rounded-md border border-line bg-panel px-1.5 py-0.5 text-ink"
+                  value={pieceStatus}
+                  onChange={(e) => {
+                    const v = e.target.value as PieceStatus;
+                    setPieceStatus(v);
+                    meta.save({ status: v }, 0);
+                  }}
+                >
+                  {PIECE_STATUSES.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </span>
+              <span className="flex items-center gap-1">
+                <label htmlFor={`${piece.id}-limit`}>Limit</label>
+                <input
+                  id={`${piece.id}-limit`}
+                  className="w-20 rounded-md border border-line bg-panel px-1.5 py-0.5 text-ink disabled:opacity-50"
+                  type="number"
+                  min={1}
+                  value={limitValue ?? ""}
+                  disabled={limitKind === "none"}
+                  onChange={(e) => {
+                    const n = parseInt(e.target.value, 10);
+                    const v = Number.isFinite(n) && n > 0 ? n : null;
+                    setLimitValue(v);
+                    meta.save({ limit_value: v });
+                  }}
+                />
+                <select
+                  aria-label="Counted in"
+                  className="rounded-md border border-line bg-panel px-1.5 py-0.5 text-ink"
+                  value={limitKind}
+                  onChange={(e) => {
+                    const v = e.target.value as LimitKind;
+                    setLimitKind(v);
+                    meta.save({ limit_kind: v }, 0);
+                  }}
+                >
+                  <option value="words">words</option>
+                  <option value="chars">characters</option>
+                  <option value="none">no limit</option>
+                </select>
+              </span>
+            </>
+          ) : (
+            <span>{labelOf(PIECE_STATUSES, pieceStatus)}</span>
+          )}
           {people.length > 0 && (
             <span className="flex flex-wrap gap-1" aria-label="Also here">
               {people.map((p, i) => (
@@ -229,11 +290,34 @@ export function PieceEditor({
             </span>
           )}
         </div>
-        {owner ? (
-          <details className="mt-3" open={!!prompt}>
-            <summary className="cursor-pointer text-sm text-muted">Prompt</summary>
+
+        <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Piece details">
+          {(
+            [
+              ["prompt", "Prompt", !!prompt],
+              ["notes", "Notes", !!notes],
+              ...(owner || !workspace ? ([["more", "More", false]] as const) : []),
+            ] as const
+          ).map(([key, label, filled]) => (
+            <button
+              key={key}
+              type="button"
+              aria-expanded={panels[key]}
+              aria-controls={`${piece.id}-${key}`}
+              onClick={() => togglePanel(key)}
+              className={`rounded-md border px-2.5 py-1 text-sm ${panels[key] ? "border-muted bg-panel text-ink" : "border-line text-muted hover:text-ink"}`}
+            >
+              {label}
+              {filled && !panels[key] && <span aria-hidden className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-accent align-middle" />}
+              <span aria-hidden className="ml-1 text-xs">{panels[key] ? "▴" : "▾"}</span>
+            </button>
+          ))}
+        </div>
+
+        <div id={`${piece.id}-prompt`} hidden={!panels.prompt} className="mt-2">
+          {owner ? (
             <textarea
-              className="field mt-2"
+              className="field"
               rows={3}
               value={prompt}
               aria-label="Prompt"
@@ -243,10 +327,60 @@ export function PieceEditor({
                 meta.save({ prompt: e.target.value });
               }}
             />
-          </details>
-        ) : (
-          prompt && <p className="mt-3 rounded-md border border-line bg-panel px-3 py-2 text-sm">{prompt}</p>
-        )}
+          ) : (
+            <p className="rounded-md border border-line bg-panel px-3 py-2 text-sm whitespace-pre-wrap">{prompt || "No prompt entered."}</p>
+          )}
+        </div>
+        <div id={`${piece.id}-notes`} hidden={!panels.notes} className="mt-2">
+          {owner ? (
+            <textarea
+              className="field"
+              rows={4}
+              value={notes}
+              aria-label="Notes"
+              placeholder="Ideas, reminders, feedback. Kept apart from the essay and never counted. People you share with can read them."
+              onChange={(e) => {
+                setNotes(e.target.value);
+                meta.save({ notes: e.target.value });
+              }}
+            />
+          ) : (
+            <p className="rounded-md border border-line bg-panel px-3 py-2 text-sm whitespace-pre-wrap">{notes || "No notes."}</p>
+          )}
+        </div>
+        <div id={`${piece.id}-more`} hidden={!panels.more} className="mt-2 flex flex-col gap-3 rounded-md border border-line bg-panel p-3">
+          {owner && (
+            <ChatbotCopy
+              build={() =>
+                chatbotPrompt({
+                  title,
+                  collegeName,
+                  aiPolicy,
+                  prompt,
+                  limitKind,
+                  limitValue,
+                  text,
+                  notes,
+                  research,
+                })
+              }
+            />
+          )}
+          {owner && workspace && <MakeVersion pieceId={piece.id} />}
+          {!workspace && <History pieceId={piece.id} editor={editor} canRestore={owner} author={me.name} />}
+          {owner && (
+            <div>
+              <ConfirmButton
+                label="Delete piece"
+                question="Delete this piece, its history, notes and suggestions?"
+                onConfirm={async () => {
+                  live?.sync.discard();
+                  await deletePiece(piece.id);
+                }}
+              />
+            </div>
+          )}
+        </div>
 
         {canWrite && (
           <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -320,118 +454,12 @@ export function PieceEditor({
         )}
       </section>
 
-      <aside className="flex flex-col gap-5">
-        {live && editor && <SuggestionsPanel live={live} editor={editor} role={role} me={me.id} />}
-        {owner ? (
-          <>
-            <div>
-              <label className="label" htmlFor="status">Status</label>
-              <select
-                id="status"
-                className="field"
-                value={pieceStatus}
-                onChange={(e) => {
-                  const v = e.target.value as PieceStatus;
-                  setPieceStatus(v);
-                  meta.save({ status: v }, 0);
-                }}
-              >
-                {PIECE_STATUSES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-              </select>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="label" htmlFor="limit_value">Limit</label>
-                <input
-                  id="limit_value"
-                  className="field"
-                  type="number"
-                  min={1}
-                  value={limitValue ?? ""}
-                  disabled={limitKind === "none"}
-                  onChange={(e) => {
-                    const n = parseInt(e.target.value, 10);
-                    const v = Number.isFinite(n) && n > 0 ? n : null;
-                    setLimitValue(v);
-                    meta.save({ limit_value: v });
-                  }}
-                />
-              </div>
-              <div>
-                <label className="label" htmlFor="limit_kind">Counted in</label>
-                <select
-                  id="limit_kind"
-                  className="field"
-                  value={limitKind}
-                  onChange={(e) => {
-                    const v = e.target.value as LimitKind;
-                    setLimitKind(v);
-                    meta.save({ limit_kind: v }, 0);
-                  }}
-                >
-                  <option value="words">Words</option>
-                  <option value="chars">Characters</option>
-                  <option value="none">No limit</option>
-                </select>
-              </div>
-            </div>
-            <div>
-              <label className="label" htmlFor="notes">Notes</label>
-              <textarea
-                id="notes"
-                className="field"
-                rows={6}
-                value={notes}
-                placeholder="Ideas, reminders, feedback. Kept apart from the essay and never counted. People you share with can read them."
-                onChange={(e) => {
-                  setNotes(e.target.value);
-                  meta.save({ notes: e.target.value });
-                }}
-              />
-            </div>
-          </>
+      {/* The margin: suggestions, and nothing else. */}
+      <aside className="flex flex-col gap-3" aria-label="Margin">
+        {live && editor ? (
+          <SuggestionsPanel live={live} editor={editor} role={role} me={me.id} />
         ) : (
-          <div className="text-sm">
-            <p className="label">Status</p>
-            <p>{labelOf(PIECE_STATUSES, pieceStatus)}</p>
-            {notes && (
-              <>
-                <p className="label mt-4">Notes</p>
-                <p className="whitespace-pre-wrap">{notes}</p>
-              </>
-            )}
-          </div>
-        )}
-        {owner && (
-          <ChatbotCopy
-            build={() =>
-              chatbotPrompt({
-                title,
-                collegeName,
-                aiPolicy,
-                prompt,
-                limitKind,
-                limitValue,
-                text,
-                notes,
-                research,
-              })
-            }
-          />
-        )}
-        {owner && workspace && <MakeVersion pieceId={piece.id} />}
-        {!workspace && <History pieceId={piece.id} editor={editor} canRestore={owner} author={me.name} />}
-        {owner && (
-          <div>
-            <ConfirmButton
-              label="Delete piece"
-              question="Delete this piece, its history, notes and suggestions?"
-              onConfirm={async () => {
-                live?.sync.discard();
-                await deletePiece(piece.id);
-              }}
-            />
-          </div>
+          <p className="text-sm text-muted">Suggestions appear here.</p>
         )}
       </aside>
     </div>
@@ -616,10 +644,14 @@ function SuggestionsPanel({ live, editor, role, me }: { live: Live; editor: Edit
   const pick = (id: string) => editor.view.dispatch(editor.state.tr.setMeta(suggestKey, { pick: id }));
 
   if (!open.length && !undo) {
-    return role === "owner" ? null : (
+    return (
       <div>
         <p className="label">Suggestions</p>
-        <p className="text-sm text-muted">None yet.</p>
+        <p className="text-sm text-muted">
+          {role === "owner"
+            ? "Suggestions from the people you share with, and from Claude, appear here beside your essay."
+            : "None yet. Your suggestions appear here for the writer to accept or decline."}
+        </p>
       </div>
     );
   }

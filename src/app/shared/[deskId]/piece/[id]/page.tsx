@@ -28,7 +28,7 @@ export default async function SharedPiece(props: PageProps<"/shared/[deskId]/pie
       <nav className="mb-3 flex flex-wrap items-center gap-2 text-sm text-muted">
         <Link href={`/shared/${deskId}`}>Board</Link>
         <span>/</span>
-        <span>{college?.name ?? "Shared pieces"}</span>
+        <span>{college?.name ?? "Independent piece"}</span>
       </nav>
       {siblings && siblings.length > 1 && (
         <div role="tablist" aria-label="Pieces" className="mb-4 flex flex-wrap gap-1 border-b border-line">

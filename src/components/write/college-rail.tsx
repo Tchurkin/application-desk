@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { labelOf, PIECE_STATUSES, type PieceStatus } from "@/lib/domain/colleges";
 import { PREF } from "@/lib/write/layout";
-import { countLabel, groupMeta, pickCollegePiece, type RailGroup } from "@/lib/write/rail";
+import { countLabel, groupMeta, pickCollegePiece, SHARED, type RailGroup, type RailPiece } from "@/lib/write/rail";
 import { usePref, writePref } from "./hooks";
 
 const DOT: Record<PieceStatus, string> = {
@@ -28,7 +28,8 @@ type Item = { kind: "group"; key: string; group: RailGroup } | { kind: "piece"; 
 /**
  * The Files tool: every college in the order it needs attention, each with its pieces. Clicking
  * a college opens its first unfinished piece; the caret (or the arrow keys) shows and hides its
- * pieces. Which colleges are expanded is remembered per browser.
+ * pieces. Which colleges are expanded is remembered per browser. Independent pieces (not tied to
+ * a college, like a personal statement) are listed on their own, not inside a folder.
  */
 export function CollegeRail({
   groups,
@@ -77,10 +78,15 @@ export function CollegeRail({
 
   const isOpen = (g: RailGroup) => g.total > 0 && expanded.has(g.key);
 
-  const items: Item[] = groups.flatMap((g) => [
-    { kind: "group" as const, key: g.key, group: g },
-    ...(isOpen(g) ? g.pieces.map((p) => ({ kind: "piece" as const, key: p.id, group: g, id: p.id })) : []),
-  ]);
+  const loose = (g: RailGroup) => g.key === SHARED;
+  const items: Item[] = groups.flatMap((g) =>
+    loose(g)
+      ? g.pieces.map((p) => ({ kind: "piece" as const, key: p.id, group: g, id: p.id }))
+      : [
+          { kind: "group" as const, key: g.key, group: g },
+          ...(isOpen(g) ? g.pieces.map((p) => ({ kind: "piece" as const, key: p.id, group: g, id: p.id })) : []),
+        ],
+  );
   const focusable = items.some((i) => i.key === focusKey) ? focusKey : (items[0]?.key ?? "");
 
   const openGroup = (g: RailGroup) => {
@@ -139,7 +145,9 @@ export function CollegeRail({
         break;
       case "ArrowLeft":
         handled();
-        if (item.kind === "piece") focus(item.group.key);
+        if (item.kind === "piece") {
+          if (!loose(item.group)) focus(item.group.key);
+        }
         else if (isOpen(item.group)) setOpen(item.group.key, false);
         break;
       case "Enter":
@@ -163,9 +171,50 @@ export function CollegeRail({
     );
   }
 
+  /** One piece's row: inside its college (level 2), or on its own (level 1). */
+  const pieceRow = (p: RailPiece, g: RailGroup, level: 1 | 2) => {
+    const here = p.id === currentId;
+    const status = here ? live.status : p.status;
+    const count = here ? live.count : countLabel({ words: p.word_count, kind: p.limit_kind, limit: p.limit_value });
+    const isVersion = !!p.variant_of && g.pieces.some((o) => o.id === p.variant_of);
+    const indent = level === 1 ? (isVersion ? "pl-8" : "pl-3") : isVersion ? "pl-10" : "pl-7";
+    return (
+      <li
+        key={p.id}
+        role="treeitem"
+        aria-level={level}
+        aria-label={`${p.title}, ${labelOf(PIECE_STATUSES, status)}, ${count}`}
+        aria-current={here ? "page" : undefined}
+        data-rail-key={p.id}
+        tabIndex={focusable === p.id ? 0 : -1}
+        ref={(el) => {
+          if (el) refs.current.set(p.id, el);
+          else refs.current.delete(p.id);
+        }}
+        onFocus={(e) => {
+          e.stopPropagation();
+          setFocusKey(p.id);
+        }}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (!here) router.push(pieceHref(p.id));
+        }}
+        title={p.title}
+        className={`flex cursor-pointer items-center gap-2 pr-3 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset ${indent} ${
+          level === 1 ? `border-l-2 py-2 ${here ? "border-accent" : "border-transparent"}` : "py-1"
+        } ${here ? "bg-accent-soft text-ink" : "text-ink/85 hover:bg-bg"}`}
+      >
+        <StatusDot status={status} />
+        <span className={`min-w-0 flex-1 truncate ${level === 1 ? "font-medium" : ""}`}>{p.title}</span>
+        <span className="shrink-0 font-mono text-xs text-muted">{count}</span>
+      </li>
+    );
+  };
+
   return (
     <ul role="tree" aria-label="Colleges and pieces" className="py-1 text-sm" onKeyDown={onKeyDown}>
       {groups.map((g) => {
+        if (loose(g)) return g.pieces.map((p) => pieceRow(p, g, 1));
         const open = isOpen(g);
         const current = g.key === currentKey;
         const meta = groupMeta(g);
@@ -216,43 +265,7 @@ export function CollegeRail({
             </div>
             {open && (
               <ul role="group" className="pb-1">
-                {g.pieces.map((p) => {
-                  const here = p.id === currentId;
-                  const status = here ? live.status : p.status;
-                  const count = here ? live.count : countLabel({ words: p.word_count, kind: p.limit_kind, limit: p.limit_value });
-                  const isVersion = !!p.variant_of && g.pieces.some((o) => o.id === p.variant_of);
-                  return (
-                    <li
-                      key={p.id}
-                      role="treeitem"
-                      aria-level={2}
-                      aria-label={`${p.title}, ${labelOf(PIECE_STATUSES, status)}, ${count}`}
-                      aria-current={here ? "page" : undefined}
-                      data-rail-key={p.id}
-                      tabIndex={focusable === p.id ? 0 : -1}
-                      ref={(el) => {
-                        if (el) refs.current.set(p.id, el);
-                        else refs.current.delete(p.id);
-                      }}
-                      onFocus={(e) => {
-                        e.stopPropagation();
-                        setFocusKey(p.id);
-                      }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (!here) router.push(pieceHref(p.id));
-                      }}
-                      title={p.title}
-                      className={`flex cursor-pointer items-center gap-2 py-1 pr-3 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset ${
-                        isVersion ? "pl-10" : "pl-7"
-                      } ${here ? "bg-accent-soft text-ink" : "text-ink/85 hover:bg-bg"}`}
-                    >
-                      <StatusDot status={status} />
-                      <span className="min-w-0 flex-1 truncate">{p.title}</span>
-                      <span className="shrink-0 font-mono text-xs text-muted">{count}</span>
-                    </li>
-                  );
-                })}
+                {g.pieces.map((p) => pieceRow(p, g, 2))}
               </ul>
             )}
           </li>

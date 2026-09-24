@@ -5,7 +5,6 @@ import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { isOutdated, useConnectors } from "@/components/ask/watch-status";
 import { ConfirmButton } from "@/components/confirm-button";
 import { DeskThread } from "@/components/thread/desk-thread";
-import { ConnectorPermissions } from "@/app/desk/settings/connector-creator";
 import { CounselorSetup, InstallSteps, isWindows } from "@/app/desk/settings/counselor-setup";
 import {
   revokeConnectorLink,
@@ -30,7 +29,6 @@ import {
 } from "@/lib/bridge/watchers";
 import { downloadInstaller } from "@/lib/counselor/download";
 import { EFFORTS, isEffort, isModel, MODELS, type EffortId, type ModelId } from "@/lib/counselor/models";
-import { asEssayAccess } from "@/lib/domain/share";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
 /*
@@ -163,7 +161,7 @@ function SetupCard() {
         One download and a double-click make Claude Code on this computer your counselor: it answers everything you ask on your desk,
         hidden, on your own Claude plan. Needs Claude Code installed and signed in once (claude.com/claude-code).
       </p>
-      <CounselorSetup />
+      <CounselorSetup withPermissions={false} />
       <p className="text-xs text-muted">
         No Windows computer? Add your connector to a Claude or ChatGPT chat and say &ldquo;{WATCH_PHRASE}&rdquo;: it answers here too.
       </p>
@@ -332,12 +330,13 @@ function CounselorCard({
       )}
       {error && <p className="rounded-md bg-danger-soft px-3 py-2 text-xs text-danger">{error}</p>}
 
-      {c.essay_access !== undefined && (
-        <div>
-          <p className="label">What it may do</p>
-          <ConnectorPermissions id={id} label="your counselor" essays={asEssayAccess(c.essay_access)} manage={c.can_manage !== false} />
-        </div>
-      )}
+      <p className="text-xs text-muted">
+        What it may do (read, suggest or write, and managing colleges and pieces) is in{" "}
+        <Link href="/desk/settings#connect" className="underline underline-offset-2">
+          Settings
+        </Link>
+        .
+      </p>
       {others > 0 && (
         <p className="text-xs text-muted">
           You have {others} more counselor{others === 1 ? "" : "s"} on other computers; see{" "}

@@ -4,7 +4,11 @@ import { useNow } from "@/lib/bridge/use-now";
 import { ESSAY_ACCESS, type EssayAccess } from "@/lib/domain/share";
 import { createConnectorLink, setConnectorPermissions, type ConnectorState } from "../connector-actions";
 
-/** What a connector may do: essays (read / suggest / edit) and managing colleges and pieces. */
+/**
+ * What a connector may do: its access to essays (read only / suggest / write) and whether it may
+ * manage colleges and pieces. Controlled (onEssays/onManage given) or, in a form, uncontrolled
+ * with the fields "essays" and "manage".
+ */
 export function PermissionFields({
   idPrefix,
   essays,
@@ -19,32 +23,48 @@ export function PermissionFields({
   onManage?: (v: boolean) => void;
 }) {
   const controlled = onEssays !== undefined;
+  const [own, setOwn] = useState<EssayAccess>("edit");
+  const [ownManage, setOwnManage] = useState(true);
+  const value = controlled ? (essays ?? "edit") : own;
+  const managing = controlled ? !!manage : ownManage;
+  const pick = (v: EssayAccess) => (controlled ? onEssays(v) : setOwn(v));
   return (
-    <>
+    <div className="flex flex-col gap-3" id={`${idPrefix}-permissions`}>
       <div>
-        <label className="label" htmlFor={`${idPrefix}-essays`}>With your essays it can</label>
-        <select
-          className="field"
-          id={`${idPrefix}-essays`}
-          name="essays"
-          {...(controlled ? { value: essays, onChange: (e) => onEssays(e.target.value as EssayAccess) } : { defaultValue: "edit" })}
-        >
+        <p className="label" id={`${idPrefix}-essays`}>
+          Essays
+        </p>
+        <div role="radiogroup" aria-labelledby={`${idPrefix}-essays`} className="inline-flex rounded-md border border-line bg-panel p-0.5 text-sm">
           {ESSAY_ACCESS.map((a) => (
-            <option key={a.value} value={a.value}>
-              {a.label}
-            </option>
+            <button
+              key={a.value}
+              type="button"
+              role="radio"
+              aria-checked={value === a.value}
+              onClick={() => pick(a.value)}
+              className={`rounded px-3 py-1 ${value === a.value ? "bg-accent text-accent-ink" : "text-muted hover:text-ink"}`}
+            >
+              {a.short}
+            </button>
           ))}
-        </select>
+        </div>
+        <p className="mt-1 text-xs text-muted">{ESSAY_ACCESS.find((a) => a.value === value)?.about}</p>
+        {!controlled && <input type="hidden" name="essays" value={value} />}
       </div>
-      <label className="flex items-center gap-2 self-end pb-2 text-sm">
+      <label className="flex items-start gap-2 text-sm">
         <input
           type="checkbox"
           name="manage"
-          {...(controlled ? { checked: manage, onChange: (e) => onManage?.(e.target.checked) } : { defaultChecked: true })}
+          className="mt-0.5"
+          checked={managing}
+          onChange={(e) => (controlled ? onManage?.(e.target.checked) : setOwnManage(e.target.checked))}
         />
-        Can add, change and remove colleges and pieces (details, prompts, word limits, due dates)
+        <span>
+          <span className="font-medium">Manage colleges and pieces</span>
+          <span className="block text-xs text-muted">Add, change and remove colleges and pieces: details, prompts, word limits, due dates.</span>
+        </span>
       </label>
-    </>
+    </div>
   );
 }
 
@@ -55,8 +75,8 @@ export function ConnectorCreator() {
 
   return (
     <div className="flex flex-col gap-4">
-      <form action={action} className="grid gap-3 sm:grid-cols-2">
-        <div>
+      <form action={action} className="flex flex-col gap-4">
+        <div className="max-w-xs">
           <label className="label" htmlFor="assistant">Assistant</label>
           <select className="field" id="assistant" name="assistant" defaultValue="Claude">
             <option value="Claude">Claude</option>
@@ -64,7 +84,7 @@ export function ConnectorCreator() {
           </select>
         </div>
         <PermissionFields idPrefix="new-connector" />
-        <div className="flex items-end">
+        <div>
           <button className="btn btn-primary" type="submit" disabled={pending}>
             {pending ? "Making link…" : "Make a connector link"}
           </button>
@@ -139,7 +159,7 @@ export function ConnectorPermissions({ id, essays, manage, label }: { id: string
     }
   };
   return (
-    <div className="mt-2 grid gap-2 sm:grid-cols-2" role="group" aria-label={`What ${label} can do`}>
+    <div className="mt-3 border-t border-line pt-3" role="group" aria-label={`What ${label} can do`}>
       <PermissionFields
         idPrefix={`connector-${id}`}
         essays={value.essays}
@@ -147,7 +167,7 @@ export function ConnectorPermissions({ id, essays, manage, label }: { id: string
         onEssays={(v) => void save({ ...value, essays: v })}
         onManage={(v) => void save({ ...value, manage: v })}
       />
-      {error && <p className="text-xs text-danger sm:col-span-2">Couldn&apos;t change it: {error}</p>}
+      {error && <p className="mt-2 text-xs text-danger">Couldn&apos;t change it: {error}</p>}
     </div>
   );
 }

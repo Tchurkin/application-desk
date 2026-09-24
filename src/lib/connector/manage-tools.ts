@@ -120,7 +120,7 @@ export function registerManageTools(server: McpServer, token: string) {
     {
       title: "Change a piece's details",
       description:
-        "Change a piece's title, prompt, word or character limit, due date, status (not_started, drafting, needs_review, final, submitted), notes, or move it to another college (college_id null for shared). To change its text, use write_piece or edit_piece.",
+        "Change a piece's title, prompt, word or character limit, due date, status (not_started, drafting, needs_review, final, submitted), notes, or move it to another college (college_id null makes it an independent piece). To change its text, use write_piece or edit_piece.",
       inputSchema: z.object({
         piece_id: z.string().uuid(),
         title: z.string().min(1).max(300).optional(),

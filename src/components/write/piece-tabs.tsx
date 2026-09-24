@@ -89,7 +89,7 @@ export function PieceTabs({
   );
 }
 
-/** "+": a small form for a new piece in this college (or a new shared piece). */
+/** "+": a small form for a new piece in this college (or a new independent piece). */
 function AddPiece({ college, collegeId }: { college: string; collegeId: string | null }) {
   const [open, setOpen] = useState(false);
   const id = useId();

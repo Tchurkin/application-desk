@@ -14,10 +14,15 @@ export const shareRoleLabel = (r: string) => SHARE_ROLES.find((x) => x.value ===
 /** What a connector (Claude, ChatGPT, the counselor) may do with essays. */
 export type EssayAccess = "read" | "suggest" | "edit";
 
-export const ESSAY_ACCESS: { value: EssayAccess; label: string }[] = [
-  { value: "edit", label: "Read, suggest and write directly" },
-  { value: "suggest", label: "Read and suggest edits" },
-  { value: "read", label: "Only read and advise" },
+export const ESSAY_ACCESS: { value: EssayAccess; label: string; short: string; about: string }[] = [
+  { value: "read", label: "Only read and advise", short: "Read only", about: "Reads your essays and gives advice; changes nothing." },
+  { value: "suggest", label: "Read and suggest edits", short: "Suggest", about: "Suggests edits that you accept or decline." },
+  {
+    value: "edit",
+    label: "Read, suggest and write directly",
+    short: "Write",
+    about: "Can also draft and change your essays directly; the old text stays in History.",
+  },
 ];
 
 export const asEssayAccess = (v: unknown): EssayAccess => (v === "read" || v === "suggest" ? v : "edit");

@@ -30,7 +30,7 @@ export default async function PiecePage(props: PageProps<"/desk/piece/[id]">) {
       <nav className="flex flex-wrap items-center gap-2 px-4 pt-3 text-sm text-muted">
         <Link href="/desk">Board</Link>
         <span>/</span>
-        {college ? <Link href={`/desk/college/${college.id}`}>{college.name}</Link> : <span>Shared pieces</span>}
+        {college ? <Link href={`/desk/college/${college.id}`}>{college.name}</Link> : <span>Independent piece</span>}
       </nav>
       <PieceEditor
         deskId={desk.id}

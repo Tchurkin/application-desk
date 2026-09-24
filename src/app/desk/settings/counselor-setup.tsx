@@ -26,7 +26,7 @@ export function InstallSteps() {
  * Set up Claude Code on this computer as the student's counselor: one download, one
  * double-click. See src/lib/counselor/installer.ts for what the file does.
  */
-export function CounselorSetup() {
+export function CounselorSetup({ withPermissions = true }: { withPermissions?: boolean }) {
   const windows = useSyncExternalStore(
     () => () => {},
     isWindows,
@@ -55,9 +55,9 @@ export function CounselorSetup() {
 
   return (
     <div className="flex flex-col gap-4" data-testid="counselor-setup">
-      <div className="grid gap-3 sm:grid-cols-2">
+      {withPermissions && (
         <PermissionFields idPrefix="counselor" essays={essays} manage={manage} onEssays={setEssays} onManage={setManage} />
-      </div>
+      )}
       <div className="flex flex-wrap items-center gap-3">
         <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void download()}>
           {busy ? "Preparing…" : "Download the counselor for Windows"}

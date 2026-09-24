@@ -33,7 +33,7 @@ test("a Google Drive folder download lands on the right pieces, and a combined d
   // Matched by its folder and title to the college's piece.
   await expect(page.getByLabel("College for Why Northfield").locator("option:checked")).toHaveText("Northfield University");
   await expect(page.getByLabel("Piece for Why Northfield").locator("option:checked")).toHaveText("Why Northfield?");
-  await expect(page.getByLabel("College for Personal statement").locator("option:checked")).toHaveText("Shared across colleges");
+  await expect(page.getByLabel("College for Personal statement").locator("option:checked")).toHaveText("Independent (no college)");
 
   // One doc holding two essays becomes two pieces.
   await page.getByRole("button", { name: "Split into 2 pieces at its headings" }).click();
@@ -47,7 +47,7 @@ test("a Google Drive folder download lands on the right pieces, and a combined d
   await page.goto(`/desk/piece/${whyId}`);
   await expectEssay(page, "I want to build robots here.");
   await page.goto("/desk");
-  // Shared pieces show as links with their status beside the title.
+  // Independent pieces show as links with their status beside the title.
   for (const title of ["Personal statement", "Community", "Activity"]) {
     await expect(page.getByRole("link", { name: new RegExp(`^${title}\\b`) }).first()).toBeVisible();
   }

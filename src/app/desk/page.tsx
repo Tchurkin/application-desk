@@ -19,12 +19,11 @@ export default async function BoardPage() {
   const { supabase, userId, desk } = await requireDesk();
   const [{ colleges, pieces }, { data: profile }] = await Promise.all([
     loadDesk(supabase, desk.id),
-    supabase.from("profiles").select("display_name, last_piece_id").eq("id", userId).single(),
+    supabase.from("profiles").select("display_name").eq("id", userId).single(),
   ]);
   const today = todayISO();
   const ca = checkCommonApp(colleges);
   const shared = pieces.filter((p) => !p.college_id);
-  const last = pieces.find((p) => p.id === profile?.last_piece_id);
   const money = sortByCost(colleges.map((c) => moneyRow(c, matchCollege(c.name, c.scorecard_id))));
   // loadDesk selects "*": the cost columns are missing until migration 20260928 has run.
   const costColumns = colleges.length === 0 || "cost_net" in colleges[0];
@@ -39,11 +38,6 @@ export default async function BoardPage() {
           <Link href="/desk/import" className="btn">
             Import essays
           </Link>
-          {last && (
-            <Link href={pieceHref(last.id)} className="btn">
-              Continue: {last.title} →
-            </Link>
-          )}
         </div>
       </div>
 
@@ -82,11 +76,12 @@ export default async function BoardPage() {
       )}
 
       <section className="mt-10">
-        <h2 className="mb-2 font-serif text-xl">Shared pieces</h2>
+        <h2 className="mb-1 font-serif text-xl">Independent pieces</h2>
+        <p className="mb-2 text-sm text-muted">Pieces of their own, not tied to one college, like your personal statement.</p>
         <p className="mb-3 text-sm text-muted">Writing that isn&apos;t tied to one college, like the Common App personal essay.</p>
         <PieceChips pieces={shared} pieceHref={pieceHref} />
         <form action={addPiece.bind(null, null)} className="flex flex-wrap gap-2">
-          <input className="field max-w-xs" name="title" placeholder="e.g. Personal essay" required aria-label="New shared piece title" />
+          <input className="field max-w-xs" name="title" placeholder="e.g. Personal essay" required aria-label="New independent piece title" />
           <input className="field w-24" name="limit_value" type="number" min={1} placeholder="650" aria-label="Word limit" />
           <input type="hidden" name="limit_kind" value="words" />
           <button className="btn" type="submit">Add piece</button>

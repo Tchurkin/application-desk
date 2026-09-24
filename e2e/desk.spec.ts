@@ -16,6 +16,8 @@ test("a student sets up a college, writes a piece, and it survives a reload", as
   await expect(essay(page)).toHaveText("One two three four five six");
 
   // Notes are kept outside the essay and never counted.
+  // Notes open above the writing.
+  await page.getByRole("button", { name: "Notes", exact: true }).click();
   await page.getByLabel("Notes").fill("Mention the robotics lab");
   await expect(page.getByTestId("count")).toContainText("6 / 5 words");
 
@@ -146,6 +148,7 @@ test("deleting a piece leaves no ghost, even with a write in flight", async ({ p
   const id = await addPiece(page, "Doomed");
   await essay(page).click();
   await page.keyboard.type("going away");
+  await page.getByRole("button", { name: "More", exact: true }).click();
   await page.getByRole("button", { name: "Delete piece" }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Delete" }).click();
   await expect(page).toHaveURL(new RegExp(`/desk/college/${college}`));

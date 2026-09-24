@@ -26,7 +26,7 @@ export interface RailPiece {
 }
 
 export interface RailGroup {
-  /** The college's id, or SHARED for pieces not tied to one college. */
+  /** The college's id, or SHARED for the independent pieces (not tied to a college). */
   key: string;
   college: RailCollege | null;
   name: string;
@@ -42,7 +42,7 @@ export interface RailGroup {
 }
 
 export const SHARED = "shared";
-export const SHARED_NAME = "Shared pieces";
+export const SHARED_NAME = "Independent pieces";
 
 export function isDone(status: PieceStatus): boolean {
   return status === "final" || status === "submitted";
@@ -88,8 +88,9 @@ function bucket(due: string | null, today: string): number {
 
 /**
  * Colleges in the order they need attention: unfinished before fully submitted; upcoming
- * deadlines, then passed ones, then undated; soonest first; then by name. Pieces shared across
- * colleges come first, because every college reads them, unless they are all submitted.
+ * deadlines, then passed ones, then undated; soonest first; then by name. Independent pieces
+ * (like a personal statement) come first, because every college reads them, unless they are all
+ * submitted. The rail shows them as pieces of their own, not as a folder.
  */
 export function railOrder(colleges: RailCollege[], pieces: RailPiece[], today: string): RailGroup[] {
   const byCollege = new Map<string, RailPiece[]>();

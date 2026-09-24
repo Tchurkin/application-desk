@@ -41,7 +41,7 @@ export interface Lane {
 }
 
 export const SHARED_LANE = "shared";
-export const SHARED_NAME = "Shared pieces";
+export const SHARED_NAME = "Independent pieces";
 
 /** The date a piece is due: its own, else its college's deadline. Same rule as dueOf in queries.ts. */
 export function pieceDue(piece: ProgressPiece, college: ProgressCollege | null | undefined): string | null {
@@ -84,7 +84,7 @@ function soonest(dates: (string | null)[]): string | null {
 
 /**
  * One lane per college (colleges without pieces included, so an unstarted college with a close
- * deadline still shows), plus a "Shared pieces" lane when any piece belongs to no college.
+ * deadline still shows), plus an "Independent pieces" lane when any piece belongs to no college.
  * A piece whose college isn't loaded yet is left out until the next refresh.
  */
 export function buildLanes(colleges: ProgressCollege[], pieces: ProgressPiece[], today: string): Lane[] {

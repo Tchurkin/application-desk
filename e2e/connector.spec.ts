@@ -8,13 +8,15 @@ async function write(page: Page, text: string) {
   await waitSaved(page);
 }
 
+const ESSAY_LABEL = { read: "Read only", suggest: "Suggest", edit: "Write" } as const;
+
 async function makeConnector(page: Page, opts: { essays?: "read" | "suggest" | "edit"; manage?: boolean } = {}) {
   const back = page.url();
   await page.goto("/desk/settings");
   await page.getByLabel("Assistant").selectOption("Claude");
   const form = page.locator("form", { hasText: "Make a connector link" });
-  if (opts.essays) await form.getByLabel("With your essays it can").selectOption(opts.essays);
-  if (opts.manage === false) await form.getByLabel(/Can add, change and remove colleges/).uncheck();
+  if (opts.essays) await form.getByRole("radio", { name: ESSAY_LABEL[opts.essays] }).click();
+  if (opts.manage === false) await form.getByLabel(/Manage colleges and pieces/).uncheck();
   await page.getByRole("button", { name: "Make a connector link" }).click();
   const url = await page.getByRole("textbox", { name: "Connector link" }).inputValue();
   await page.goto(back);
@@ -263,14 +265,14 @@ test("the student decides what each connector may do", async ({ page }) => {
   // Read only: not even suggestions.
   await page.goto("/desk/settings");
   const row = page.getByRole("list", { name: "Connector links" }).getByTestId("connector-link");
-  await row.getByLabel("With your essays it can").selectOption("read");
+  await row.getByRole("radio", { name: "Read only" }).click();
   await expect
     .poll(async () => (await call(client, "suggest_edits", { piece_id: pieceId, edits: [{ find: "like", replace_with: "love" }] })).text)
     .toContain("not to suggest edits");
 
   // Everything: writes and changes go through, with a due date and a word limit.
-  await row.getByLabel("With your essays it can").selectOption("edit");
-  await row.getByLabel(/Can add, change and remove colleges/).check();
+  await row.getByRole("radio", { name: "Write" }).click();
+  await row.getByLabel(/Manage colleges and pieces/).check();
   await expect.poll(async () => (await call(client, "list_my_desk")).text).toContain("write essays directly");
   expect((await call(client, "write_piece", { piece_id: pieceId, text: "Replaced." })).isError).toBe(false);
   expect((await call(client, "update_piece", { piece_id: pieceId, due: "2030-10-01", limit_value: 650 })).isError).toBe(false);
