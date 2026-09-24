@@ -587,10 +587,11 @@ function EssayEditor({
   return <EditorContent editor={editor} />;
 }
 
+/** What a suggestion does, in words; line breaks in it are kept (the list shows them). */
 function describe(s: Suggestion): string {
   const q = (t: string | undefined) => {
     const s = t ?? "";
-    return `“${s.replace(/\n/g, " ¶ ").slice(0, 80)}${s.length > 80 ? "…" : ""}”`;
+    return `“${s.slice(0, 240)}${s.length > 240 ? "…" : ""}”`;
   };
   if (s.kind === "insert") return `Add ${q(s.body)}`;
   if (s.kind === "delete") return `Delete ${q(s.quote)}`;
@@ -652,7 +653,7 @@ function SuggestionsPanel({ live, editor, role, me }: { live: Live; editor: Edit
                   {r.stale && !r.gone && " · the text changed since"}
                   {r.gone && " · its text is gone"}
                 </span>
-                <span className="break-words">{describe(s)}</span>
+                <span className="break-words whitespace-pre-wrap">{describe(s)}</span>
                 {s.note && <span className="mt-1 block text-xs text-muted">Why: {s.note}</span>}
               </button>
               <div className="mt-2 flex gap-2">

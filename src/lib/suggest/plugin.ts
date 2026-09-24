@@ -17,6 +17,7 @@ import { Decoration, DecorationSet, type EditorView } from "@tiptap/pm/view";
 import { absolutePositionToRelativePosition, relativePositionToAbsolutePosition, ySyncPluginKey } from "@tiptap/y-tiptap";
 import * as Y from "yjs";
 import { insertLines } from "@/lib/editor/insert-lines";
+import { fillParagraphs } from "@/lib/editor/paragraph-text";
 import { CONTEXT_CHARS } from "./anchor-text";
 import { docText, textBetweenPos, type DocText } from "./doc-text";
 import { findText, loosen } from "./loose";
@@ -264,7 +265,7 @@ function widget(s: Suggestion, mine: boolean, picked: boolean) {
     el.className = `sugg-ins${mine ? " sugg-mine" : ""}${picked ? " sugg-picked" : ""}`;
     el.dataset.sugg = s.id;
     el.title = `${s.author_name || "Someone"} suggests adding this`;
-    el.textContent = (s.body ?? "").replace(/\n/g, " ¶ ");
+    fillParagraphs(el, s.body ?? "");
     return el;
   };
 }

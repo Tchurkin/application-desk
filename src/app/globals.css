@@ -121,6 +121,12 @@ body {
   50% { opacity: 0; }
 }
 
+/* A later paragraph inside a suggested insertion or a rewrite: a paragraph of its own. */
+.essay .widget-para {
+  display: block;
+  margin-top: 0.9em;
+}
+
 /* A rewrite showing in place of the passage it would replace (src/lib/editor/rewrites.ts). */
 .essay .rewrite-old {
   display: none;

@@ -2,6 +2,7 @@ import { Extension } from "@tiptap/core";
 import { Plugin, PluginKey, type EditorState } from "@tiptap/pm/state";
 import { Decoration, DecorationSet, type EditorView } from "@tiptap/pm/view";
 import { insertLines } from "@/lib/editor/insert-lines";
+import { fillParagraphs } from "@/lib/editor/paragraph-text";
 import { DIRECT_EDIT } from "@/lib/suggest/plugin";
 import { docText } from "@/lib/suggest/doc-text";
 import { findText } from "@/lib/suggest/loose";
@@ -75,11 +76,7 @@ function widget(s: Showing) {
     const wrap = document.createElement("span");
     wrap.className = "rewrite-new";
     wrap.setAttribute("data-testid", "rewrite-preview");
-    const lines = s.options[s.index].split("\n");
-    lines.forEach((line, i) => {
-      if (i) wrap.appendChild(document.createElement("br"));
-      wrap.appendChild(document.createTextNode(line));
-    });
+    fillParagraphs(wrap, s.options[s.index]);
     const hint = document.createElement("span");
     hint.className = "rewrite-hint";
     hint.contentEditable = "false";
