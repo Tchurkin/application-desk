@@ -1,15 +1,16 @@
 import Link from "next/link";
+import { daysLabel, shortDate, urgencyOf } from "@/components/board/due";
+import { URGENCY_TEXT } from "@/components/board/due-tag";
 import { StatusPill } from "@/components/status-pill";
 import { APP_SYSTEMS, buildBoard, daysUntil, labelOf, ROUNDS, type College, type PieceSummary } from "@/lib/domain/colleges";
 
+/** Same urgency colours as the Deadlines table, so the two never disagree. */
 function Due({ date, today }: { date: string | null; today: string }) {
   if (!date) return <span className="text-muted">No deadline</span>;
   const d = daysUntil(date, today);
-  const when = new Date(date + "T12:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
-  const tone = d < 0 ? "text-muted" : d <= 7 ? "text-danger font-medium" : d <= 21 ? "text-warn" : "text-ink";
   return (
-    <span className={tone}>
-      {when} · {d < 0 ? "passed" : d === 0 ? "today" : `${d} day${d === 1 ? "" : "s"}`}
+    <span className={URGENCY_TEXT[urgencyOf(d)]}>
+      {shortDate(date, today)} · {daysLabel(d)}
     </span>
   );
 }

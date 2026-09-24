@@ -3,13 +3,15 @@ import { requireDesk } from "@/lib/supabase/server";
 import { deleteMyAccount, updateProfile } from "../actions";
 import { revokeConnectorLink } from "../connector-actions";
 import { revokeShareLink } from "../share-actions";
+import { AcademicsForm } from "./academics-form";
 import { ConnectorCreator } from "./connector-creator";
 import { ShareCreator } from "./share-creator";
 
 export default async function SettingsPage() {
   const { supabase, userId, desk } = await requireDesk();
   const [{ data: profile }, { data: links }, { data: members }, { data: connectors }] = await Promise.all([
-    supabase.from("profiles").select("display_name, about").eq("id", userId).single(),
+    // "*" so the academic fields (migration 20260928) come back when the database has them.
+    supabase.from("profiles").select("*").eq("id", userId).single(),
     supabase
       .from("share_links")
       .select("id, role, label, created_at")
@@ -51,6 +53,19 @@ export default async function SettingsPage() {
         </div>
         <div><button className="btn btn-primary" type="submit">Save</button></div>
       </form>
+
+      <section className="card mb-10 px-4 py-4" aria-labelledby="academics">
+        <h2 id="academics" className="mb-1 font-serif text-xl">Academic profile</h2>
+        <p className="mb-4 text-sm text-muted">
+          Your grades, scores and intended major. Claude or ChatGPT uses them, through your connector, to estimate your admission
+          odds on the Strategy page. Every field is optional; write them however you like.
+        </p>
+        {profile && "gpa" in profile ? (
+          <AcademicsForm gpa={profile.gpa ?? ""} testScores={profile.test_scores ?? ""} intendedMajor={profile.intended_major ?? ""} />
+        ) : (
+          <p className="text-sm text-muted">Run the latest database update to use this.</p>
+        )}
+      </section>
 
       <section className="card mb-10 px-4 py-4" aria-labelledby="sharing">
         <h2 id="sharing" className="mb-1 font-serif text-xl">Sharing</h2>

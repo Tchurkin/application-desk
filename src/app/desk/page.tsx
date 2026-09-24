@@ -1,27 +1,42 @@
 import Link from "next/link";
 import { Board, PieceChips } from "@/components/board";
+import { DeadlinesTable } from "@/components/board/deadlines-table";
+import { moneyRow, sortByCost } from "@/components/board/money";
+import { MoneyTable } from "@/components/board/money-table";
+import { StatTiles } from "@/components/board/stat-tiles";
+import { boardStats, deadlineRows } from "@/components/board/summary";
 import { CollegeFields } from "@/components/college-form";
 import { loadDesk, todayISO } from "@/lib/data/queries";
 import { checkCommonApp, COMMON_APP_MAX } from "@/lib/domain/colleges";
+import { matchCollege } from "@/lib/strategy/catalog";
 import { requireDesk } from "@/lib/supabase/server";
 import { addCollege, addPiece } from "./actions";
 
+const pieceHref = (id: string) => `/desk/piece/${id}`;
+const collegeHref = (id: string) => `/desk/college/${id}`;
+
 export default async function BoardPage() {
   const { supabase, userId, desk } = await requireDesk();
-  const { colleges, pieces } = await loadDesk(supabase, desk.id);
-  const { data: profile } = await supabase.from("profiles").select("display_name, last_piece_id").eq("id", userId).single();
+  const [{ colleges, pieces }, { data: profile }] = await Promise.all([
+    loadDesk(supabase, desk.id),
+    supabase.from("profiles").select("display_name, last_piece_id").eq("id", userId).single(),
+  ]);
+  const today = todayISO();
   const ca = checkCommonApp(colleges);
   const shared = pieces.filter((p) => !p.college_id);
   const last = pieces.find((p) => p.id === profile?.last_piece_id);
+  const money = sortByCost(colleges.map((c) => moneyRow(c, matchCollege(c.name, c.scorecard_id))));
+  // loadDesk selects "*": the cost columns are missing until migration 20260928 has run.
+  const costColumns = colleges.length === 0 || "cost_net" in colleges[0];
 
   return (
-    <main className="mx-auto w-full max-w-4xl px-4 py-8">
+    <main className="mx-auto w-full max-w-5xl px-4 py-8">
       <div className="mb-6 flex flex-wrap items-baseline justify-between gap-3">
         <h1 className="font-serif text-3xl">
           {profile?.display_name ? `${profile.display_name}'s board` : "Your board"}
         </h1>
         {last && (
-          <Link href={`/desk/piece/${last.id}`} className="btn">
+          <Link href={pieceHref(last.id)} className="btn">
             Continue: {last.title} →
           </Link>
         )}
@@ -41,22 +56,30 @@ export default async function BoardPage() {
         </div>
       )}
 
+      {(colleges.length > 0 || pieces.length > 0) && <StatTiles stats={boardStats(colleges, pieces, today)} today={today} />}
+
       {colleges.length === 0 ? (
         <p className="card px-4 py-6 text-muted">No colleges yet. Add your first one below.</p>
       ) : (
-        <Board
-          colleges={colleges}
-          pieces={pieces}
-          today={todayISO()}
-          pieceHref={(id) => `/desk/piece/${id}`}
-          collegeHref={(id) => `/desk/college/${id}`}
-        />
+        <>
+          <DeadlinesTable
+            rows={deadlineRows(colleges, pieces, today)}
+            today={today}
+            pieceHref={pieceHref}
+            collegeHref={collegeHref}
+          />
+          <section aria-labelledby="pieces-by-college-heading">
+            <h2 id="pieces-by-college-heading" className="mb-3 font-serif text-xl">Pieces by college</h2>
+            <Board colleges={colleges} pieces={pieces} today={today} pieceHref={pieceHref} collegeHref={collegeHref} />
+          </section>
+          <MoneyTable rows={money} needsUpdate={!costColumns} />
+        </>
       )}
 
       <section className="mt-10">
         <h2 className="mb-2 font-serif text-xl">Shared pieces</h2>
         <p className="mb-3 text-sm text-muted">Writing that isn&apos;t tied to one college, like the Common App personal essay.</p>
-        <PieceChips pieces={shared} pieceHref={(id) => `/desk/piece/${id}`} />
+        <PieceChips pieces={shared} pieceHref={pieceHref} />
         <form action={addPiece.bind(null, null)} className="flex flex-wrap gap-2">
           <input className="field max-w-xs" name="title" placeholder="e.g. Personal essay" required aria-label="New shared piece title" />
           <input className="field w-24" name="limit_value" type="number" min={1} placeholder="650" aria-label="Word limit" />

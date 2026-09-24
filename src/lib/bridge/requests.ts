@@ -55,15 +55,27 @@ export async function queueRequest(
   return data as DeskRequest;
 }
 
+/** How each assistant is named on buttons ("Ask Claude") and in "Waiting for Claude…". */
+export function assistantLabel(a: Assistant): string {
+  return a === "chatgpt" ? "ChatGPT" : "Claude";
+}
+
 const ASSISTANT_KEY = "desk:assistant";
+const assistantListeners = new Set<() => void>();
+
+/** The assistant this browser picked, or null if it never picked one. */
+export function storedAssistant(): Assistant | null {
+  try {
+    const v = localStorage.getItem(ASSISTANT_KEY);
+    return v === "chatgpt" || v === "claude" ? v : null;
+  } catch {
+    return null;
+  }
+}
 
 /** Which assistant this student uses, remembered per browser. */
 export function preferredAssistant(): Assistant {
-  try {
-    return localStorage.getItem(ASSISTANT_KEY) === "chatgpt" ? "chatgpt" : "claude";
-  } catch {
-    return "claude";
-  }
+  return storedAssistant() ?? "claude";
 }
 
 export function setPreferredAssistant(a: Assistant) {
@@ -72,4 +84,24 @@ export function setPreferredAssistant(a: Assistant) {
   } catch {
     // Private mode: just don't remember.
   }
+  // Every Ask button on the page (and on Strategy) follows the choice at once.
+  for (const l of assistantListeners) l();
+}
+
+/** Follow changes to the choice, in this tab and in others. Returns the unsubscribe. */
+export function subscribeAssistant(onChange: () => void): () => void {
+  assistantListeners.add(onChange);
+  const onStorage = (e: StorageEvent) => {
+    if (e.key === null || e.key === ASSISTANT_KEY) onChange();
+  };
+  window.addEventListener("storage", onStorage);
+  return () => {
+    assistantListeners.delete(onChange);
+    window.removeEventListener("storage", onStorage);
+  };
+}
+
+/** PostgREST's "no such table/function": the database is a migration behind the code. */
+export function bridgeMissing(e: { code?: string } | null | undefined): boolean {
+  return ["42P01", "PGRST205", "42883", "PGRST202"].includes(e?.code ?? "");
 }

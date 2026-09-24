@@ -5,7 +5,7 @@ import { PieceEditor, type PieceMeta } from "./piece-editor";
 
 export default async function PiecePage(props: PageProps<"/desk/piece/[id]">) {
   const { id } = await props.params;
-  const { supabase, userId } = await requireDesk();
+  const { supabase, userId, desk } = await requireDesk();
   const { data: piece } = await supabase
     .from("pieces")
     .select("id, college_id, title, prompt, limit_kind, limit_value, status, notes")
@@ -48,6 +48,7 @@ export default async function PiecePage(props: PageProps<"/desk/piece/[id]">) {
         </div>
       )}
       <PieceEditor
+        deskId={desk.id}
         key={piece.id}
         piece={piece}
         userId={userId}

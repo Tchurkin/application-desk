@@ -8,6 +8,7 @@ import { UndoCaret } from "@/lib/editor/undo-caret";
 import { EditorContent, useEditor, type Editor, type JSONContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { AskPanel, type AskPanelProps } from "@/components/ask/ask-panel";
 import { ConfirmButton } from "@/components/confirm-button";
 import { PIECE_STATUSES, labelOf, type PieceStatus } from "@/lib/domain/colleges";
 import { countChars, countWords, limitState, type LimitKind } from "@/lib/domain/count";
@@ -84,7 +85,9 @@ export function PieceEditor({
   role = "owner",
   aiPolicy = "allowed",
   research = "",
+  deskId,
 }: {
+  deskId?: string;
   piece: PieceMeta;
   userId: string;
   author: string;
@@ -359,6 +362,18 @@ export function PieceEditor({
                 research,
               })
             }
+          />
+        )}
+        {owner && deskId && (
+          <AskToggle
+            deskId={deskId}
+            pieceId={piece.id}
+            pieceTitle={title}
+            getSelection={() => {
+              if (!editor) return "";
+              const { from, to } = editor.state.selection;
+              return editor.state.doc.textBetween(from, to, "\n");
+            }}
           />
         )}
         <History pieceId={piece.id} editor={owner ? editor : null} />
@@ -744,6 +759,19 @@ function ChatbotCopy({ build }: { build: () => string }) {
         <a className="underline" href="https://chatgpt.com/" target="_blank" rel="noreferrer">ChatGPT</a>. To have edits arrive here
         as suggestions, connect one in Settings.
       </p>
+    </div>
+  );
+}
+
+/** Ask Claude or ChatGPT about this piece: questions queued on the desk, answered through the connector. */
+function AskToggle(props: AskPanelProps) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div>
+      <button type="button" className="label cursor-pointer" onClick={() => setOpen(!open)} aria-expanded={open} aria-label="Ask">
+        Ask {open ? "▾" : "▸"}
+      </button>
+      {open && <AskPanel {...props} />}
     </div>
   );
 }

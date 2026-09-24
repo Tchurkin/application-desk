@@ -1,73 +1,32 @@
 import "server-only";
 import data from "@/data/admission-rates.json";
+import { buildIndex, candidates, lookup, type CatalogEntry } from "./match";
 
 /*
  * The bundled College Scorecard catalog (U.S. Department of Education, public domain): every
  * U.S. college with a published admission rate, plus average SAT/ACT and yearly cost. It is the
  * baseline for the Strategy page and money figures when no AI (or student) has set better ones.
- * Rebuild with scripts/build_admission_rates.py.
+ * Rebuild with scripts/build_admission_rates.py. Server-only so the data stays out of the browser.
  */
 
-export interface CatalogEntry {
-  id: number;
-  name: string;
-  alias?: string;
-  city: string;
-  state: string;
-  /** Overall admission rate, 0..1. */
-  rate: number;
-  sat?: number;
-  act?: number;
-  /** Average yearly cost of attendance (in-state for public colleges), USD. */
-  cost?: number;
-  /** Average yearly net price after grants and aid, USD. */
-  net?: number;
-  public?: boolean;
-}
+export type { CatalogEntry } from "./match";
+export { normalizeName } from "./match";
 
-const schools = (data as { schools: CatalogEntry[] }).schools;
-const byId = new Map(schools.map((s) => [s.id, s]));
-
-/** Lowercase, no punctuation, no filler words, so "U of Michigan" ~ "University of Michigan". */
-export function normalizeName(s: string): string {
-  return s
-    .toLowerCase()
-    .replace(/&/g, " and ")
-    .replace(/-main campus$/, "")
-    .replace(/\b(univ|u)\b/g, "university")
-    .replace(/[^a-z0-9 ]+/g, " ")
-    .replace(/\b(the|of|at|in)\b/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-const index = new Map<string, CatalogEntry[]>();
-function add(key: string, s: CatalogEntry) {
-  const k = normalizeName(key);
-  if (!k) return;
-  const list = index.get(k) ?? [];
-  if (!list.includes(s)) list.push(s);
-  index.set(k, list);
-}
-for (const s of schools) {
-  add(s.name, s);
-  // "University of Michigan-Ann Arbor" is also known as "University of Michigan".
-  const base = s.name.split("-")[0];
-  if (base !== s.name) add(base, s);
-  for (const a of s.alias?.split(/[|,]/) ?? []) add(a.trim(), s);
-}
+const index = buildIndex((data as { schools: CatalogEntry[] }).schools);
 
 /**
  * The catalog entry for a college the student typed, or null. An exact (normalized) name or alias
- * match wins; when several colleges share it, the larger-named main campus is not guessed at.
+ * match wins; when several colleges share it, none is guessed at (see catalogCandidates).
  */
 export function matchCollege(name: string, scorecardId?: number | null): CatalogEntry | null {
-  if (scorecardId && byId.has(scorecardId)) return byId.get(scorecardId)!;
-  const hits = index.get(normalizeName(name));
-  if (hits?.length === 1) return hits[0];
-  return null;
+  return lookup(index, name, scorecardId);
 }
 
 export function catalogById(id: number): CatalogEntry | null {
-  return byId.get(id) ?? null;
+  return index.byId.get(id) ?? null;
+}
+
+/** The catalog colleges that share this name, when matchCollege can't pick one. */
+export function catalogCandidates(name: string): CatalogEntry[] {
+  return candidates(index, name);
 }

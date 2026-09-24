@@ -1,9 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { DueTag } from "@/components/board/due-tag";
+import { StrategySummary } from "@/components/board/strategy-summary";
 import { CollegeFields } from "@/components/college-form";
 import { ConfirmButton } from "@/components/confirm-button";
 import { StatusPill } from "@/components/status-pill";
-import { COLLEGE_COLS, PIECE_SUMMARY_COLS, type CollegeRow, type PieceRow } from "@/lib/data/queries";
+import { PIECE_SUMMARY_COLS, todayISO, type CollegeRow, type PieceRow } from "@/lib/data/queries";
+import { APP_SYSTEMS, labelOf, ROUNDS } from "@/lib/domain/colleges";
+import { matchCollege } from "@/lib/strategy/catalog";
 import { requireDesk } from "@/lib/supabase/server";
 import { addPiece, deleteCollege, updateCollege } from "../../actions";
 
@@ -11,16 +15,25 @@ export default async function CollegePage(props: PageProps<"/desk/college/[id]">
   const { id } = await props.params;
   const { supabase } = await requireDesk();
   const [{ data: college }, { data: pieces }] = await Promise.all([
-    supabase.from("colleges").select(COLLEGE_COLS).eq("id", id).maybeSingle<CollegeRow>(),
+    // "*" so the strategy columns come back once migration 20260928 has run, and nothing breaks before.
+    supabase.from("colleges").select("*").eq("id", id).maybeSingle<CollegeRow>(),
     supabase.from("pieces").select(PIECE_SUMMARY_COLS).eq("college_id", id).order("sort").order("created_at"),
   ]);
   if (!college) notFound();
   const list = (pieces ?? []) as PieceRow[];
+  const submitted = list.length > 0 && list.every((p) => p.status === "submitted");
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-8">
       <Link href="/desk" className="text-sm text-muted">← Board</Link>
-      <h1 className="mt-2 mb-6 font-serif text-3xl">{college.name}</h1>
+      <h1 className="mt-2 font-serif text-3xl">{college.name}</h1>
+      <p className="mt-1 mb-6 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
+        <span>{labelOf(ROUNDS, college.round)}</span>
+        <span>{labelOf(APP_SYSTEMS, college.app_system)}</span>
+        <DueTag date={college.deadline} today={todayISO()} submitted={submitted} />
+      </p>
+
+      <StrategySummary college={college} entry={matchCollege(college.name, college.scorecard_id)} strategyHref="/desk/strategy" />
 
       <section className="mb-10">
         <h2 className="mb-3 font-serif text-xl">Pieces of writing</h2>
