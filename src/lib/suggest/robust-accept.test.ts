@@ -135,6 +135,25 @@ describe("suggestions survive paragraphs moving", () => {
     );
   });
 
+  it("after an accept, a suggestion whose words the student then edits is still offered (stale), not gone", () => {
+    const { ydoc, ed } = setup([P1, P2, P3]);
+    const [del, rewrite] = suggestions(ydoc, [
+      { find: " When I was ten, I took apart our toaster to see how it worked.", replace_with: "" },
+      { find: "At Northfield, I want to join the robotics club.", replace_with: "At Northfield, I would lead the robotics club within a year." },
+    ]);
+    expect(acceptInto(ed.view, del)).toBe(true);
+    // The student changes one word in the sentence the second suggestion rewrites.
+    const at = text(ed).indexOf("robotics club.");
+    ed.commands.insertContentAt({ from: posOfOffset(ed, at), to: posOfOffset(ed, at + "robotics".length) }, "engineering");
+    const r = resolveSuggestion(ed.state, rewrite);
+    expect(r.gone).toBe(false);
+    expect(r.stale).toBe(true);
+    expect(acceptInto(ed.view, rewrite)).toBe(true);
+    expect(text(ed)).toBe(
+      ["I have always loved building things.", P2.replace("At Northfield, I want to join the robotics club.", "At Northfield, I would lead the robotics club within a year."), P3].join("\n"),
+    );
+  });
+
   it("wrapping a paragraph in a list keeps its suggestion acceptable", () => {
     const { ydoc, ed } = setup([P1, P2, P3]);
     const [s] = suggestions(ydoc, [{ find: "join the robotics club", replace_with: "lead the robotics club" }]);

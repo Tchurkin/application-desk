@@ -18,7 +18,7 @@ import { absolutePositionToRelativePosition, relativePositionToAbsolutePosition,
 import * as Y from "yjs";
 import { insertLines } from "@/lib/editor/insert-lines";
 import { CONTEXT_CHARS } from "./anchor-text";
-import { docText, textBetweenPos } from "./doc-text";
+import { docText, textBetweenPos, type DocText } from "./doc-text";
 import { findText, loosen } from "./loose";
 import { fromBase64, toBase64 } from "@/lib/sync/base64";
 import type { Suggestion, SuggestionStore } from "./store";
@@ -169,6 +169,27 @@ function anchorAlive(doc: Y.Doc, rel: Y.RelativePosition): boolean {
   }
 }
 
+/**
+ * A passage whose words were partly edited: its quote's opening and closing words found near
+ * `near`, in order, spanning roughly the quote's length.
+ */
+function findByEnds(dt: DocText, quote: string, near: number | undefined): { from: number; to: number } | null {
+  if (quote.length < 16) return null;
+  const sizes = [40, 24, 14, 8, 6].filter((k) => k * 2 <= quote.length);
+  for (const h of sizes) {
+    const head = findText(dt.hay, quote.slice(0, h), near);
+    if (!("start" in head)) continue;
+    for (const t of sizes) {
+      const tail = findText(dt.hay, quote.slice(-t), head.start + quote.length);
+      if (!("start" in tail) || tail.start < head.end) continue;
+      const span = tail.end - head.start;
+      if (span < quote.length * 0.5 || span > quote.length * 1.5 + 40) continue;
+      return { from: dt.posFrom(head.start), to: dt.posTo(tail.end) };
+    }
+  }
+  return null;
+}
+
 /** Whether `text` ends with `tail`, allowing for curly quotes and whitespace differences. */
 function endsWithLoosely(text: string, tail: string): boolean {
   const t = loosen(tail).text;
@@ -223,6 +244,9 @@ export function resolveSuggestion(state: EditorState, s: Suggestion): Resolved {
   }
   // The quoted words were edited, but the anchors still hold: the student decides.
   if (trusted) return { s, from: a!.pos, to: b!.pos, at: s.kind === "replace" ? b!.pos : null, stale: true, gone: false };
+  // Edited words and loose anchors together: find the passage by how its quote starts and ends.
+  const span = findByEnds(dt, quote, a ? dt.offsetOf(a.pos) : undefined);
+  if (span) return { s, from: span.from, to: span.to, at: s.kind === "replace" ? span.to : null, stale: true, gone: false };
   return gone;
 }
 

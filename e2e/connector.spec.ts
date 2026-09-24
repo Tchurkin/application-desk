@@ -46,7 +46,20 @@ test("suggestions of any length arrive for review, and the student accepts a lon
 
   const { tools } = await client.listTools();
   expect(tools.map((t) => t.name).sort()).toEqual(
-    ["create_piece", "edit_piece", "list_my_desk", "read_piece", "suggest_edits", "write_piece"].sort(),
+    [
+      "create_piece",
+      "delete_college",
+      "delete_piece",
+      "edit_piece",
+      "list_my_desk",
+      "read_piece",
+      "set_up_colleges",
+      "suggest_edits",
+      "update_college",
+      "update_my_profile",
+      "update_piece",
+      "write_piece",
+    ].sort(),
   );
   const read = await call(client, "read_piece", { piece_id: pieceId });
   expect(read.text).toContain("I like robots. I built one.");
