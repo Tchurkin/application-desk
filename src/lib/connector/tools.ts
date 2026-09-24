@@ -1,28 +1,27 @@
 import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { McpServer } from "@modelcontextprotocol/server";
+import type * as Y from "yjs";
 import { z } from "zod";
 import { APP_SYSTEMS, labelOf, PIECE_STATUSES, ROUNDS } from "@/lib/domain/colleges";
 import { countChars, countWords } from "@/lib/domain/count";
 import { anchorEdit, docFromRows, flatten, type AnchoredRow } from "@/lib/suggest/anchor-text";
 import { supabaseEnv } from "@/lib/supabase/env";
+import { applyEdits, writeWhole, type WriteResult } from "./write";
 
 /*
  * The Application Desk connector: what Claude or ChatGPT can do on a student's desk.
- * Everything goes through database functions keyed by the connector token; the only thing
- * it can write is suggestions.
+ * Everything goes through database functions keyed by the connector token.
  */
 
-export const INSTRUCTIONS = `You are connected to a high school student's Application Desk: their college list and the college essays and short answers they are writing. Act as a thoughtful college counselor.
+export const INSTRUCTIONS = `You are connected to a high school student's Application Desk: their college list and the college essays and short answers they are writing. Help however the student asks, as a skilled college counselor and writing partner.
 
-These are the rules of the product, not preferences:
-1. The student writes the essay. Never write an essay, or whole paragraphs, for the student to paste. To propose wording, use suggest_edits: each edit appears on the student's desk as a suggestion they accept or decline, marked as AI.
-2. Respect each college's AI policy. When read_piece says a college does not allow AI drafting help, do not propose wording or write sentences for that piece, in chat or through tools. You may still ask questions, point out what is unclear, and check facts and requirements.
-3. Never invent facts. Do not add events, roles, feelings, outcomes, numbers or names the student has not stated in their writing, notes or profile. If an improvement needs a fact you don't have, ask the student for it.
-4. Keep the student's voice. Prefer the smallest edit that fixes the problem, and give a short reason for each.
-5. Mind the word or character limit shown by read_piece.
+You can work in two ways; follow what the student asks for:
+- Suggest: suggest_edits puts proposed changes on their desk as suggestions they accept or decline one by one. Use it when they want feedback, a review, or edits they will go through themselves.
+- Write: write_piece drafts or replaces a whole piece, and edit_piece applies specific changes directly. Use these when they ask you to draft, rewrite, or just make the changes (for example, "draft all my supplementals so I can go through them"). Before any direct write, the desk saves the current text in the piece's History, so the student can always restore it.
+You can also create_piece to add a new essay or short answer to a college.
 
-Start with list_my_desk to see the colleges and pieces, then read_piece before commenting on or editing a piece.`;
+Start with list_my_desk to see the colleges and pieces, and read_piece before working on a piece: it has the prompt, the word or character limit, the current text, the student's notes, their research on the college, and their other essays for that college. Use what the student has written about themselves; when a draft needs a specific detail you don't have, ask or leave a clear [bracketed placeholder]. Mind the limit. Some colleges have an AI policy noted on the desk; tell the student if what they ask for would go against it.`;
 
 const TOKEN_RE = /^[A-Za-z0-9_-]{20,64}$/;
 
@@ -83,6 +82,8 @@ function limitLine(kind: string, value: number | null) {
   return `${value} ${kind === "chars" ? "characters" : "words"}`;
 }
 
+const POLICY_NOTE = "the student noted that this college does not allow AI help with drafting";
+
 export function renderDesk(d: DeskInfo): string {
   const lines = [`# ${d.desk_title}`];
   if (d.student?.name) lines.push(`Student: ${d.student.name}`);
@@ -95,7 +96,7 @@ export function renderDesk(d: DeskInfo): string {
   for (const c of d.colleges) {
     lines.push(
       `- ${c.name} [college_id: ${c.id}] ${labelOf(ROUNDS, c.round)}, ${labelOf(APP_SYSTEMS, c.app_system)}, deadline ${c.deadline ?? "not set"}` +
-        (c.ai_policy === "no_drafting" ? ". NO AI DRAFTING: questions and fact checks only." : ""),
+        (c.ai_policy === "no_drafting" ? ` (AI policy: ${POLICY_NOTE})` : ""),
     );
     for (const p of piecesFor(c.id)) lines.push(pieceLine(p));
   }
@@ -108,23 +109,22 @@ export function renderDesk(d: DeskInfo): string {
 }
 
 export function renderPiece(p: PieceInfo, body: string): string {
-  const noDrafting = p.college?.ai_policy === "no_drafting";
   const used = p.limit_kind === "chars" ? countChars(body) : countWords(body);
   const lines = [
     `# ${p.title} [piece_id: ${p.id}]`,
     p.college ? `College: ${p.college.name}${p.college.deadline ? `, deadline ${p.college.deadline}` : ""}` : "Shared across colleges",
-    noDrafting
-      ? "AI POLICY: this college does not allow AI help with drafting. Do not propose wording or write sentences for this piece. Ask questions, point out unclear spots, and check facts only; suggest_edits is disabled here."
-      : "AI policy: suggestions allowed (the student accepts or declines each one).",
+  ];
+  if (p.college?.ai_policy === "no_drafting") lines.push(`AI policy: ${POLICY_NOTE}.`);
+  lines.push(
     `Status: ${labelOf(PIECE_STATUSES, p.status)}`,
     `Limit: ${limitLine(p.limit_kind, p.limit_value)}. Currently ${used} ${p.limit_kind === "chars" ? "characters" : "words"}.`,
     "",
     "## Prompt",
     p.prompt || "(no prompt entered)",
     "",
-    "## The student's text, as it is now",
-    body || "(empty: the student hasn't started writing)",
-  ];
+    "## The current text (paragraphs are separated by single line breaks)",
+    body || "(empty: nothing written yet)",
+  );
   if (p.notes) lines.push("", "## The student's notes (not part of the essay)", p.notes);
   if (p.college?.research) lines.push("", `## The student's research on ${p.college.name}`, p.college.research);
   if (p.student?.about) lines.push("", "## About the student (in their words)", p.student.about);
@@ -135,7 +135,7 @@ export function renderPiece(p: PieceInfo, body: string): string {
     }
   }
   if (p.open_suggestions.length) {
-    lines.push("", "## Suggestions already waiting for the student");
+    lines.push("", "## Suggestions waiting for the student");
     for (const s of p.open_suggestions) {
       const what =
         s.kind === "insert" ? `add "${s.body}"` : s.kind === "delete" ? `delete "${s.quote}"` : `replace "${s.quote}" with "${s.body}"`;
@@ -150,12 +150,37 @@ async function loadPiece(sb: SupabaseClient, token: string, pieceId: string) {
   if (error) throw new Error(error.message);
   const p = data as PieceInfo;
   const doc = docFromRows(p.doc_state, p.updates);
-  const flat = flatten(doc);
-  doc.destroy();
-  return { p, flat };
+  return { p, doc, flat: flatten(doc) };
+}
+
+/** Save a direct write: the old text goes to History, the Yjs update to the edit log. */
+async function saveWrite(sb: SupabaseClient, token: string, pieceId: string, r: WriteResult) {
+  if (!r.update) return;
+  const { error } = await sb.rpc("connector_write", {
+    token,
+    piece: pieceId,
+    yjs_update: r.update,
+    before_json: r.beforeJSON,
+    before_text: r.before,
+    after_text: r.after,
+    after_words: countWords(r.after),
+    after_chars: countChars(r.after),
+  });
+  if (error) throw new Error(error.message);
 }
 
 const pieceId = z.string().uuid().describe("The piece_id from list_my_desk.");
+
+const EditSchema = z.object({
+  find: z.string().min(1).describe("Exact text as it currently appears in the piece (any length). Must occur exactly once."),
+  replace_with: z.string().optional().describe("Replacement text, any length; line breaks start new paragraphs. Empty string deletes."),
+  insert_after: z.string().optional().describe("Text to insert right after the found text, instead of replacing it."),
+  reason: z.string().max(1000).optional().describe("Why, in a sentence, for the student."),
+});
+
+function countsLine(after: string) {
+  return `Now ${countWords(after)} words, ${countChars(after)} characters.`;
+}
 
 export function registerTools(server: McpServer, token: string) {
   server.registerTool(
@@ -163,7 +188,7 @@ export function registerTools(server: McpServer, token: string) {
     {
       title: "List my colleges and essays",
       description:
-        "The student's colleges (with deadlines and each college's AI policy) and every piece of writing, with ids, status and word counts.",
+        "The student's colleges (with deadlines and any AI policy they noted) and every piece of writing, with ids, status, word counts and limits.",
       inputSchema: z.object({}),
       annotations: { readOnlyHint: true },
     },
@@ -179,13 +204,14 @@ export function registerTools(server: McpServer, token: string) {
     {
       title: "Read an essay",
       description:
-        "One piece of writing: its prompt, limit, current text, the student's notes and research, the college's AI policy, the other pieces for that college, and suggestions already waiting.",
+        "One piece of writing: its prompt, limit, current text, the student's notes and research, the other pieces for that college, and suggestions already waiting.",
       inputSchema: z.object({ piece_id: pieceId }),
       annotations: { readOnlyHint: true },
     },
     async ({ piece_id }) => {
       try {
-        const { p, flat } = await loadPiece(db(), token, piece_id);
+        const { p, doc, flat } = await loadPiece(db(), token, piece_id);
+        doc.destroy();
         return text(renderPiece(p, flat.text));
       } catch (e) {
         return fail((e as Error).message);
@@ -198,41 +224,23 @@ export function registerTools(server: McpServer, token: string) {
     {
       title: "Suggest edits",
       description:
-        "Propose specific edits to a piece. Each edit appears on the student's desk as a suggestion they accept or decline; nothing changes the essay until they accept. " +
-        "For each edit, quote the exact current text in `find` (enough words to be unique), then give either `replace_with` (use an empty string to delete) or `insert_after`. " +
-        "Keep edits small and in the student's voice, never add facts the student hasn't stated, and give a short reason. Not allowed for colleges that bar AI drafting help.",
-      inputSchema: z.object({
-        piece_id: pieceId,
-        edits: z
-          .array(
-            z.object({
-              find: z.string().min(1).describe("Exact text as it currently appears in the piece. Must occur exactly once."),
-              replace_with: z.string().optional().describe("Replacement text. Empty string deletes the found text."),
-              insert_after: z.string().optional().describe("Text to insert right after the found text, instead of replacing it."),
-              reason: z.string().min(1).max(600).describe("Why, in a sentence, for the student."),
-            }),
-          )
-          .min(1)
-          .max(25),
-      }),
+        "Propose edits of any length for the student to review: each appears on their desk as a suggestion they accept or decline, and nothing changes until they accept. " +
+        "For each edit, quote the exact current text in `find` (enough to be unique), then give `replace_with` (empty string deletes) or `insert_after`, and a short reason.",
+      inputSchema: z.object({ piece_id: pieceId, edits: z.array(EditSchema).min(1).max(100) }),
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     async ({ piece_id, edits }) => {
       const sb = db();
       try {
-        const { p, flat } = await loadPiece(sb, token, piece_id);
-        if (p.college?.ai_policy === "no_drafting") {
-          return fail(
-            `${p.college.name} does not allow AI help with drafting, so edits can't be suggested for this piece. You can still ask the student questions and check facts.`,
-          );
-        }
+        const { p, doc, flat } = await loadPiece(sb, token, piece_id);
+        doc.destroy();
         if (!flat.text.trim()) {
-          return fail("The student hasn't written anything in this piece yet. Ask them questions to help them start; the student writes the first draft.");
+          return fail("This piece is empty, so there's nothing to suggest edits to. Use write_piece to draft it.");
         }
         const rows: AnchoredRow[] = [];
         const report: string[] = [];
         edits.forEach((e, i) => {
-          const r = anchorEdit(flat, e);
+          const r = anchorEdit(flat, { ...e, reason: e.reason ?? "" });
           if (r.ok) {
             rows.push(r.row);
             report.push(`${i + 1}. added`);
@@ -243,9 +251,129 @@ export function registerTools(server: McpServer, token: string) {
           if (error) return fail(error.message);
         }
         const head = rows.length
-          ? `${rows.length} suggestion${rows.length === 1 ? "" : "s"} added to "${p.title}". The student will see them on their desk and accept or decline each one.`
+          ? `${rows.length} suggestion${rows.length === 1 ? "" : "s"} added to "${p.title}". The student will accept or decline each one on their desk.`
           : "No suggestions were added.";
         return { content: [{ type: "text", text: `${head}\n${report.join("\n")}` }], isError: rows.length === 0 };
+      } catch (e) {
+        return fail((e as Error).message);
+      }
+    },
+  );
+
+  server.registerTool(
+    "write_piece",
+    {
+      title: "Write a piece",
+      description:
+        "Draft a piece or replace its whole text. Separate paragraphs with line breaks. The current text is saved in the piece's History first, so the student can restore it.",
+      inputSchema: z.object({
+        piece_id: pieceId,
+        text: z.string().describe("The complete new text of the piece."),
+      }),
+      annotations: { readOnlyHint: false, destructiveHint: true },
+    },
+    async ({ piece_id, text: body }) => {
+      const sb = db();
+      let doc: Y.Doc | null = null;
+      try {
+        const loaded = await loadPiece(sb, token, piece_id);
+        doc = loaded.doc;
+        const r = writeWhole(doc, body);
+        if (!r.update) return text(`"${loaded.p.title}" already has exactly that text.`);
+        await saveWrite(sb, token, piece_id, r);
+        return text(
+          `Wrote "${loaded.p.title}". ${countsLine(r.after)}` +
+            (r.before.trim() ? " The previous text is saved in the piece's History." : ""),
+        );
+      } catch (e) {
+        return fail((e as Error).message);
+      } finally {
+        doc?.destroy();
+      }
+    },
+  );
+
+  server.registerTool(
+    "edit_piece",
+    {
+      title: "Edit a piece directly",
+      description:
+        "Apply edits of any length directly to a piece (no review step). For each edit, quote the exact current text in `find`, then give `replace_with` (empty string deletes) or `insert_after`. " +
+        "Edits must not overlap. The text before the edits is saved in the piece's History.",
+      inputSchema: z.object({ piece_id: pieceId, edits: z.array(EditSchema).min(1).max(100) }),
+      annotations: { readOnlyHint: false, destructiveHint: true },
+    },
+    async ({ piece_id, edits }) => {
+      const sb = db();
+      let doc: Y.Doc | null = null;
+      try {
+        const loaded = await loadPiece(sb, token, piece_id);
+        doc = loaded.doc;
+        if (!loaded.flat.text.trim()) return fail("This piece is empty. Use write_piece to draft it.");
+        const r = applyEdits(doc, edits.map((e) => ({ ...e, reason: e.reason ?? "" })));
+        const report = r.outcomes.map((o) => `${o.index + 1}. ${o.ok ? "applied" : `not applied: ${o.reason}`}`);
+        const applied = r.outcomes.filter((o) => o.ok).length;
+        if (applied) await saveWrite(sb, token, piece_id, r);
+        return {
+          content: [
+            {
+              type: "text",
+              text:
+                (applied
+                  ? `Applied ${applied} edit${applied === 1 ? "" : "s"} to "${loaded.p.title}". ${countsLine(r.after)} The previous text is saved in the piece's History.`
+                  : "No edits were applied.") + `\n${report.join("\n")}`,
+            },
+          ],
+          isError: applied === 0,
+        };
+      } catch (e) {
+        return fail((e as Error).message);
+      } finally {
+        doc?.destroy();
+      }
+    },
+  );
+
+  server.registerTool(
+    "create_piece",
+    {
+      title: "Add a piece",
+      description:
+        "Add a new essay or short answer for one of the student's colleges (or shared across colleges when college_id is omitted), optionally with its prompt, limit and a first draft.",
+      inputSchema: z.object({
+        college_id: z.string().uuid().optional().describe("The college_id from list_my_desk; omit for a piece shared across colleges."),
+        title: z.string().min(1).max(300),
+        prompt: z.string().optional().describe("The question exactly as the college asks it."),
+        limit_kind: z.enum(["words", "chars", "none"]).optional(),
+        limit_value: z.number().int().positive().optional(),
+        text: z.string().optional().describe("A first draft; paragraphs separated by line breaks."),
+      }),
+      annotations: { readOnlyHint: false, destructiveHint: false },
+    },
+    async ({ college_id, title, prompt, limit_kind, limit_value, text: body }) => {
+      const sb = db();
+      try {
+        const { data: id, error } = await sb.rpc("connector_create_piece", {
+          token,
+          college: college_id ?? null,
+          piece_title: title,
+          piece_prompt: prompt ?? "",
+          piece_limit_kind: limit_kind ?? (limit_value ? "words" : "none"),
+          piece_limit_value: limit_value ?? null,
+        });
+        if (error) return fail(error.message);
+        let drafted = "";
+        if (body?.trim()) {
+          const { doc } = await loadPiece(sb, token, id as string);
+          try {
+            const r = writeWhole(doc, body);
+            await saveWrite(sb, token, id as string, r);
+            drafted = ` with a first draft. ${countsLine(r.after)}`;
+          } finally {
+            doc.destroy();
+          }
+        }
+        return text(`Added "${title}" [piece_id: ${id}]${drafted || "."}`);
       } catch (e) {
         return fail((e as Error).message);
       }

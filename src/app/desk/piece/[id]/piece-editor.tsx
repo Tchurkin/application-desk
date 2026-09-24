@@ -698,29 +698,22 @@ function chatbotPrompt(p: {
   notes: string;
   research: string;
 }): string {
-  const noDrafting = p.aiPolicy === "no_drafting";
   const limit =
     p.limitKind === "none" || !p.limitValue ? "no limit" : `${p.limitValue} ${p.limitKind === "chars" ? "characters" : "words"}`;
   return [
-    "You're helping me, a high school senior, with a college application essay. Act as a thoughtful college counselor.",
-    "",
-    "Rules:",
-    "- I write the essay. Don't write it, or whole paragraphs, for me.",
-    noDrafting
-      ? `- ${p.collegeName ?? "This college"} does not allow AI help with drafting. Don't suggest wording or write sentences. Ask me questions, point out what's unclear, and check facts and requirements only.`
-      : "- When you suggest wording, keep it to specific, small edits in my voice: quote the exact words to change and give the replacement and a short reason.",
-    "- Never add facts I haven't told you: no invented events, roles, feelings, outcomes, numbers or names. Ask me instead.",
-    `- Keep to the limit: ${limit}.`,
+    "I'm a high school senior working on a college application essay. Help me as a skilled college counselor and writing partner.",
     "",
     `Piece: ${p.title}${p.collegeName ? ` for ${p.collegeName}` : ""}`,
     `Prompt: ${p.prompt || "(not entered)"}`,
+    `Limit: ${limit}`,
+    ...(p.aiPolicy === "no_drafting" ? [`Note: I marked ${p.collegeName ?? "this college"} as not allowing AI help with drafting.`] : []),
     "",
     "My draft:",
     p.text || "(I haven't started yet.)",
     ...(p.notes ? ["", "My notes:", p.notes] : []),
     ...(p.research ? ["", `My research on ${p.collegeName}:`, p.research] : []),
     "",
-    "Start by telling me what's working and the one or two most important things to improve.",
+    "What I'd like: ",
   ].join("\n");
 }
 
@@ -741,7 +734,7 @@ function ChatbotCopy({ build }: { build: () => string }) {
         {copied ? "Copied. Paste it into a chat." : "Copy this piece for a chatbot"}
       </button>
       <p className="mt-1 text-xs text-muted">
-        Copies the prompt, your draft, notes and research with the desk&apos;s rules, for{" "}
+        Copies the prompt, your draft, notes and research, for{" "}
         <a className="underline" href="https://claude.ai/new" target="_blank" rel="noreferrer">Claude</a> or{" "}
         <a className="underline" href="https://chatgpt.com/" target="_blank" rel="noreferrer">ChatGPT</a>. To have edits arrive here
         as suggestions, connect one in Settings.

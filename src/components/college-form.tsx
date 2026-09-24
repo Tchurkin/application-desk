@@ -34,7 +34,7 @@ export function CollegeFields({ college }: { college?: Partial<College> & { rese
       </label>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" name="ai_policy" value="no_drafting" defaultChecked={college?.ai_policy === "no_drafting"} />
-        This college forbids AI help with drafting
+        This college doesn&apos;t allow AI help with drafting (tells Claude/ChatGPT)
       </label>
     </div>
   );

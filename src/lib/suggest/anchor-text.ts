@@ -46,7 +46,7 @@ export function flatten(doc: Y.Doc, field = "default"): FlatDoc {
       blockOpen = true;
       for (const k of kids) {
         if (k instanceof Y.XmlText) {
-          const s = k.toString() === "" ? "" : plain(k);
+          const s = plain(k);
           segments.push({ t: k, start: text.length, len: s.length });
           text += s;
         } else if (k instanceof Y.XmlElement && k.nodeName === "hardBreak") {
@@ -73,6 +73,11 @@ function plain(t: Y.XmlText): string {
     .toDelta()
     .map((op: { insert?: unknown }) => (typeof op.insert === "string" ? op.insert : ""))
     .join("");
+}
+
+/** Paragraph breaks as the essay editor makes them: one or more newlines end a paragraph. */
+export function normalizeBreaks(text: string): string {
+  return text.replace(/\r\n?/g, "\n").replace(/\n{2,}/g, "\n");
 }
 
 /** Curly quotes, dashes and odd spaces as plain characters, one for one (lengths are kept). */
@@ -155,10 +160,17 @@ export function anchorEdit(flat: FlatDoc, e: Edit): EditOutcome {
     if (!e.insert_after) return { ok: false, reason: "insert_after is empty." };
     return {
       ok: true,
-      row: { kind: "insert", anchor_from: anchorAtOffset(flat, f.end, -1), anchor_to: null, quote: "", body: e.insert_after, note: e.reason },
+      row: {
+        kind: "insert",
+        anchor_from: anchorAtOffset(flat, f.end, -1),
+        anchor_to: null,
+        quote: "",
+        body: normalizeBreaks(e.insert_after),
+        note: e.reason,
+      },
     };
   }
-  const body = e.replace_with ?? "";
+  const body = normalizeBreaks(e.replace_with ?? "");
   if (body === quote) return { ok: false, reason: "The replacement is the same as the original." };
   return {
     ok: true,

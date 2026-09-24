@@ -11,11 +11,12 @@
  */
 
 import { isChangeOrigin } from "@tiptap/extension-collaboration";
-import { Plugin, PluginKey, Selection, TextSelection, type EditorState, type Transaction } from "@tiptap/pm/state";
+import { Plugin, PluginKey, Selection, TextSelection, type EditorState } from "@tiptap/pm/state";
 import type { Node as PMNode } from "@tiptap/pm/model";
 import { Decoration, DecorationSet, type EditorView } from "@tiptap/pm/view";
 import { absolutePositionToRelativePosition, relativePositionToAbsolutePosition, ySyncPluginKey } from "@tiptap/y-tiptap";
 import * as Y from "yjs";
+import { insertLines } from "@/lib/editor/insert-lines";
 import { fromBase64, toBase64 } from "@/lib/sync/base64";
 import type { Suggestion, SuggestionStore } from "./store";
 
@@ -408,23 +409,6 @@ export function suggestForwardDelete(view: EditorView, opts: SuggestOptions) {
 }
 
 // ─── accepting (the student) ────────────────────────────────────────────────
-
-/** Insert text that may contain line breaks, splitting paragraphs. Returns the end position. */
-function insertLines(tr: Transaction, at: number, text: string): number {
-  let pos = at;
-  text.split("\n").forEach((line, i) => {
-    if (i > 0) {
-      tr.split(pos);
-      pos = tr.mapping.map(pos, 1);
-      pos = Selection.near(tr.doc.resolve(pos), 1).from;
-    }
-    if (line) {
-      tr.insertText(line, pos);
-      pos += line.length;
-    }
-  });
-  return pos;
-}
 
 /**
  * Apply a suggestion to the text as the student's own edit. Returns false if its text is gone.

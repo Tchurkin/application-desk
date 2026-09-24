@@ -89,13 +89,14 @@ export default async function SettingsPage() {
       <section className="card mb-10 px-4 py-4" aria-labelledby="connect">
         <h2 id="connect" className="mb-1 font-serif text-xl">Connect Claude or ChatGPT</h2>
         <p className="mb-2 text-sm text-muted">
-          Let Claude or ChatGPT read your desk and suggest edits, on your own plan with no extra cost. Its edits arrive here as
-          suggestions you accept or decline; it never changes your text itself. Colleges marked &quot;no AI drafting&quot; get
-          questions and fact checks, not edits.
+          Let Claude or ChatGPT work on your desk, on your own plan with no extra cost. Ask for feedback and its edits arrive
+          here as suggestions you accept or decline. Ask it to draft or rewrite and it writes straight into your pieces (it can
+          add new supplementals too). Before it changes a piece directly, your current text is saved in that piece&apos;s
+          History, so you can always restore it.
         </p>
         <p className="mb-4 text-sm text-muted">
-          Anyone with a connector link can read your desk and add suggestions, so keep it private and revoke it when you&apos;re
-          done. For privacy, turn off model training on your chats in Claude or ChatGPT settings.
+          Anyone with a connector link can read and change your desk, so keep it private and revoke it when you&apos;re done.
+          For privacy, turn off model training on your chats in Claude or ChatGPT settings.
         </p>
         <ConnectorCreator />
         {connectors && connectors.length > 0 && (
