@@ -16,9 +16,10 @@ import {
 import { clip, hasWaiting, mergeRequest, removeRequest, sortThread, THREAD_KINDS, THREAD_LIMIT, whenLabel } from "@/lib/bridge/thread";
 import { useAssistant } from "@/lib/bridge/use-assistant";
 import { useNow } from "@/lib/bridge/use-now";
-import { isCounselor, WATCH_PHRASE, watcher } from "@/lib/bridge/watchers";
+import { activityOn, isCounselor, WATCH_PHRASE, watcher } from "@/lib/bridge/watchers";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { AnswerText } from "./answer-text";
+import { PendingAnswer } from "./pending-answer";
 import { useConnectors, WatchStatus } from "./watch-status";
 
 /**
@@ -57,7 +58,7 @@ interface Thread {
 }
 
 type Notice =
-  | { kind: "queued"; watching: boolean; counselor: boolean; label: string; polish: boolean }
+  | { kind: "queued"; watching: boolean; counselor: boolean; paused: boolean; label: string; polish: boolean }
   | { kind: "connect" }
   | { kind: "error"; text: string };
 
@@ -93,7 +94,8 @@ async function fetchThread(supabase: SupabaseClient, pieceId: string, epoch: { c
 export function AskPanel({ deskId, pieceId, pieceTitle, getSelection, collegeName = null, aiPolicy = "allowed" }: AskPanelProps) {
   const supabase = supabaseBrowser();
   const ids = useId();
-  const now = useNow();
+  // Ticks often enough to follow what the counselor is doing.
+  const now = useNow(5_000);
   const [thread, setThread] = useState<Thread>({ pieceId, phase: "loading", rows: [] });
   const { connectors } = useConnectors(deskId);
   const onlyChatGPT = !!connectors?.length && connectors.every((c) => c.label === "ChatGPT");
@@ -260,6 +262,7 @@ export function AskPanel({ deskId, pieceId, pieceTitle, getSelection, collegeNam
           kind: "queued",
           watching: !!watching,
           counselor: isCounselor(watching, Date.now()),
+          paused: isCounselor(watching, Date.now()) && !!watching?.counselor_paused,
           label: watching?.label ?? label,
           polish: kind === "polish",
         });
@@ -373,7 +376,14 @@ export function AskPanel({ deskId, pieceId, pieceTitle, getSelection, collegeNam
         {rows.length > 0 && (
           <ol aria-label="Questions and answers" aria-live="polite" className="flex flex-col gap-4">
             {rows.map((r) => (
-              <RequestItem key={r.id} r={r} now={now} waitingFor={label} onDismiss={() => void dismiss(r)} />
+              <RequestItem
+                key={r.id}
+                r={r}
+                now={now}
+                waitingFor={label}
+                doing={r.status === "pending" ? activityOn(connectors, r.id, now) : null}
+                onDismiss={() => void dismiss(r)}
+              />
             ))}
           </ol>
         )}
@@ -466,7 +476,19 @@ export function AskPanel({ deskId, pieceId, pieceTitle, getSelection, collegeNam
   );
 }
 
-function RequestItem({ r, now, waitingFor, onDismiss }: { r: DeskRequest; now: number; waitingFor: string; onDismiss: () => void }) {
+function RequestItem({
+  r,
+  now,
+  waitingFor,
+  doing,
+  onDismiss,
+}: {
+  r: DeskRequest;
+  now: number;
+  waitingFor: string;
+  doing: string | null;
+  onDismiss: () => void;
+}) {
   const asked = whenLabel(r.created_at, now);
   const answered = whenLabel(r.answered_at, now);
   const question = r.prompt || (r.kind === "polish" ? "Suggest a few rewordings of this passage." : "");
@@ -493,7 +515,7 @@ function RequestItem({ r, now, waitingFor, onDismiss }: { r: DeskRequest; now: n
       )}
       {question && <p className="rounded-md bg-accent-soft px-2.5 py-1.5 text-sm break-words whitespace-pre-wrap">{question}</p>}
       {r.status === "pending" ? (
-        <p className="text-sm text-muted italic">Waiting for {waitingFor}…</p>
+        <PendingAnswer r={r} who={waitingFor} doing={doing} />
       ) : (
         <div className="border-l-2 border-accent pl-2.5">
           <p className="mb-1 font-mono text-[11px] tracking-wide text-muted uppercase">
@@ -514,6 +536,17 @@ function NoticeLine({ notice }: { notice: Notice }) {
   const link = "font-medium underline underline-offset-2";
   switch (notice.kind) {
     case "queued":
+      if (notice.paused) {
+        return (
+          <p className="text-warn">
+            Saved. Your counselor is paused, so it answers once you resume it on the{" "}
+            <Link className={link} href="/desk/counselor">
+              Counselor page
+            </Link>
+            .
+          </p>
+        );
+      }
       return notice.watching ? (
         <p className="text-muted">
           Sent to {notice.counselor ? "your counselor" : notice.label}.{" "}

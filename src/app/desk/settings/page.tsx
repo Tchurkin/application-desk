@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { ConfirmButton } from "@/components/confirm-button";
 import { requireDesk } from "@/lib/supabase/server";
 import { deleteMyAccount, updateProfile } from "../actions";
@@ -173,7 +174,11 @@ export default async function SettingsPage() {
         </p>
         <p className="mb-4 text-sm text-muted">
           It uses your own Claude plan through Claude Code, which needs to be installed and signed in once
-          (claude.com/claude-code). Revoke its link above to turn it off.
+          (claude.com/claude-code). Talk to it, change its speed, pause it or turn it off on the{" "}
+          <Link href="/desk/counselor" className="underline underline-offset-2">
+            Counselor page
+          </Link>
+          .
         </p>
         <CounselorSetup />
       </section>

@@ -9,7 +9,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  */
 
 export type Assistant = "claude" | "chatgpt";
-export type RequestKind = "ask" | "polish" | "odds" | "interview";
+export type RequestKind = "ask" | "polish" | "odds" | "interview" | "chat";
 
 export interface DeskRequest {
   id: string;
@@ -23,9 +23,12 @@ export interface DeskRequest {
   answered_by: string;
   created_at: string;
   answered_at: string | null;
+  /** When the counselor on the student's computer picked it up (migration 20261001). */
+  counselor_at?: string | null;
 }
 
-export const REQUEST_COLS = "id, desk_id, piece_id, kind, prompt, selection, status, answer, answered_by, created_at, answered_at";
+export const REQUEST_COLS =
+  "id, desk_id, piece_id, kind, prompt, selection, status, answer, answered_by, created_at, answered_at, counselor_at";
 
 /** The message that sends the assistant to the desk's queue. */
 export function handoffMessage(kind: RequestKind): string {

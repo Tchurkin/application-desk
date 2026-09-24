@@ -3,24 +3,49 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 /*
  * Who is answering the desk right now: a Claude or ChatGPT chat running watch_desk, or the
  * counselor on the student's computer (see src/lib/counselor/installer.ts). Both check in on the
- * desk's connector link; the website reads when they last did.
+ * desk's connector link; the website reads when they last did, and what they last did.
  */
 
+export type CounselorSpeed = "fast" | "balanced" | "thorough";
+
+export interface Activity {
+  tool: string;
+  piece?: string | null;
+  /** The request the counselor is working on, if it said. */
+  request?: string | null;
+}
+
 export interface Connector {
+  id?: string;
   label: string;
   last_used_at: string | null;
   /** When a chat (watch_desk) or the counselor last checked the desk (migration 20260929). */
   watched_at?: string | null;
   /** When the counselor on the student's computer last checked in (migration 20261001). */
   counselor_at?: string | null;
+  /** Migration 20261002. */
+  counselor_speed?: CounselorSpeed;
+  counselor_paused?: boolean;
+  counselor_version?: string;
+  /** Asked to remove itself from the student's computer. */
+  counselor_remove?: boolean;
+  /** A new counselor's link, waiting to replace this one (migration 20261003). */
+  replaces?: string | null;
+  activity?: Activity | null;
+  activity_at?: string | null;
+  /** Migration 20261001. */
+  essay_access?: string;
+  can_manage?: boolean;
 }
 
 /** What the student says once in their open Claude/ChatGPT chat. */
 export const WATCH_PHRASE = "Watch my Application Desk";
 /** Watchers check in at least every ~45s; allow for a slow answer in between. */
 export const WATCH_FRESH_MS = 120_000;
+/** Something the assistant did this recently is "now". */
+export const ACTIVITY_FRESH_MS = 90_000;
 
-const fresh = (ts: string | null | undefined, now: number) => !!ts && now - Date.parse(ts) < WATCH_FRESH_MS;
+const fresh = (ts: string | null | undefined, now: number, within = WATCH_FRESH_MS) => !!ts && now - Date.parse(ts) < within;
 
 /** The counselor or chat watching the desk right now, if any; a counselor first. */
 export function watcher(connectors: Connector[] | null, now: number): Connector | null {
@@ -32,7 +57,82 @@ export function isCounselor(c: Connector | null, now: number): boolean {
   return !!c && fresh(c.counselor_at, now);
 }
 
-const COLUMNS = ["label, last_used_at, watched_at, counselor_at", "label, last_used_at, watched_at", "label, last_used_at"];
+/**
+ * The desk's counselor links (ever installed). With `now`, running ones come first in a stable
+ * order (each refreshes its check-in at its own moment, so ordering them by it would flip them
+ * back and forth); otherwise, and after those, the most recently seen first.
+ */
+export function counselors(connectors: Connector[] | null, now?: number): Connector[] {
+  const on = (c: Connector) => (now === undefined ? false : isCounselor(c, now));
+  return (connectors ?? [])
+    .filter((c) => !!c.counselor_at)
+    .sort(
+      (a, b) =>
+        Number(on(b)) - Number(on(a)) ||
+        (on(a) && on(b) ? (a.id ?? "").localeCompare(b.id ?? "") : Date.parse(b.counselor_at!) - Date.parse(a.counselor_at!)),
+    );
+}
+
+/** A new counselor downloaded to replace this one and not yet started, if any. */
+export function pendingReplacement(connectors: Connector[] | null, id: string): Connector | null {
+  return (connectors ?? []).find((c) => c.replaces === id && !c.counselor_at) ?? null;
+}
+
+const DOING: Record<string, (piece: string) => string> = {
+  thinking: () => "thinking",
+  list_my_desk: () => "looking over your desk",
+  read_piece: (p) => (p ? `reading “${p}”` : "reading your essay"),
+  suggest_edits: (p) => (p ? `suggesting edits to “${p}”` : "suggesting edits"),
+  write_piece: (p) => (p ? `writing “${p}”` : "writing"),
+  edit_piece: (p) => (p ? `editing “${p}”` : "editing"),
+  create_piece: () => "adding a piece",
+  update_piece: (p) => (p ? `updating “${p}”` : "updating a piece"),
+  delete_piece: () => "removing a piece",
+  set_up_colleges: () => "setting up your colleges",
+  update_college: () => "updating a college",
+  delete_college: () => "removing a college",
+  read_strategy: () => "reading your college list",
+  set_college_strategy: () => "setting your odds",
+  update_academics: () => "updating your academics",
+  read_profile: () => "reading your profile",
+  save_profile_section: () => "updating your profile",
+  order_profile_sections: () => "organizing your profile",
+  delete_profile_section: () => "organizing your profile",
+  update_my_profile: () => "updating your profile",
+  writing: () => "writing",
+};
+
+/** What the assistant is doing right now ("reading “Why us”"), or null when it's idle. */
+export function activityText(c: Connector | null, now: number): string | null {
+  if (!c?.activity || !fresh(c.activity_at, now, ACTIVITY_FRESH_MS)) return null;
+  const f = DOING[c.activity.tool];
+  return f ? f(c.activity.piece ?? "") : null;
+}
+
+/** How long something took, for people: "14s", "2m 5s", "1h 3m". */
+export function tookText(ms: number): string {
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ${s % 60}s`;
+  return `${Math.floor(m / 60)}h ${m % 60}m`;
+}
+
+/** What a counselor is doing on this request, if it is working on it right now. */
+export function activityOn(connectors: Connector[] | null, requestId: string, now: number): string | null {
+  const c = (connectors ?? []).find((x) => x.activity?.request === requestId);
+  return c ? activityText(c, now) : null;
+}
+
+/** Newest schema first; each fallback is a database one migration further behind. */
+const COLUMNS = [
+  "id, label, last_used_at, watched_at, counselor_at, counselor_speed, counselor_paused, counselor_version, counselor_remove, activity, activity_at, essay_access, can_manage, replaces",
+  "id, label, last_used_at, watched_at, counselor_at, counselor_speed, counselor_paused, counselor_version, counselor_remove, activity, activity_at, essay_access, can_manage",
+  "id, label, last_used_at, watched_at, counselor_at, essay_access, can_manage",
+  "id, label, last_used_at, watched_at, counselor_at",
+  "id, label, last_used_at, watched_at",
+  "id, label, last_used_at",
+];
 
 /** The desk's live connector links; null when they can't be read (then nothing is assumed). */
 export async function fetchConnectors(supabase: SupabaseClient, deskId: string): Promise<Connector[] | null> {

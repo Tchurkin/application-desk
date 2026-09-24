@@ -1,0 +1,23 @@
+import type { DeskRequest } from "@/lib/bridge/requests";
+import { AnswerText } from "./answer-text";
+
+/**
+ * A request still waiting for its answer: the answer so far while the counselor writes it
+ * (streamed into the request), what the counselor is doing on it, that the counselor has it, or
+ * who it is waiting for.
+ */
+export function PendingAnswer({ r, who, doing = null }: { r: DeskRequest; who: string; doing?: string | null }) {
+  if (r.answer) {
+    return (
+      <div className="border-l-2 border-accent pl-2.5" aria-busy="true" data-testid="draft-answer">
+        <p className="mb-1 font-mono text-[11px] tracking-wide text-muted uppercase">{who} · writing…</p>
+        <div className="typing">
+          <AnswerText text={r.answer} />
+        </div>
+      </div>
+    );
+  }
+  if (doing) return <p className="text-sm text-muted italic">Your counselor is {doing}…</p>;
+  if (r.counselor_at) return <p className="text-sm text-muted italic">Your counselor has it…</p>;
+  return <p className="text-sm text-muted italic">Waiting for {who}…</p>;
+}

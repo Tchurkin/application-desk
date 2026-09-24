@@ -83,8 +83,8 @@ test("the interview runs through the desk, and the counselor picks each turn up 
   const api = apiClient();
   const first = await api.rpc("connector_counselor_poll", { token });
   expect(first.error).toBeNull();
-  expect(first.data).toEqual({ fresh: 1, waiting: 1 });
-  expect((await api.rpc("connector_counselor_poll", { token })).data).toEqual({ fresh: 0, waiting: 1 });
+  expect(first.data).toMatchObject({ fresh: 1, waiting: 1 });
+  expect((await api.rpc("connector_counselor_poll", { token })).data).toMatchObject({ fresh: 0, waiting: 1 });
   const bad = await api.rpc("connector_counselor_poll", { token: "not-a-real-token-at-all-000000" });
   expect(bad.error?.message).toContain("not valid");
 
@@ -104,6 +104,6 @@ test("the interview runs through the desk, and the counselor picks each turn up 
   const next = await call(client, "list_desk_requests");
   expect(next.text).toContain("Taking apart my dad's old radio.");
   expect(next.text).toContain("save_profile_section");
-  expect((await api.rpc("connector_counselor_poll", { token })).data).toEqual({ fresh: 1, waiting: 1 });
+  expect((await api.rpc("connector_counselor_poll", { token })).data).toMatchObject({ fresh: 1, waiting: 1 });
   await client.close();
 });

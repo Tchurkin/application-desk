@@ -3,6 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { renderRequestList, type PendingRequest } from "@/lib/bridge/listing";
 import { bridgeMissing } from "@/lib/bridge/requests";
+import { listWithContext } from "./context";
 import { db, fail, text } from "./tools";
 
 /**
@@ -57,7 +58,7 @@ export function registerBridgeTools(server: McpServer, token: string) {
       try {
         const list = await watch(token);
         if (!list.length) return text(`No new requests yet. ${KEEP_WATCHING}`);
-        return text(`${renderRequestList(list)}\n\nAnswer each one on the desk. ${KEEP_WATCHING}`);
+        return text(`${await listWithContext(db(), token, list)}\n\nAnswer each one on the desk. ${KEEP_WATCHING}`);
       } catch (e) {
         return fail((e as Error).message);
       }
@@ -69,7 +70,7 @@ export function registerBridgeTools(server: McpServer, token: string) {
     {
       title: "List requests from the desk",
       description:
-        "Questions, polish requests and odds requests the student queued on the Application Desk website, oldest first, " +
+        "Questions, polish, odds, interview and chat requests the student queued on the Application Desk website, oldest first, " +
         "with the piece, the question, the passage they highlighted, and the tools that finish each one. " +
         "Call this when the student asks you to handle their desk requests, then close each one with answer_request.",
       inputSchema: z.object({}),

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LIST_MAX, PASSAGE_MAX, renderRequestList, type PendingRequest } from "./listing";
+import { LIST_MAX, PASSAGE_MAX, renderRequest, renderRequestList, type PendingRequest } from "./listing";
 
 const PIECE = "11111111-1111-4111-8111-111111111111";
 
@@ -52,6 +52,34 @@ describe("renderRequestList", () => {
     expect(t).toContain("read_strategy, then set_college_strategy for each college");
     expect(t).toContain("answer_request with request_id o1");
     expect(t).not.toContain("piece_id");
+  });
+
+  it("says the piece is already there when it was sent along, so read_piece isn't needed", () => {
+    const t = renderRequestList([row("r1")], { included: { pieces: new Set([PIECE]) } });
+    expect(t).toContain("is included below");
+    expect(t).not.toContain("call read_piece");
+    expect(t).toContain("answer_request with request_id r1");
+  });
+
+  it("lets the counselor answer by replying, for every kind", () => {
+    const kinds = ["ask", "polish", "odds", "interview", "chat"] as const;
+    for (const kind of kinds) {
+      const t = renderRequest(row(`k-${kind}`, { kind, selection: kind === "polish" ? "My robot." : "" }), {
+        answer: "reply",
+        included: { pieces: new Set([PIECE]), strategy: true, profile: true },
+      });
+      expect(t, kind).toContain(`(kind: ${kind})`);
+      expect(t, kind).toContain("don't call answer_request");
+      expect(t, kind).not.toMatch(/call answer_request with/);
+      expect(t, kind).not.toContain("read_strategy,");
+    }
+  });
+
+  it("passes a chat message on as it was written", () => {
+    const t = renderRequestList([row("c1", { kind: "chat", piece_id: null, piece_title: null, prompt: "What should I work on this week?" })]);
+    expect(t).toContain("a message from the student [request_id: c1] (kind: chat)");
+    expect(t).toContain("What should I work on this week?");
+    expect(t).toContain("Reply with answer_request with request_id c1");
   });
 
   it("caps how many it lists and how long a passage runs", () => {

@@ -47,8 +47,12 @@ each assistant may do**, and every direct change is kept in the piece's history.
   bill.
 - **Ask from the desk**: questions, "polish this passage" and odds estimates are asked on the
   website and answered there, by a Claude or ChatGPT chat told to "Watch my Application Desk",
-  or by the **counselor**: a one-file Windows setup (Settings → Your counselor) that runs
-  Claude Code hidden on your own computer and wakes it only when you ask something.
+  or by the **counselor**: a one-file Windows setup that runs Claude Code hidden on your own
+  computer. It keeps one Claude session warm, gets each request with the essay or college list
+  it's about, and streams its answer onto the page as it writes.
+- **Counselor page**: talk to the counselor directly, see what it's doing and what it has done
+  lately, set its speed (Fast, Balanced, Thorough), pause it, update it, or remove it from your
+  computer.
 - **Profile**: sections about you (activities, stories, values, goals) that you write or that
   Claude writes while interviewing you, one question at a time. Claude reads your profile
   before helping with any essay.

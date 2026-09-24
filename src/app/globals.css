@@ -110,6 +110,17 @@ body {
   text-decoration: line-through;
   cursor: pointer;
 }
+/* An answer still being written: a blinking caret after its last line. */
+.typing > :last-child::after {
+  content: "\258D";
+  margin-left: 1px;
+  color: var(--accent);
+  animation: typing-blink 1s steps(1) infinite;
+}
+@keyframes typing-blink {
+  50% { opacity: 0; }
+}
+
 /* A passage still highlighted after the editor lost focus (e.g. while asking about it). */
 .essay .held-selection {
   background: color-mix(in srgb, var(--warn) 28%, transparent);

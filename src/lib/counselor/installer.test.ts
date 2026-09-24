@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { counselorInstaller, WAKE_PROMPT, type InstallerConfig } from "./installer";
+import { CHECK_PROMPT, COUNSELOR_VERSION, counselorInstaller, type InstallerConfig } from "./installer";
 
 const CONFIG: InstallerConfig = {
   site: "https://desk.example.com/",
@@ -30,10 +30,11 @@ describe("counselorInstaller", () => {
     expect(out).toContain("$SupabaseUrl = 'https://abcd.supabase.co'");
     expect(out).toContain(`$Key = '${CONFIG.supabaseKey}'`);
     expect(out).toContain(`$Token = '${CONFIG.token}'`);
-    expect(out).toContain(WAKE_PROMPT);
+    expect(out.split(CHECK_PROMPT).length - 1).toBe(2);
     expect(out).not.toMatch(/__[A-Z_]+__/);
-    // PowerShell's own "$_" survives the substitutions.
+    // PowerShell's own "$_" and "$m" survive the substitutions.
     expect(out).toContain("$_.CommandLine");
+    expect(out).toContain("'\\u{0:x4}' -f [int][char]$m.Value");
   });
 
   it("writes the watcher, the counselor's brief and a way to turn it off", () => {
@@ -41,12 +42,34 @@ describe("counselorInstaller", () => {
       expect(out).toContain(`Save '${name}'`);
     }
     expect(out).toContain("mcp__application-desk");
-    expect(out).toContain("connector_counselor_poll");
     // Every here-string is closed at the start of a line.
     const opens = out.match(/@'\r\n/g)?.length ?? 0;
     const closes = out.match(/\r\n'@/g)?.length ?? 0;
     expect(opens).toBe(4);
     expect(closes).toBe(4);
+  });
+
+  it("keeps one Claude Code running and streams its answers onto the desk", () => {
+    expect(out).toContain(`$Version = '${COUNSELOR_VERSION}'`);
+    for (const flag of ["--input-format', 'stream-json'", "--output-format', 'stream-json'", "--include-partial-messages", "--restricted"]) {
+      expect(out).toContain(flag);
+    }
+    expect(out).toContain("$psi.EnvironmentVariables['ENABLE_TOOL_SEARCH'] = 'false'");
+    for (const fn of ["connector_counselor_poll", "connector_draft_answer", "connector_finish_request", "connector_activity", "connector_counselor_removed"]) {
+      expect(out).toContain(`'${fn}'`);
+    }
+    expect(out).toContain("$WorkUrl = $Cfg.site + '/api/counselor/' + $Cfg.token");
+    // Each speed the website offers.
+    for (const speed of ["fast = @('--model', 'sonnet', '--effort', 'low')", "thorough = @('--model', 'opus', '--effort', 'high')"]) {
+      expect(out).toContain(speed);
+    }
+  });
+
+  it("can remove itself, its conversation and its folder", () => {
+    expect(out).toContain("function Remove-Counselor");
+    expect(out).toContain("if ($r.remove) { Remove-Counselor }");
+    expect(out).toContain("$_.Name -like '*ApplicationDesk-Counselor'");
+    expect(out).toContain("rmdir /s /q");
   });
 
   it("refuses values that could break out of the script", () => {
