@@ -130,15 +130,22 @@ test("the AI writes, edits and adds pieces directly; the old text stays in Histo
   await page.getByRole("button", { name: "History", exact: true }).click();
   const versions = page.getByRole("list", { name: "Saved versions" }).getByRole("button");
   await expect(versions.first()).toBeVisible();
+  await versions.first().click();
+  const compare = page.getByTestId("version-compare");
   let found = false;
-  for (let i = 0; i < (await versions.count()); i++) {
-    await versions.nth(i).click();
-    if ((await page.getByTestId("version-preview").innerText()).includes("My own first try.")) {
+  for (let i = 0; i < 20; i++) {
+    await expect(compare.getByTestId("diff-counts")).not.toHaveText("Loading…");
+    if ((await compare.getByTestId("version-preview").innerText()).includes("My own first try.")) {
       found = true;
       break;
     }
+    const older = compare.getByRole("button", { name: "Older version" });
+    if (await older.isDisabled()) break;
+    await older.click();
   }
   expect(found).toBe(true);
+  await compare.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(compare).toHaveCount(0);
 
   // A new supplemental with a first draft appears on the desk.
   const c = await call(client, "create_piece", {

@@ -9,6 +9,7 @@ import { EditorContent, useEditor, type Editor, type JSONContent } from "@tiptap
 import StarterKit from "@tiptap/starter-kit";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { FormatToolbar } from "@/components/write/format-toolbar";
+import { VersionCompare, type LoadedVersion } from "@/components/write/version-compare";
 import { countLabel, type RailGroup, type RailPiece } from "@/lib/write/rail";
 import { MakeVersion, WriteWorkspace } from "./write-workspace";
 import { ConfirmButton } from "@/components/confirm-button";
@@ -419,7 +420,7 @@ export function PieceEditor({
           />
         )}
         {owner && workspace && <MakeVersion pieceId={piece.id} />}
-        {!workspace && <History pieceId={piece.id} editor={owner ? editor : null} />}
+        {!workspace && <History pieceId={piece.id} editor={editor} canRestore={owner} author={me.name} />}
         {owner && (
           <div>
             <ConfirmButton
@@ -445,7 +446,7 @@ export function PieceEditor({
       countNow={countLabel({ words: countWords(text), chars: countChars(text), kind: limitKind, limit: limitValue })}
       status={pieceStatus}
       editor={editor}
-      history={<History pieceId={piece.id} editor={editor} inPanel />}
+      history={<History pieceId={piece.id} editor={editor} canRestore author={me.name} inPanel />}
       onDeleteCurrent={() => live?.sync.discard()}
     >
       {body}
@@ -703,18 +704,58 @@ function SuggestionsPanel({ live, editor, role, me }: { live: Live; editor: Edit
   );
 }
 
-function History({ pieceId, editor, inPanel = false }: { pieceId: string; editor: Editor | null; inPanel?: boolean }) {
+function History({
+  pieceId,
+  editor,
+  canRestore,
+  author,
+  inPanel = false,
+}: {
+  pieceId: string;
+  /** The piece as it is now, to compare with (and to restore into, for the student). */
+  editor: Editor | null;
+  canRestore: boolean;
+  author: string;
+  inPanel?: boolean;
+}) {
   const supabase = supabaseBrowser();
   const [openState, setOpen] = useState(false);
   // In the side panel it is always open (the tool button opens and closes the panel).
   const open = inPanel || openState;
   const [versions, setVersions] = useState<VersionRow[] | null>(null);
-  const [preview, setPreview] = useState<{ id: string; text: string; content: JSONContent } | null>(null);
+  const [comparing, setComparing] = useState<string | null>(null);
 
+  const reload = useCallback(() => listVersions(supabase, pieceId).then(setVersions, () => setVersions([])), [supabase, pieceId]);
   useEffect(() => {
-    if (!open) return;
-    listVersions(supabase, pieceId).then(setVersions, () => setVersions([]));
-  }, [open, supabase, pieceId]);
+    if (open) void reload();
+  }, [open, reload]);
+
+  const load = useCallback(
+    async (id: string): Promise<LoadedVersion> => {
+      const full = await loadVersion(supabase, id);
+      return { text: full.plain_text, content: full.content as JSONContent };
+    },
+    [supabase],
+  );
+
+  async function restore(v: LoadedVersion) {
+    if (!editor) return;
+    // Today's text is kept as a version first, so restoring never loses anything.
+    const now = textOf(editor);
+    if (now.trim() && now !== v.text) await saveVersion(supabase, pieceId, `${author || "You"}, before restoring`, editor.getJSON(), now);
+    // An ordinary edit: it syncs to everyone like any other change.
+    editor
+      .chain()
+      .command(({ tr }) => {
+        tr.setMeta(DIRECT_EDIT, true);
+        return true;
+      })
+      .setContent(v.content)
+      .run();
+    setComparing(null);
+    if (!inPanel) setOpen(false);
+    void reload();
+  }
 
   return (
     <div className={inPanel ? "p-3" : ""}>
@@ -730,58 +771,36 @@ function History({ pieceId, editor, inPanel = false }: { pieceId: string; editor
           ) : versions.length === 0 ? (
             <p className="text-sm text-muted">No saved versions yet.</p>
           ) : (
-            <ul className="max-h-64 overflow-y-auto rounded-md border border-line bg-panel text-sm" aria-label="Saved versions">
-              {versions.map((v) => (
-                <li key={v.id}>
-                  <button
-                    type="button"
-                    className={`flex w-full justify-between gap-2 px-2 py-1 text-left hover:bg-bg ${preview?.id === v.id ? "bg-accent-soft" : ""}`}
-                    onClick={async () => {
-                      const full = await loadVersion(supabase, v.id);
-                      setPreview({ id: v.id, text: full.plain_text, content: full.content as JSONContent });
-                    }}
-                  >
-                    <span>{new Date(v.at).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}</span>
-                    <span className="text-muted">{v.words} words</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-          {preview && (
-            <div className="rounded-md border border-line bg-panel p-3">
-              <p className="mb-2 max-h-60 overflow-y-auto font-serif text-sm whitespace-pre-wrap" data-testid="version-preview">
-                {preview.text || <em className="text-muted">(empty)</em>}
-              </p>
-              <div className="flex gap-2">
-                {editor && (
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={() => {
-                      // Restoring is an ordinary edit: today's text stays in history, and the change syncs.
-                      editor
-                        .chain()
-                        .command(({ tr }) => {
-                          tr.setMeta(DIRECT_EDIT, true);
-                          return true;
-                        })
-                        .setContent(preview.content)
-                        .run();
-                      setPreview(null);
-                      setOpen(false);
-                    }}
-                  >
-                    Restore this version
-                  </button>
-                )}
-                <button type="button" className="btn" onClick={() => setPreview(null)}>
-                  Close
-                </button>
-              </div>
-            </div>
+            <>
+              <p className="text-xs text-muted">Pick a version to see it beside the piece as it is now, with what changed since.</p>
+              <ul className="max-h-64 overflow-y-auto rounded-md border border-line bg-panel text-sm" aria-label="Saved versions">
+                {versions.map((v) => (
+                  <li key={v.id}>
+                    <button
+                      type="button"
+                      className={`flex w-full justify-between gap-2 px-2 py-1 text-left hover:bg-bg ${comparing === v.id ? "bg-accent-soft" : ""}`}
+                      onClick={() => setComparing(v.id)}
+                    >
+                      <span>{new Date(v.at).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}</span>
+                      <span className="text-muted">{v.words} words</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
         </div>
+      )}
+      {comparing && versions && (
+        <VersionCompare
+          versions={versions}
+          id={comparing}
+          load={load}
+          editor={editor}
+          onPick={setComparing}
+          onRestore={canRestore && editor ? (v) => void restore(v) : null}
+          onClose={() => setComparing(null)}
+        />
       )}
     </div>
   );

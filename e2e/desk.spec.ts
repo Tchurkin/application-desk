@@ -96,7 +96,7 @@ test("warns past 20 Common App colleges and suggests the no-letter ones", async 
   await expect(alert).toContainText("Cap College 7");
 });
 
-test("history keeps the first save and restores an old version", async ({ page }) => {
+test("history keeps the first save, compares a version with now side by side, and restores it", async ({ page }) => {
   await signUp(page, "history");
   await addCollege(page, "History College");
   await addPiece(page, "Drafts");
@@ -120,11 +120,24 @@ test("history keeps the first save and restores an old version", async ({ page }
   const list = page.getByRole("list", { name: "Saved versions" });
   await expect(list.getByRole("button")).toHaveCount(2);
   await list.getByRole("button").first().click();
-  await expect(page.getByTestId("version-preview")).toHaveText("second draft");
-  await list.getByRole("button").last().click();
-  await expect(page.getByTestId("version-preview")).toHaveText("first draft");
-  await page.getByRole("button", { name: "Restore this version" }).click();
+
+  // Split screen: the version on the left, the piece now on the right, with what changed marked.
+  const compare = page.getByTestId("version-compare");
+  await expect(compare.getByTestId("version-preview")).toHaveText("second draft");
+  await expect(compare.getByTestId("version-now")).toHaveText("second draft, continued");
+  await expect(compare.getByTestId("version-now").locator("ins")).toContainText("continued");
+  await expect(compare.getByTestId("version-preview").locator("del")).toHaveText("draft");
+  await expect(compare.getByTestId("diff-counts")).toContainText("1 word taken out, 2 added");
+
+  // Step back to the older version, then restore it.
+  await compare.getByRole("button", { name: "Older version" }).click();
+  await expect(compare.getByTestId("version-preview")).toHaveText("first draft");
+  await expect(compare.getByRole("button", { name: "Older version" })).toBeDisabled();
+  await compare.getByRole("button", { name: "Restore this version" }).click();
+  await expect(compare).toHaveCount(0);
   await expect(essay(page)).toHaveText("first draft");
+  // What was there before restoring is a version too.
+  await expect.poll(() => list.getByRole("button").count()).toBeGreaterThanOrEqual(3);
 });
 
 test("deleting a piece leaves no ghost, even with a write in flight", async ({ page }) => {

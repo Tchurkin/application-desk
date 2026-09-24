@@ -121,6 +121,19 @@ body {
   50% { opacity: 0; }
 }
 
+/* Comparing a version with now (src/components/write/version-compare.tsx). */
+.diff-removed {
+  background: var(--danger-soft);
+  color: var(--danger);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+.diff-added {
+  background: var(--accent-soft);
+  text-decoration: none;
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
 /* A later paragraph inside a suggested insertion or a rewrite: a paragraph of its own. */
 .essay .widget-para {
   display: block;
