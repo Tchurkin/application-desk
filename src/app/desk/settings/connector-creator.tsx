@@ -90,14 +90,14 @@ export function ConnectorCreator() {
           {state.label === "ChatGPT" ? (
             <ol className="list-decimal pl-5">
               <li>Needs ChatGPT Plus or higher. On chatgpt.com, open Settings → Apps → Advanced settings and turn on Developer mode.</li>
-              <li>Choose Create app, name it Application Desk, paste the link, and pick No authentication.</li>
-              <li>In a chat, add the Application Desk app from the + menu, then ask something like &quot;Read my Why Northfield essay and suggest edits.&quot;</li>
+              <li>Choose Create app, name it Margin, paste the link, and pick No authentication.</li>
+              <li>In a chat, add the Margin app from the + menu, then ask something like &quot;Read my Why Northfield essay and suggest edits.&quot;</li>
             </ol>
           ) : (
             <ol className="list-decimal pl-5">
               <li>Works on any Claude plan, including free. On claude.ai or the Claude desktop app, open Settings → Connectors.</li>
-              <li>Choose Add custom connector, name it Application Desk, and paste the link.</li>
-              <li>In a chat, turn Application Desk on from the tools menu, then ask something like &quot;Read my Why Northfield essay and suggest edits.&quot;</li>
+              <li>Choose Add custom connector, name it Margin, and paste the link.</li>
+              <li>In a chat, turn Margin on from the tools menu, then ask something like &quot;Read my Why Northfield essay and suggest edits.&quot;</li>
             </ol>
           )}
         </div>

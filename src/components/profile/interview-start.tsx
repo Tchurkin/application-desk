@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { ModelPicker, useModelChoice } from "@/components/ask/model-picker";
 import { bridgeMissing, queueRequest } from "@/lib/bridge/requests";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
@@ -14,12 +15,13 @@ export function InterviewStart({ deskId }: { deskId: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [model, setModel] = useModelChoice("chat");
 
   async function start() {
     setBusy(true);
     setError(null);
     try {
-      await queueRequest(supabaseBrowser(), { deskId, pieceId: null, kind: "interview", prompt: "" });
+      await queueRequest(supabaseBrowser(), { deskId, pieceId: null, kind: "interview", prompt: "", model });
       router.push("/desk/counselor");
     } catch (e) {
       const err = e as { code?: string; message?: string };
@@ -41,9 +43,12 @@ export function InterviewStart({ deskId }: { deskId: string }) {
         Your counselor asks you one question at a time, in the chat on the Counselor page, and writes what you say into these sections in
         your words. Answer in as much detail as you like, skip anything, and stop whenever you want.
       </p>
-      <button type="button" className="btn btn-primary self-start" disabled={busy} onClick={() => void start()}>
-        {busy ? "Starting…" : "Start the interview"}
-      </button>
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void start()}>
+          {busy ? "Starting…" : "Start the interview"}
+        </button>
+        <ModelPicker value={model} onChange={setModel} />
+      </div>
       {error && <p className="rounded-md bg-danger-soft px-3 py-2 text-xs text-danger">{error}</p>}
     </section>
   );

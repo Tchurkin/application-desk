@@ -2,6 +2,7 @@
 import { createHash } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import type { CounselorSpeed } from "@/lib/bridge/watchers";
+import { isEffort, isModel, type EffortId, type ModelId } from "@/lib/counselor/models";
 import { asEssayAccess, type EssayAccess } from "@/lib/domain/share";
 import { requireDesk } from "@/lib/supabase/server";
 
@@ -24,7 +25,7 @@ function revalidate() {
 }
 
 /** The settings each migration added, newest first; a database a migration behind lacks the first ones. */
-const NEWER_FIELDS = ["replaces", "counselor_speed"];
+const NEWER_FIELDS = ["counselor_model", "counselor_effort", "replaces", "counselor_speed"];
 
 /**
  * Set what a new link may do (and, for a counselor, how fast it runs and what it replaces). A
@@ -89,7 +90,7 @@ export async function updateCounselorLink(oldId: string): Promise<ConnectorState
   const { supabase } = await requireDesk();
   const { data: old, error } = await supabase
     .from("connector_links")
-    .select("id, label, essay_access, can_manage, counselor_speed")
+    .select("*")
     .eq("id", oldId)
     .is("revoked_at", null)
     .single();
@@ -101,6 +102,8 @@ export async function updateCounselorLink(oldId: string): Promise<ConnectorState
     essay_access: asEssayAccess(old.essay_access),
     can_manage: old.can_manage !== false,
     counselor_speed: asSpeed(old.counselor_speed),
+    ...(isModel(old.counselor_model) ? { counselor_model: old.counselor_model } : {}),
+    ...(isEffort(old.counselor_effort) ? { counselor_effort: old.counselor_effort } : {}),
     replaces: oldId,
   });
   if (made.error) return { error: made.error };
@@ -120,10 +123,18 @@ export async function setConnectorPermissions(id: string, essays: EssayAccess, m
   revalidate();
 }
 
-/** Which model and effort the counselor runs; it takes effect between requests. */
-export async function setCounselorSpeed(id: string, speed: CounselorSpeed) {
+/** The nearest of the three speeds an older counselor (version 2) understands. */
+const speedFor = (model: ModelId, effort: EffortId): CounselorSpeed =>
+  model === "opus" || model === "fable" ? "thorough" : effort === "low" ? "fast" : "balanced";
+
+/** The counselor's default model and how hard it thinks; they take effect from the next request. */
+export async function setCounselorModel(id: string, model: ModelId, effort: EffortId) {
   const { supabase } = await requireDesk();
-  const { error } = await supabase.from("connector_links").update({ counselor_speed: asSpeed(speed) }).eq("id", id);
+  if (!isModel(model) || !isEffort(effort)) throw new Error("Unknown model.");
+  const { error } = await supabase
+    .from("connector_links")
+    .update({ counselor_model: model, counselor_effort: effort, counselor_speed: speedFor(model, effort) })
+    .eq("id", id);
   if (error) throw new Error(error.message);
   revalidate();
 }

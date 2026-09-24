@@ -47,5 +47,8 @@ test("a Google Drive folder download lands on the right pieces, and a combined d
   await page.goto(`/desk/piece/${whyId}`);
   await expectEssay(page, "I want to build robots here.");
   await page.goto("/desk");
-  for (const title of ["Personal statement", "Community", "Activity"]) await expect(page.getByText(title, { exact: true }).first()).toBeVisible();
+  // Shared pieces show as links with their status beside the title.
+  for (const title of ["Personal statement", "Community", "Activity"]) {
+    await expect(page.getByRole("link", { name: new RegExp(`^${title}\\b`) }).first()).toBeVisible();
+  }
 });

@@ -105,7 +105,7 @@ export async function counselorMessages(
   sb: SupabaseClient,
   token: string,
   rows: PendingRequest[],
-): Promise<{ id: string; kind: RequestKind; text: string }[]> {
+): Promise<{ id: string; kind: RequestKind; text: string; model: string }[]> {
   const ctx = new Context(sb, token);
   return Promise.all(
     rows.map(async (r) => {
@@ -114,6 +114,7 @@ export async function counselorMessages(
       return {
         id: r.id,
         kind: r.kind,
+        model: r.model ?? "",
         text: [`# A request from the student's desk`, body, "", REPLY_RULES, ...(c ? ["", "---", "", c.text] : [])].join("\n"),
       };
     }),

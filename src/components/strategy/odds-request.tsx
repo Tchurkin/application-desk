@@ -9,6 +9,7 @@ import {
   type Assistant,
   type DeskRequest,
 } from "@/lib/bridge/requests";
+import { ModelPicker, useModelChoice } from "@/components/ask/model-picker";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
 /*
@@ -48,6 +49,7 @@ export function OddsRequest({
   const [answered, setAnswered] = useState<DeskRequest | null>(null);
   const [error, setError] = useState<string | null>(null);
   const seen = useRef<string | null>(null);
+  const [model, setModel] = useModelChoice("odds");
 
   const pendingId = pending?.id ?? null;
   useEffect(() => {
@@ -98,7 +100,7 @@ export function OddsRequest({
     setAnswered(null);
     setQueuing(true);
     try {
-      setPending(await queueRequest(supabaseBrowser(), { deskId, kind: "odds", prompt: ODDS_PROMPT }));
+      setPending(await queueRequest(supabaseBrowser(), { deskId, kind: "odds", prompt: ODDS_PROMPT, model }));
     } catch (e) {
       setError(`Couldn't ask ${NAME[a]}: ${(e as Error).message}`);
     } finally {
@@ -144,12 +146,13 @@ export function OddsRequest({
           </div>
         </div>
       ) : (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {assistants.map((a) => (
             <button key={a} type="button" className="btn btn-primary" onClick={() => void queue(a)}>
               Estimate my odds with {NAME[a]}
             </button>
           ))}
+          <ModelPicker value={model} onChange={setModel} />
         </div>
       )}
       {error && <p role="alert" className="rounded-md bg-danger-soft px-3 py-2 text-danger">{error}</p>}

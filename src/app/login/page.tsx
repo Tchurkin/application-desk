@@ -10,7 +10,7 @@ export default async function LoginPage(props: PageProps<"/login">) {
   return (
     <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center px-4 py-12">
       <Link href="/" className="mb-8 text-sm text-muted">
-        ← Application Desk
+        ← Margin
       </Link>
       <h1 className="mb-6 font-serif text-3xl">{signup ? "Start your desk" : "Sign in"}</h1>
       {error && <p className="mb-4 rounded-md bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}

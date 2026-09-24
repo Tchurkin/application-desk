@@ -82,12 +82,12 @@ if ($Cfg.key -like 'eyJ*') { $Headers['Authorization'] = 'Bearer ' + $Cfg.key }
 $RpcUrl = $Cfg.supabaseUrl + '/rest/v1/rpc/'
 $WorkUrl = $Cfg.site + '/api/counselor/' + $Cfg.token
 
-# Speeds the website can choose: which Claude model, and how hard it thinks.
-$Speeds = @{
-  fast = @('--model', 'sonnet', '--effort', 'low')
-  balanced = @('--model', 'sonnet', '--effort', 'medium')
-  thorough = @('--model', 'opus', '--effort', 'high')
-}
+# The Claude models and efforts the website can choose (Claude Code's aliases), and the model
+# and effort each of the older three speeds meant, for a database without per-model settings.
+$Models = @('haiku', 'sonnet', 'opus', 'fable')
+$Efforts = @('low', 'medium', 'high')
+$SpeedModel = @{ fast = 'sonnet'; balanced = 'sonnet'; thorough = 'opus' }
+$SpeedEffort = @{ fast = 'low'; balanced = 'medium'; thorough = 'high' }
 
 # JSON that is plain ASCII, whatever it holds: Windows PowerShell sends text in the local code page.
 function Ascii($s) { return [regex]::Replace($s, '[^\x00-\x7F]', { param($m) '\u{0:x4}' -f [int][char]$m.Value }) }
@@ -130,7 +130,10 @@ function Retry-Unposted {
 }
 
 $script:Proc = $null
-$script:ProcSpeed = ''
+$script:ProcModel = ''
+$script:ProcEffort = ''
+$script:Switching = $null
+$script:SwitchSeq = 0
 $script:Resumed = $false
 $script:Out = $null
 $script:Err = $null
@@ -146,9 +149,8 @@ $script:LastUsed = Get-Date
 $script:LastFetch = [datetime]::MinValue
 $script:NeedFetch = $true
 
-function Start-Claude($speed) {
-  $flags = $Speeds[$speed]
-  if (-not $flags) { $flags = $Speeds['balanced']; $speed = 'balanced' }
+function Start-Claude($model, $effort) {
+  $flags = @('--model', $model, '--effort', $effort)
   $session = ''
   if (Test-Path $SessionFile) { $session = ([IO.File]::ReadAllText($SessionFile)).Trim() }
   # Claude Code deletes conversations unused for a month: resume only one that is still there.
@@ -185,12 +187,13 @@ function Start-Claude($speed) {
   $psi.EnvironmentVariables['ENABLE_TOOL_SEARCH'] = 'false'
   try {
     $script:Proc = [Diagnostics.Process]::Start($psi)
-    $script:ProcSpeed = $speed
+    $script:ProcModel = $model
+    $script:ProcEffort = $effort
     $script:Out = $script:Proc.StandardOutput.ReadLineAsync()
     $script:Err = $script:Proc.StandardError.ReadLineAsync()
     $script:ErrTail.Clear()
     $script:StartFails = 0
-    Log ('Claude Code is up (' + $speed + ').')
+    Log ('Claude Code is up (' + $model + ', ' + $effort + ' effort).')
   } catch {
     $script:Proc = $null
     $script:StartFails++
@@ -220,6 +223,7 @@ function Stop-Claude($gently) {
   $script:Proc = $null
   $script:Out = $null
   $script:Err = $null
+  $script:Switching = $null
 }
 
 function Send-Next {
@@ -235,7 +239,7 @@ function Send-Next {
     Stop-Claude $false
     return
   }
-  $script:Current = @{ id = $item.id; text = $item.text; tries = $item.tries; started = Get-Date; draft = ''; posted = ''; postedAt = [datetime]::MinValue }
+  $script:Current = @{ id = $item.id; text = $item.text; model = $item.model; tries = $item.tries; started = Get-Date; draft = ''; posted = ''; postedAt = [datetime]::MinValue }
   $script:LastUsed = Get-Date
   Activity 'thinking' $item.id
 }
@@ -248,7 +252,7 @@ function Finish-Current($o) {
   if ($script:Resumed -and $o.is_error -and [int]$o.num_turns -eq 0 -and ((@($o.errors) -join ' ') -match 'No conversation found')) {
     Remove-Item -Force -ErrorAction SilentlyContinue $SessionFile
     $script:Resumed = $false
-    [void]$script:Queue.Insert(0, @{ id = $c.id; text = $c.text; tries = $c.tries; at = Get-Date })
+    [void]$script:Queue.Insert(0, @{ id = $c.id; text = $c.text; model = $c.model; tries = $c.tries; at = Get-Date })
     Log 'The saved conversation is gone; starting a new one.'
     return
   }
@@ -266,7 +270,36 @@ function Finish-Current($o) {
   Log ('Answered in ' + [int]((Get-Date) - $c.started).TotalSeconds + 's.')
 }
 
+# Change the running Claude Code's model without restarting it (and without losing the conversation).
+function Switch-Model($model) {
+  $script:SwitchSeq++
+  $id = 'model-' + $script:SwitchSeq
+  $msg = @{ type = 'control_request'; request_id = $id; request = @{ subtype = 'set_model'; model = $model } }
+  try {
+    $script:Proc.StandardInput.WriteLine(($msg | ConvertTo-Json -Compress -Depth 5))
+    $script:Proc.StandardInput.Flush()
+    $script:Switching = @{ id = $id; model = $model; until = (Get-Date).AddSeconds(15) }
+  } catch {
+    Stop-Claude $false
+  }
+}
+
 function Handle-Line($line) {
+  if ($script:Switching -and $line.IndexOf('"control_response"') -ge 0) {
+    try { $o = $line | ConvertFrom-Json } catch { return }
+    if ($o.response.request_id -eq $script:Switching.id) {
+      if ($o.response.subtype -eq 'success') {
+        $script:ProcModel = $script:Switching.model
+        Log ('Switched to ' + $script:ProcModel + '.')
+      } else {
+        # This Claude Code can't switch (or not to that model): start again with it.
+        Log ('Could not switch to ' + $script:Switching.model + ': ' + ($o.response | ConvertTo-Json -Compress -Depth 4))
+        Stop-Claude $true
+      }
+      $script:Switching = $null
+    }
+    return
+  }
   $c = $script:Current
   if (-not $c) { return }
   if ($line.IndexOf('"stream_event"') -ge 0) {
@@ -323,7 +356,9 @@ function Fetch-Work {
     foreach ($q in $r.requests) {
       if ($script:Seen.ContainsKey($q.id)) { continue }
       $script:Seen[$q.id] = $true
-      [void]$script:Queue.Add(@{ id = $q.id; text = [string]$q.text; tries = 0; at = Get-Date })
+      $m = [string]$q.model
+      if ($Models -notcontains $m) { $m = '' }
+      [void]$script:Queue.Add(@{ id = $q.id; text = [string]$q.text; model = $m; tries = 0; at = Get-Date })
     }
     $script:NeedFetch = $false
     $script:FetchFails = 0
@@ -346,11 +381,12 @@ function Handle-Exit {
   $script:Proc = $null
   $script:Out = $null
   $script:Err = $null
+  $script:Switching = $null
   $c = $script:Current
   $script:Current = $null
   if (-not $c) { return }
   if ($c.tries -lt 1) {
-    [void]$script:Queue.Insert(0, @{ id = $c.id; text = $c.text; tries = $c.tries + 1; at = Get-Date })
+    [void]$script:Queue.Insert(0, @{ id = $c.id; text = $c.text; model = $c.model; tries = $c.tries + 1; at = Get-Date })
   } else {
     Finish $c.id "Sorry, I couldn't answer this one: Claude Code stopped unexpectedly. Try asking again."
     Activity 'idle'
@@ -383,7 +419,8 @@ function Remove-Counselor {
 Log ('Counselor ' + $Version + ' started.')
 $LastPoll = [datetime]::MinValue
 $Fails = 0
-$Speed = 'balanced'
+$Model = 'sonnet'
+$Effort = 'medium'
 $Paused = $false
 $Waiting = 0
 while ($true) {
@@ -396,7 +433,10 @@ while ($true) {
       $r = Rpc 'connector_counselor_poll' @{ token = $Cfg.token; version = $Version }
       $Fails = 0
       if ($r.remove) { Remove-Counselor }
-      if ($r.speed) { $Speed = [string]$r.speed }
+      if ($Models -contains [string]$r.model) { $Model = [string]$r.model }
+      elseif ($SpeedModel.ContainsKey([string]$r.speed)) { $Model = $SpeedModel[[string]$r.speed] }
+      if ($Efforts -contains [string]$r.effort) { $Effort = [string]$r.effort }
+      elseif ($SpeedEffort.ContainsKey([string]$r.speed)) { $Effort = $SpeedEffort[[string]$r.speed] }
       $Paused = [bool]$r.paused
       $Waiting = [int]$r.waiting
       if ([int]$r.fresh -gt 0) { $script:NeedFetch = $true }
@@ -445,12 +485,22 @@ while ($true) {
   if ($Waiting -eq 0) { $script:NeedFetch = $false }
   if ($script:Unposted.Count) { Retry-Unposted }
 
-  if (-not $script:Current) {
-    # A new speed takes effect between requests.
-    if ($script:Proc -and $script:ProcSpeed -ne $Speed) { Stop-Claude $true }
+  if ($script:Switching -and (Get-Date) -gt $script:Switching.until) {
+    Log ('Switching to ' + $script:Switching.model + ' took too long; starting again with it.')
+    $script:Switching = $null
+    Stop-Claude $false
+  }
+
+  if (-not $script:Current -and -not $script:Switching) {
+    # A new effort takes effect between requests (a new model switches in place, below).
+    if ($script:Proc -and $script:ProcEffort -ne $Effort) { Stop-Claude $true }
     if (-not $Paused -and $script:Queue.Count -gt 0) {
-      if (-not $script:Proc -and (Get-Date) -ge $script:NextStart) { Start-Claude $Speed }
-      if ($script:Proc -and $script:Queue.Count -gt 0) { Send-Next }
+      $want = $script:Queue[0].model
+      if (-not $want) { $want = $Model }
+      if (-not $script:Proc -and (Get-Date) -ge $script:NextStart) { Start-Claude $want $Effort }
+      if ($script:Proc -and $script:Queue.Count -gt 0) {
+        if ($script:ProcModel -ne $want) { Switch-Model $want } else { Send-Next }
+      }
     } elseif ($script:Proc -and ($Paused -or ((Get-Date) - $script:LastUsed).TotalMinutes -gt 20)) {
       # Nothing to do for a while: let Claude Code rest; the conversation resumes next time.
       Stop-Claude $true

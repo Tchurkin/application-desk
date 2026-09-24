@@ -59,10 +59,10 @@ describe("counselorInstaller", () => {
       expect(out).toContain(`'${fn}'`);
     }
     expect(out).toContain("$WorkUrl = $Cfg.site + '/api/counselor/' + $Cfg.token");
-    // Each speed the website offers.
-    for (const speed of ["fast = @('--model', 'sonnet', '--effort', 'low')", "thorough = @('--model', 'opus', '--effort', 'high')"]) {
-      expect(out).toContain(speed);
-    }
+    // Every model the website offers, switched in place in the running Claude Code.
+    expect(out).toContain("$Models = @('haiku', 'sonnet', 'opus', 'fable')");
+    expect(out).toContain("subtype = 'set_model'");
+    expect(out).toContain("$flags = @('--model', $model, '--effort', $effort)");
   });
 
   it("can remove itself, its conversation and its folder", () => {

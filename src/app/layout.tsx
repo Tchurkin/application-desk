@@ -6,8 +6,9 @@ const sans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const serif = Source_Serif_4({ variable: "--font-serif", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Application Desk",
-  description: "Write every college essay in one place, and share it with the people helping you.",
+  title: { default: "Margin", template: "%s · Margin" },
+  description:
+    "Margin Application Desk: every college essay in one place. Your words stay in the middle; parents, your counselor and AI work from the margin.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

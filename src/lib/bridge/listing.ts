@@ -24,6 +24,8 @@ export interface PendingRequest {
   prompt: string;
   selection: string;
   created_at: string;
+  /** The model asked for, "" (or missing before migration 20261004) for the default. */
+  model?: string;
 }
 
 export interface ListingOptions {

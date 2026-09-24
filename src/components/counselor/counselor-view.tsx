@@ -11,7 +11,7 @@ import {
   revokeConnectorLink,
   setCounselorPaused,
   setCounselorRemove,
-  setCounselorSpeed,
+  setCounselorModel,
   updateCounselorLink,
 } from "@/app/desk/connector-actions";
 import { subscribeDeskRequests } from "@/lib/bridge/live";
@@ -29,6 +29,7 @@ import {
   type CounselorSpeed,
 } from "@/lib/bridge/watchers";
 import { downloadInstaller } from "@/lib/counselor/download";
+import { EFFORTS, isEffort, isModel, MODELS, type EffortId, type ModelId } from "@/lib/counselor/models";
 import { asEssayAccess } from "@/lib/domain/share";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
@@ -44,11 +45,44 @@ const SUGGESTIONS = [
   "Help me plan my deadlines.",
 ];
 
-export const SPEEDS: { id: CounselorSpeed; label: string; about: string }[] = [
-  { id: "fast", label: "Fast", about: "Sonnet, thinking briefly. Quick answers to questions and polish." },
-  { id: "balanced", label: "Balanced", about: "Sonnet, thinking it through. Good for most things." },
-  { id: "thorough", label: "Thorough", about: "Opus, thinking hard. Slower; for odds, full drafts and big decisions." },
-];
+/** What an older counselor's speed meant, for a desk that hasn't stored a model yet. */
+const SPEED_MODEL: Record<CounselorSpeed, { model: ModelId; effort: EffortId }> = {
+  fast: { model: "sonnet", effort: "low" },
+  balanced: { model: "sonnet", effort: "medium" },
+  thorough: { model: "opus", effort: "high" },
+};
+
+function Choice<T extends string>({
+  label,
+  options,
+  value,
+  disabled,
+  onPick,
+}: {
+  label: string;
+  options: { id: T; label: string }[];
+  value: T;
+  disabled: boolean;
+  onPick: (v: T) => void;
+}) {
+  return (
+    <div role="radiogroup" aria-label={label} className="inline-flex flex-wrap rounded-md border border-line bg-panel p-0.5 text-sm">
+      {options.map((o) => (
+        <button
+          key={o.id}
+          type="button"
+          role="radio"
+          aria-checked={value === o.id}
+          disabled={disabled}
+          onClick={() => onPick(o.id)}
+          className={`rounded px-3 py-1 ${value === o.id ? "bg-accent text-accent-ink" : "text-muted hover:text-ink"}`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export function CounselorView({ deskId }: { deskId: string }) {
   const now = useNow(5_000);
@@ -176,7 +210,11 @@ function CounselorCard({
   const on = isCounselor(c, now);
   const paused = !!c.counselor_paused;
   const doing = on ? activityText(c, now) : null;
-  const speed = c.counselor_speed ?? "balanced";
+  const fromSpeed = SPEED_MODEL[c.counselor_speed ?? "balanced"] ?? SPEED_MODEL.balanced;
+  const model: ModelId = isModel(c.counselor_model) ? c.counselor_model : fromSpeed.model;
+  const effort: EffortId = isEffort(c.counselor_effort) ? c.counselor_effort : fromSpeed.effort;
+  // A database without migration 20261004 stores no model yet.
+  const modelsReady = c.counselor_model !== undefined;
   const lastSeen = c.counselor_at ? whenLabel(c.counselor_at, now || timeOf(c.counselor_at)) : "";
   // A database without migration 20261002: no speed, pause or removal to offer yet.
   const legacy = c.counselor_version === undefined;
@@ -213,7 +251,8 @@ function CounselorCard({
         outdated && (
           <div className="rounded-md border border-accent bg-accent-soft px-3 py-2 text-sm" data-testid="counselor-update">
             <p className="mb-2">
-              A faster counselor is ready: no start-up wait, answers appear as they&apos;re written, and a speed you choose here.
+              A newer counselor is ready: pick any Claude model for it (and for each question), no start-up wait, and answers that
+              appear as they&apos;re written.
             </p>
             <button
               type="button"
@@ -234,29 +273,22 @@ function CounselorCard({
         )
       )}
 
-      {!legacy && (
-        <fieldset>
-          <legend className="label">Speed</legend>
-          <div role="radiogroup" aria-label="Speed" className="inline-flex rounded-md border border-line bg-panel p-0.5 text-sm">
-            {SPEEDS.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                role="radio"
-                aria-checked={speed === s.id}
-                disabled={busy}
-                onClick={() => void run(() => setCounselorSpeed(id, s.id))}
-                className={`rounded px-3 py-1 ${speed === s.id ? "bg-accent text-accent-ink" : "text-muted hover:text-ink"}`}
-              >
-                {s.label}
-              </button>
-            ))}
-          </div>
-          <p className="mt-1 text-xs text-muted">
-            {SPEEDS.find((s) => s.id === speed)?.about}{" "}
-            {outdated ? "It takes effect once you update the counselor." : "Changes apply from the next request."}
-          </p>
-        </fieldset>
+      {!legacy && modelsReady && (
+        <div className="flex flex-col gap-3">
+          <fieldset>
+            <legend className="label">Model</legend>
+            <Choice label="Model" options={MODELS} value={model} disabled={busy} onPick={(m) => void run(() => setCounselorModel(id, m, effort))} />
+            <p className="mt-1 text-xs text-muted">{MODELS.find((m) => m.id === model)?.about} You can also pick a model for any one question.</p>
+          </fieldset>
+          <fieldset>
+            <legend className="label">Thinking</legend>
+            <Choice label="Thinking" options={EFFORTS} value={effort} disabled={busy} onPick={(e) => void run(() => setCounselorModel(id, model, e))} />
+            <p className="mt-1 text-xs text-muted">
+              {EFFORTS.find((e) => e.id === effort)?.about}{" "}
+              {outdated ? "Your choices take effect once you update the counselor." : "Changes apply from the next request."}
+            </p>
+          </fieldset>
+        </div>
       )}
 
       {c.counselor_remove ? (

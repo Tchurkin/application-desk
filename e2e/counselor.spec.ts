@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { expect, test, type Page } from "@playwright/test";
+import { COUNSELOR_VERSION } from "../src/lib/counselor/version";
 import { addCollege, addPiece, apiClient, signUp } from "./helpers";
 
 /*
@@ -25,12 +26,12 @@ async function connect(url: string) {
   return client;
 }
 
-type Poll = { fresh: number; waiting: number; speed: string; paused: boolean; remove: boolean };
+type Poll = { fresh: number; waiting: number; speed: string; model: string; effort: string; paused: boolean; remove: boolean };
 
 function counselorApi(token: string) {
   const api = apiClient();
   return {
-    poll: async (version = "2") => {
+    poll: async (version = COUNSELOR_VERSION) => {
       const { data, error } = await api.rpc("connector_counselor_poll", { token, version });
       if (error) throw new Error(error.message);
       return data as Poll;
@@ -42,7 +43,7 @@ function counselorApi(token: string) {
 const chat = (p: Page) => p.getByTestId("counselor-chat");
 const card = (p: Page) => p.getByTestId("counselor-card");
 
-test("talking to the counselor: live drafts, speed, pause, and removing it from the computer", async ({ page, request }) => {
+test("talking to the counselor: live drafts, models, pause, and removing it from the computer", async ({ page, request }) => {
   await signUp(page, "counselor");
   await page.goto("/desk/counselor");
   await expect(card(page)).toContainText("Set up your counselor");
@@ -55,7 +56,7 @@ test("talking to the counselor: live drafts, speed, pause, and removing it from 
   const c = counselorApi(token);
 
   // An older counselor shows up with an update on offer.
-  expect(await c.poll("1")).toMatchObject({ fresh: 1, waiting: 1, speed: "balanced", paused: false, remove: false });
+  expect(await c.poll("1")).toMatchObject({ fresh: 1, waiting: 1, speed: "balanced", model: "sonnet", effort: "medium", paused: false, remove: false });
   await page.goto("/desk/counselor");
   await expect(card(page)).toContainText("A faster counselor is ready");
   expect((await c.poll()).fresh).toBe(0);
@@ -87,14 +88,19 @@ test("talking to the counselor: live drafts, speed, pause, and removing it from 
   const { data: again } = await c.rpc("connector_finish_request", { request: id, answer_text: "Again." });
   expect(again).toBe(false);
 
-  // Speed.
-  await card(page).getByRole("radio", { name: "Thorough" }).click();
-  await expect.poll(async () => (await c.poll()).speed).toBe("thorough");
-  await expect(card(page).getByRole("radio", { name: "Thorough" })).toHaveAttribute("aria-checked", "true");
+  // The counselor's model and how hard it thinks.
+  await card(page).getByRole("radiogroup", { name: "Model" }).getByRole("radio", { name: "Opus" }).click();
+  await expect.poll(async () => (await c.poll()).model).toBe("opus");
+  await card(page).getByRole("radiogroup", { name: "Thinking" }).getByRole("radio", { name: "High" }).click();
+  await expect.poll(async () => (await c.poll()).effort).toBe("high");
+  expect((await c.poll()).speed).toBe("thorough");
+  await expect(card(page).getByRole("radio", { name: "Opus" })).toHaveAttribute("aria-checked", "true");
 
   // Paused, it picks nothing up; resumed, it does.
   await card(page).getByRole("button", { name: "Pause" }).click();
   await expect.poll(async () => (await c.poll()).paused).toBe(true);
+  // This one asks for a model of its own.
+  await chat(page).getByLabel("Model").selectOption("haiku");
   await chat(page).getByLabel("Message your counselor").fill("Is my list balanced?");
   await chat(page).getByRole("button", { name: "Send", exact: true }).click();
   await expect(chat(page)).toContainText("Is my list balanced?");
@@ -103,6 +109,8 @@ test("talking to the counselor: live drafts, speed, pause, and removing it from 
   await expect(card(page).getByTestId("counselor-state")).toContainText("Paused");
   await card(page).getByRole("button", { name: "Resume" }).click();
   await expect.poll(async () => (await c.poll()).fresh).toBe(1);
+  const later = (await (await request.get(`/api/counselor/${token}`)).json()) as { requests: { text: string; model: string }[] };
+  expect(later.requests.find((r) => r.text.includes("Is my list balanced?"))?.model).toBe("haiku");
 
   // Removing it from the computer: it's asked to, does, and its link is gone.
   await card(page).getByRole("button", { name: "Remove from computer" }).click();
@@ -124,8 +132,8 @@ test.describe("on a Windows computer", () => {
     const old = counselorApi(token);
     await old.poll("1");
     await page.goto("/desk/counselor");
-    await card(page).getByRole("radio", { name: "Fast" }).click();
-    await expect.poll(async () => (await old.poll("1")).speed).toBe("fast");
+    await card(page).getByRole("radio", { name: "Haiku" }).click();
+    await expect.poll(async () => (await old.poll("1")).model).toBe("haiku");
 
     const [download] = await Promise.all([page.waitForEvent("download"), card(page).getByRole("button", { name: "Update the counselor" }).click()]);
     expect(download.suggestedFilename()).toBe("Application Desk counselor setup.cmd");
@@ -136,9 +144,9 @@ test.describe("on a Windows computer", () => {
     expect(fresh).not.toBe(token);
 
     // Until the new counselor runs, the old one keeps working.
-    expect((await old.poll("1")).speed).toBe("fast");
+    expect((await old.poll("1")).model).toBe("haiku");
     // The new one's first check-in turns the old one off.
-    expect(await counselorApi(fresh).poll()).toMatchObject({ speed: "fast", paused: false });
+    expect(await counselorApi(fresh).poll()).toMatchObject({ model: "haiku", paused: false });
     await expect(old.poll("1")).rejects.toThrow(/not valid/);
     await page.reload();
     await expect(card(page).getByTestId("counselor-state")).toContainText("On");

@@ -25,6 +25,8 @@ export interface DeskRequest {
   answered_at: string | null;
   /** When the counselor on the student's computer picked it up (migration 20261001). */
   counselor_at?: string | null;
+  /** The Claude model asked for, or "" for the counselor's default (migration 20261004). */
+  model?: string;
 }
 
 export const REQUEST_COLS =
@@ -47,11 +49,19 @@ export function assistantUrl(assistant: Assistant, message: string): string {
 /** Queue a request on the desk. */
 export async function queueRequest(
   supabase: SupabaseClient,
-  r: { deskId: string; pieceId?: string | null; kind: RequestKind; prompt: string; selection?: string },
+  r: { deskId: string; pieceId?: string | null; kind: RequestKind; prompt: string; selection?: string; model?: string },
 ): Promise<DeskRequest> {
   const { data, error } = await supabase
     .from("desk_requests")
-    .insert({ desk_id: r.deskId, piece_id: r.pieceId ?? null, kind: r.kind, prompt: r.prompt, selection: r.selection ?? "" })
+    .insert({
+      desk_id: r.deskId,
+      piece_id: r.pieceId ?? null,
+      kind: r.kind,
+      prompt: r.prompt,
+      selection: r.selection ?? "",
+      // Only when one was picked, so a database without the column still takes requests.
+      ...(r.model ? { model: r.model } : {}),
+    })
     .select(REQUEST_COLS)
     .single();
   if (error) throw error;

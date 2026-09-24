@@ -4,13 +4,14 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, type Keyboard
 import { AnswerText } from "@/components/ask/answer-text";
 import { PendingAnswer } from "@/components/ask/pending-answer";
 import { useConnectors, WatchStatus } from "@/components/ask/watch-status";
+import { ModelPicker, useModelChoice } from "@/components/ask/model-picker";
 import { ConfirmButton } from "@/components/confirm-button";
 import { subscribeDeskRequests } from "@/lib/bridge/live";
 import { MESSAGE_MAX } from "@/lib/bridge/listing";
 import { bridgeMissing, queueRequest, REQUEST_COLS, type DeskRequest, type RequestKind } from "@/lib/bridge/requests";
 import { hasWaiting, mergeRequest, removeRequest, sortThread, THREAD_LIMIT } from "@/lib/bridge/thread";
 import { useNow } from "@/lib/bridge/use-now";
-import { activityOn } from "@/lib/bridge/watchers";
+import { activityOn, counselors } from "@/lib/bridge/watchers";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
 /*
@@ -50,6 +51,7 @@ export function DeskThread(p: DeskThreadProps) {
   const ids = useId();
   const now = useNow(5_000);
   const { connectors } = useConnectors(deskId);
+  const [model, setModel] = useModelChoice("chat");
   const [rows, setRows] = useState<DeskRequest[] | null>(null);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -108,7 +110,7 @@ export function DeskThread(p: DeskThreadProps) {
     setBusy(true);
     setError(null);
     try {
-      const row = await queueRequest(supabase, { deskId, pieceId: null, kind, prompt: text });
+      const row = await queueRequest(supabase, { deskId, pieceId: null, kind, prompt: text, model });
       setRows((l) => mergeRequest(l ?? [], row, null, shown));
       setDraft("");
     } catch (e) {
@@ -197,9 +199,12 @@ export function DeskThread(p: DeskThreadProps) {
             onKeyDown={onKeyDown}
           />
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <button type="submit" className="btn btn-primary" disabled={busy || !draft.trim()}>
-              {p.sendLabel}
-            </button>
+            <span className="flex flex-wrap items-center gap-2">
+              <button type="submit" className="btn btn-primary" disabled={busy || !draft.trim()}>
+                {p.sendLabel}
+              </button>
+              <ModelPicker value={model} onChange={setModel} defaultModel={counselors(connectors)[0]?.counselor_model} />
+            </span>
             {started && <ConfirmButton label="Start over" confirmLabel="Clear" question={p.clearQuestion} onConfirm={clear} />}
           </div>
         </form>

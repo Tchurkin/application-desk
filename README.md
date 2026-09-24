@@ -1,4 +1,7 @@
-# Application Desk
+# Margin Application Desk
+
+**Margin** for short: the student's words sit in the middle, and everyone else (parents, the
+counselor, the AI) works from the margin.
 
 A free, open-source place for a high school senior to write every college essay and short
 answer: one desk, every college, every prompt, a live word count against the limit, and a
