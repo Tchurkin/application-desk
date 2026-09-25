@@ -17,18 +17,13 @@ export function MoneyFigure({ figure }: { figure: Figure | null }) {
   );
 }
 
-/** Sticker and net cost per year for each college, cheapest net first. */
+/** Sticker and net cost per year for each college, cheapest net first (the Money page). */
 export function MoneyTable({ rows, needsUpdate }: { rows: MoneyRow[]; needsUpdate: boolean }) {
   const anyAvg = rows.some((r) => r.sticker?.avg || r.net?.avg);
   return (
-    <section aria-labelledby="money-heading" className="mt-10">
-      <h2 id="money-heading" className="mb-1 font-serif text-xl">Money</h2>
-      <p className="mb-3 text-sm text-muted">
-        A year at each college: the sticker price, and the net price after grants and aid. Each
-        college&apos;s net price calculator gives your own figure.
-      </p>
+    <div>
       <div className="card overflow-x-auto">
-        <table aria-labelledby="money-heading" className="w-full text-sm">
+        <table aria-label="Money" className="w-full text-sm">
           <thead>
             <tr className="border-b border-line text-left text-xs tracking-wide text-muted uppercase">
               <th scope="col" className="px-3 py-2 font-medium">College</th>
@@ -53,6 +48,6 @@ export function MoneyTable({ rows, needsUpdate }: { rows: MoneyRow[]; needsUpdat
       {needsUpdate && (
         <p className="mt-2 text-xs text-warn">Run the latest database update to use your own and the AI&apos;s cost figures.</p>
       )}
-    </section>
+    </div>
   );
 }

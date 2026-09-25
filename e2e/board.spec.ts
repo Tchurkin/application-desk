@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { addCollege, addPiece, essay, signUp, waitSaved } from "./helpers";
+import { addCollege, addPiece, essay, signUp, submitCollege, waitSaved } from "./helpers";
 
 /** A YYYY-MM-DD date `n` days from today (UTC, as the server counts days). */
 const inDays = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
@@ -13,11 +13,11 @@ async function setStatus(page: Page, status: string) {
 /** A summary tile's big number. */
 const tileValue = (page: Page, id: string) => page.getByTestId(`tile-${id}`).locator("dd").first();
 
-test("the tiles count colleges, submitted pieces and words, and show the next deadline still owed", async ({ page }) => {
+test("the tiles count colleges, final pieces and words, and show the next deadline still owed", async ({ page }) => {
   await signUp(page, "tiles");
   await addCollege(page, "Northfield University", { deadline: inDays(10) });
   await addPiece(page, "Why Northfield?");
-  await setStatus(page, "submitted");
+  await setStatus(page, "final");
   await addCollege(page, "Southfield College", { deadline: inDays(40) });
   await addPiece(page, "Community");
   await essay(page).click();
@@ -32,12 +32,14 @@ test("the tiles count colleges, submitted pieces and words, and show the next de
     await expect(tileValue(page, "pieces")).toHaveText("1/2", { timeout: 1000 });
   }).toPass({ timeout: 20_000 });
   await expect(tileValue(page, "colleges")).toHaveText("2");
-  // Northfield is due sooner, but everything for it is sent.
+  // Northfield is due sooner, but its application is in.
+  await submitCollege(page, "Northfield University");
+  await page.reload();
   const next = page.getByTestId("tile-next");
   await expect(next).toContainText("Southfield College");
   await expect(next).toContainText(/(39|40) days left/);
   await expect(next).not.toContainText("Northfield");
-  await expect(page.getByTestId("tile-colleges")).toContainText("1 fully submitted");
+  await expect(page.getByTestId("tile-colleges")).toContainText("1 submitted");
 });
 
 test("each college's lane shows its details, opens its pieces, and links to its page", async ({ page }) => {
@@ -55,7 +57,7 @@ test("each college's lane shows its details, opens its pieces, and links to its 
   await expect(earlyLane).toContainText("Coalition");
   await expect(earlyLane.getByTitle("Regular Decision")).toHaveText("RD");
   await expect(earlyLane).toContainText("Oct 15");
-  await expect(earlyLane).toContainText("0/2 submitted");
+  await expect(earlyLane).toContainText("1/2 final");
   await expect(earlyLane.getByRole("group", { name: "Letters for Early College" })).toContainText("none yet");
   await expect(board.getByRole("listitem", { name: "Late College", exact: true }).getByRole("group", { name: "Letters for Late College" })).toContainText(
     "none needed",
@@ -83,7 +85,10 @@ test("the money table shows catalog averages for a known college, and the colleg
   await expect(strategy.getByRole("link", { name: /All colleges by odds/ })).toHaveAttribute("href", "/desk/strategy");
 
   await addCollege(page, "Northfield University");
+  // Money has a page of its own, off the board.
   await page.goto("/desk");
+  await page.getByRole("navigation", { name: "Board actions" }).getByRole("link", { name: "Money" }).click();
+  await expect(page).toHaveURL(/\/desk\/money$/);
   const money = page.getByRole("table", { name: "Money" });
   const known = money.getByRole("row").filter({ hasText: "Massachusetts Institute of Technology" });
   await expect(known).toContainText(/\$\d{1,3},\d{3}/);

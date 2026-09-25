@@ -1,9 +1,9 @@
 import { buildBoard, type College, type PieceStatus, type PieceSummary } from "@/lib/domain/colleges";
-import { daysTo, urgencyOf, type Urgency } from "./due";
+import { daysTo } from "./due";
 
 /*
- * What the Board's tiles and Deadlines table show, derived from the desk's colleges and pieces.
- * Pure, so it is unit-tested and the page stays a server component.
+ * What the Board's tiles show, derived from the desk's colleges and pieces. Pure, so it is
+ * unit-tested and the page stays a server component.
  */
 
 /** A piece with its own due date (migration 20260928); older databases leave it out. */
@@ -28,12 +28,13 @@ export interface NextDeadline {
 
 export interface BoardStats {
   colleges: number;
-  /** Colleges with every piece submitted. */
+  /** Colleges whose application is submitted. */
   collegesSubmitted: number;
   pieces: number;
-  submitted: number;
-  /** Final but not yet sent. */
-  final: number;
+  /** Final, or sent with their application. */
+  finished: number;
+  /** Waiting for a review. */
+  review: number;
   words: number;
   next: NextDeadline | null;
 }
@@ -46,10 +47,11 @@ export function boardStats(colleges: College[], pieces: Piece[], today: string):
     const days = daysTo(date, today);
     if (date && days !== null && days >= 0) candidates.push({ date, days, label });
   };
-  // Work still owed: each college not fully submitted, and each unsent piece with a date of its own.
+  // Work still owed: each college not submitted, and each unsent piece with a date of its own.
+  const sent = new Set(board.filter((r) => r.submitted).map((r) => r.college.id));
   for (const row of board) if (!row.submitted) consider(row.college.deadline, row.college.name);
   for (const p of pieces) {
-    if (p.status === "submitted" || !p.due) continue;
+    if (p.status === "submitted" || !p.due || (p.college_id && sent.has(p.college_id))) continue;
     const college = p.college_id ? byId.get(p.college_id) : undefined;
     consider(p.due, college ? `${p.title} · ${college.name}` : p.title);
   }
@@ -60,40 +62,9 @@ export function boardStats(colleges: College[], pieces: Piece[], today: string):
     colleges: colleges.length,
     collegesSubmitted: board.filter((r) => r.submitted).length,
     pieces: pieces.length,
-    submitted: pieces.filter((p) => p.status === "submitted").length,
-    final: pieces.filter((p) => p.status === "final").length,
+    finished: pieces.filter((p) => finished(p.status)).length,
+    review: pieces.filter((p) => p.status === "needs_review").length,
     words: pieces.reduce((n, p) => n + (p.word_count || 0), 0),
     next,
   };
-}
-
-export interface DeadlineRow {
-  college: College;
-  days: number | null;
-  urgency: Urgency;
-  /** Pieces submitted, and all of the college's pieces. */
-  done: number;
-  total: number;
-  words: number;
-  /** Every piece submitted: the row sinks and fades. */
-  submitted: boolean;
-  /** The piece a click opens; null when the college has no pieces yet. */
-  openPieceId: string | null;
-}
-
-/** One row per college in board order: soonest deadline first, fully submitted colleges last. */
-export function deadlineRows(colleges: College[], pieces: Piece[], today: string): DeadlineRow[] {
-  return buildBoard(colleges, pieces).map(({ college, pieces: ps, done, total, submitted }) => {
-    const days = daysTo(college.deadline, today);
-    return {
-      college,
-      days,
-      urgency: urgencyOf(days),
-      done,
-      total,
-      words: ps.reduce((n, p) => n + (p.word_count || 0), 0),
-      submitted,
-      openPieceId: firstUnfinished(ps)?.id ?? null,
-    };
-  });
 }

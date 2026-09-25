@@ -91,7 +91,9 @@ export function registerManageTools(server: McpServer, token: string) {
     "update_college",
     {
       title: "Change a college",
-      description: "Change any detail of a college: name, system, round, deadlines, whether it needs letters, AI policy, research notes. Omitted fields stay as they are.",
+      description:
+        "Change any detail of a college: name, system, round, deadlines, whether it needs letters, AI policy, research notes. Omitted fields stay as they are. " +
+        "submitted: true when the student has submitted the college's whole application (every piece is marked submitted and it moves to the bottom of their board); false takes that back (its pieces go back to final).",
       inputSchema: z.object({
         college_id: z.string().uuid(),
         name: z.string().min(1).max(200).optional(),
@@ -102,13 +104,17 @@ export function registerManageTools(server: McpServer, token: string) {
         needs_letters: z.boolean().optional(),
         ai_policy: z.enum(["allowed", "no_drafting"]).optional(),
         research: z.string().optional(),
+        submitted: z.boolean().optional().describe("The whole application is submitted (true), or not (false)."),
       }),
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
-    async ({ college_id, ...fields }) => {
+    async ({ college_id, submitted, ...fields }) => {
       try {
-        await rpc("connector_update_college", { token, college: college_id, fields: defined(fields) });
-        return text("College updated.");
+        const set = defined(fields);
+        if (Object.keys(set).length) await rpc("connector_update_college", { token, college: college_id, fields: set });
+        if (submitted !== undefined) await rpc("connector_submit_college", { token, college: college_id, submitted });
+        if (!Object.keys(set).length && submitted === undefined) return fail("Give at least one field to change.");
+        return text(submitted === undefined ? "College updated." : submitted ? "Application marked submitted." : "Application marked not submitted.");
       } catch (e) {
         return fail((e as Error).message);
       }
@@ -120,7 +126,7 @@ export function registerManageTools(server: McpServer, token: string) {
     {
       title: "Change a piece's details",
       description:
-        "Change a piece's title, prompt, word or character limit, due date, status (not_started, drafting, needs_review, final, submitted), notes, or move it to another college (college_id null makes it an independent piece). To change its text, use write_piece or edit_piece.",
+        "Change a piece's title, prompt, word or character limit, due date, stage (not_started, drafting, needs_review, final), notes, or move it to another college (college_id null makes it an independent piece). To change its text, use write_piece or edit_piece. A college's application is submitted as a whole with update_college submitted: true, not piece by piece.",
       inputSchema: z.object({
         piece_id: z.string().uuid(),
         title: z.string().min(1).max(300).optional(),
@@ -128,7 +134,7 @@ export function registerManageTools(server: McpServer, token: string) {
         limit_kind: LIMIT_KIND.optional(),
         limit_value: z.number().int().min(0).optional().describe("0 clears the limit."),
         due: DATE.or(z.literal("")).optional().describe("When the student wants it finished, YYYY-MM-DD, or empty to clear."),
-        status: z.enum(["not_started", "drafting", "needs_review", "final", "submitted"]).optional(),
+        status: z.enum(["not_started", "drafting", "needs_review", "final"]).optional(),
         notes: z.string().optional(),
         college_id: z.string().uuid().nullable().optional(),
       }),

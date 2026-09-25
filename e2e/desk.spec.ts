@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { addCollege, addPiece, apiClient, essay, signUp, waitSaved } from "./helpers";
+import { addCollege, addPiece, apiClient, essay, signUp, submitCollege, waitSaved } from "./helpers";
 
 test("a student sets up a college, writes a piece, and it survives a reload", async ({ page }) => {
   await signUp(page, "basic");
@@ -75,8 +75,7 @@ test("the board orders by deadline and sinks fully submitted colleges", async ({
   await addCollege(page, "Early College", { deadline: "2030-10-15" });
   await addCollege(page, "Done College", { deadline: "2030-10-01" });
   await addPiece(page, "Done essay");
-  await page.getByLabel("Status", { exact: true }).selectOption("submitted");
-  await page.waitForTimeout(500);
+  await submitCollege(page, "Done College");
   // Virginia vs Virginia Tech: pieces attach by id, never by a name prefix.
   await addCollege(page, "Virginia", { deadline: "2030-11-01" });
   await addCollege(page, "Virginia Tech", { deadline: "2030-11-01" });

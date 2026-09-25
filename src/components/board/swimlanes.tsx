@@ -1,20 +1,33 @@
 "use client";
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useRef, useState, useSyncExternalStore } from "react";
 import { DueTag } from "@/components/progress/due-cell";
 import { StageSlider } from "@/components/progress/stage-slider";
 import { BAR_TONE, CARD_EDGE } from "@/components/progress/tones";
+import { ConfirmDialog } from "@/components/write/confirm-dialog";
 import { ChevronIcon } from "@/components/write/icons";
 import { APP_SYSTEMS, labelOf, ROUNDS, type PieceStatus } from "@/lib/domain/colleges";
-import { countLabel, countPhrase, stageSummary, type Lane, type ProgressPiece } from "@/lib/progress/lanes";
-import { stageLabel, STAGES } from "@/lib/progress/stages";
+import {
+  countLabel,
+  countPhrase,
+  finalCount,
+  isFiled,
+  stageSummary,
+  type Lane,
+  type ProgressCollege,
+  type ProgressPiece,
+} from "@/lib/progress/lanes";
+import { stageIndex, stageLabel, STAGES } from "@/lib/progress/stages";
 import { LetterRow, type LetterActions } from "./letters";
 
 /*
  * The master board: one swimlane per college, most urgent first, each with its application
- * details and letters under its name and its pieces as cards in five stage columns. Drag a card
- * to another column, or focus it and use the arrow keys; click it to open the piece. A college
- * folds up to one line.
+ * details and letters under its name and its pieces as cards in four stage columns, and one per
+ * piece of its own (a personal statement). Drag a card to another column, or focus it and use
+ * the arrow keys; click it to open the piece. A college folds up to one line.
+ *
+ * A college's application is submitted all at once, with its Submit button. A submitted college
+ * folds up at the bottom of the board, and after a few days it's filed under Submitted.
  */
 
 export type BoardMove = (piece: ProgressPiece, to: PieceStatus, focusToken: string | null) => void;
@@ -26,6 +39,8 @@ export interface LaneContext {
   /** Link college names to their details page (the owner's desk has one). */
   collegeLinks: boolean;
   onMove: BoardMove;
+  /** Mark a college's application submitted, or take that back. */
+  onSubmit: (college: ProgressCollege, submitted: boolean) => Promise<void>;
   letters: LetterActions;
 }
 
@@ -38,7 +53,21 @@ const PORTAL_SHORT: Record<string, string> = {
 };
 
 /** The cards' columns (the header and each lane line up on it). */
-const COLUMNS = "grid grid-cols-1 gap-2 sm:grid-cols-5";
+const COLUMNS = "grid grid-cols-1 gap-2 sm:grid-cols-4";
+
+const dayOf = (at: string, zone?: string) =>
+  new Date(at).toLocaleDateString("en-US", { month: "short", day: "numeric", ...(zone ? { timeZone: zone } : {}) });
+const still = () => () => {};
+
+/** "Submitted Nov 1", on the student's own calendar (the server renders UTC; the browser takes over). */
+function SubmittedOn({ at }: { at: string | null }) {
+  const day = useSyncExternalStore(
+    still,
+    () => (at ? dayOf(at) : ""),
+    () => (at ? dayOf(at, "UTC") : ""),
+  );
+  return <>{day ? `Submitted ${day}` : "Submitted"}</>;
+}
 
 export function Swimlanes({
   lanes,
@@ -51,6 +80,22 @@ export function Swimlanes({
   onFold: (key: string) => void;
   ctx: LaneContext;
 }) {
+  // Submitted colleges stay folded unless opened here.
+  const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set());
+  const isFolded = (l: Lane) => (l.submitted ? !opened.has(l.key) : folded.has(l.key));
+  const toggle = (l: Lane) => {
+    if (!l.submitted) return onFold(l.key);
+    setOpened((s) => {
+      const next = new Set(s);
+      if (next.has(l.key)) next.delete(l.key);
+      else next.add(l.key);
+      return next;
+    });
+  };
+  const shown = lanes.filter((l) => !isFiled(l, ctx.today));
+  const filed = lanes.filter((l) => isFiled(l, ctx.today));
+  const lane = (l: Lane) => <Swimlane key={l.key} lane={l} folded={isFolded(l)} onFold={() => toggle(l)} ctx={ctx} />;
+
   return (
     <div>
       <div
@@ -64,10 +109,16 @@ export function Swimlanes({
         ))}
       </div>
       <ol aria-label="Colleges" className="flex flex-col gap-3">
-        {lanes.map((lane) => (
-          <Swimlane key={lane.key} lane={lane} folded={folded.has(lane.key)} onFold={() => onFold(lane.key)} ctx={ctx} />
-        ))}
+        {shown.map(lane)}
       </ol>
+      {filed.length > 0 && (
+        <details className="mt-6" data-testid="submitted-colleges">
+          <summary className="cursor-pointer text-sm font-medium text-muted hover:text-ink">Submitted ({filed.length})</summary>
+          <ol aria-label="Submitted" className="mt-3 flex flex-col gap-3">
+            {filed.map(lane)}
+          </ol>
+        </details>
+      )}
     </div>
   );
 }
@@ -75,13 +126,16 @@ export function Swimlanes({
 function Swimlane({ lane, folded, onFold, ctx }: { lane: Lane; folded: boolean; onFold: () => void; ctx: LaneContext }) {
   const track = useRef<HTMLDivElement>(null);
   const [zone, setZone] = useState<number | null>(null);
+  const [asking, setAsking] = useState(false);
   const college = lane.college;
-  const collegeHref = college && ctx.collegeLinks ? `${ctx.base}/college/${college.id}` : null;
-  const done = lane.pieces.filter((p) => p.status === "submitted").length;
+  const own = college ? null : lane.pieces[0];
+  const nameHref = college ? (ctx.collegeLinks ? `${ctx.base}/college/${college.id}` : null) : own ? `${ctx.base}/piece/${own.id}` : null;
+  const finals = finalCount(lane.pieces);
+  const open = lane.pieces.length - finals;
   const bodyId = `lane-${lane.key}`;
 
   return (
-    <li aria-label={lane.name} data-lane={lane.key} className={`card ${lane.submitted ? "opacity-75" : ""}`}>
+    <li aria-label={lane.name} data-lane={lane.key} className={`card ${lane.submitted ? "opacity-80" : ""}`}>
       <div className="flex items-start gap-1.5 px-2.5 py-2">
         <button
           type="button"
@@ -98,44 +152,70 @@ function Swimlane({ lane, folded, onFold, ctx }: { lane: Lane; folded: boolean; 
         </button>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            {collegeHref ? (
-              <Link href={collegeHref} title="Details and new pieces" className="font-medium hover:underline">
+            {nameHref ? (
+              <Link href={nameHref} title={college ? "Details and new pieces" : "Open"} className="font-medium hover:underline">
                 {lane.name}
               </Link>
             ) : (
               <span className="font-medium">{lane.name}</span>
             )}
-            {college && (
+            {college ? (
               <span className="flex flex-wrap items-baseline gap-x-2 text-xs text-muted">
                 {college.round && (
                   <abbr title={labelOf(ROUNDS, college.round)} className="rounded bg-bg px-1.5 py-px font-mono text-[11px] text-ink no-underline">
                     {ROUND_SHORT[college.round] ?? college.round}
                   </abbr>
                 )}
-                {college.app_system && <span title={labelOf(APP_SYSTEMS, college.app_system)}>{PORTAL_SHORT[college.app_system] ?? labelOf(APP_SYSTEMS, college.app_system)}</span>}
-                {college.deadline ? <DueTag date={college.deadline} today={ctx.today} /> : <span>no deadline</span>}
+                {college.app_system && (
+                  <span title={labelOf(APP_SYSTEMS, college.app_system)}>
+                    {PORTAL_SHORT[college.app_system] ?? labelOf(APP_SYSTEMS, college.app_system)}
+                  </span>
+                )}
+                {lane.submitted ? (
+                  <span className="rounded bg-accent px-1.5 py-px font-medium text-accent-ink" data-testid="submitted-tag">
+                    <SubmittedOn at={lane.submittedAt} />
+                  </span>
+                ) : college.deadline ? (
+                  <DueTag date={college.deadline} today={ctx.today} />
+                ) : (
+                  <span>no deadline</span>
+                )}
                 {college.ai_policy === "no_drafting" && <span className="text-warn">no AI drafting</span>}
               </span>
+            ) : (
+              <span className="flex flex-wrap items-baseline gap-x-2 text-xs text-muted">
+                <span>Independent piece</span>
+                {lane.due && <DueTag date={lane.due} today={ctx.today} />}
+              </span>
             )}
-            {lane.pieces.length > 0 && (
+            {college && lane.pieces.length > 0 && (
               <span className="text-xs text-muted">
-                {done}/{lane.pieces.length} submitted
+                {finals}/{lane.pieces.length} final
               </span>
             )}
           </div>
           {college && <LetterRow collegeId={college.id} collegeName={lane.name} needsLetters={college.needs_letters} actions={ctx.letters} />}
           {folded && <StatusStrip pieces={lane.pieces} />}
         </div>
+        {college && ctx.canWrite && (
+          <button
+            type="button"
+            className={`btn shrink-0 ${lane.submitted ? "" : "border-accent text-accent"}`}
+            onClick={() => (lane.submitted ? void ctx.onSubmit(college, false) : setAsking(true))}
+          >
+            {lane.submitted ? "Undo submit" : "Submit application"}
+          </button>
+        )}
       </div>
 
       {!folded &&
         (lane.pieces.length === 0 ? (
           <p id={bodyId} className="border-t border-line px-10 py-2 text-xs text-muted">
             No pieces yet
-            {collegeHref && (
+            {college && ctx.collegeLinks && (
               <>
                 {" · "}
-                <Link href={collegeHref} className="underline hover:text-ink">
+                <Link href={`${ctx.base}/college/${college.id}`} className="underline hover:text-ink">
                   add one
                 </Link>
               </>
@@ -144,7 +224,7 @@ function Swimlane({ lane, folded, onFold, ctx }: { lane: Lane; folded: boolean; 
         ) : (
           <div id={bodyId} ref={track} role="group" aria-label={`${lane.name} stages`} className={`${COLUMNS} border-t border-line p-2`}>
             {STAGES.map((stage, i) => {
-              const cards = lane.pieces.filter((p) => p.status === stage);
+              const cards = lane.pieces.filter((p) => stageIndex(p.status) === i);
               return (
                 <div
                   key={stage}
@@ -166,6 +246,27 @@ function Swimlane({ lane, folded, onFold, ctx }: { lane: Lane; folded: boolean; 
             })}
           </div>
         ))}
+
+      {asking && college && (
+        <ConfirmDialog
+          question={`Submit ${lane.name}'s application?`}
+          detail={
+            (lane.pieces.length
+              ? `Its ${lane.pieces.length === 1 ? "piece is" : `${lane.pieces.length} pieces are`} marked submitted, and it moves to the bottom of the board.`
+              : "It moves to the bottom of the board.") +
+            (open > 0
+              ? ` ${open} ${open === 1 ? "piece isn't" : "pieces aren't"} final yet; undoing this later puts every piece at Final.`
+              : " You can undo this.")
+          }
+          confirmLabel="Submit"
+          tone="primary"
+          onCancel={() => setAsking(false)}
+          onConfirm={async () => {
+            await ctx.onSubmit(college, true);
+            setAsking(false);
+          }}
+        />
+      )}
     </li>
   );
 }
@@ -183,14 +284,15 @@ function Card({
   onZone: (z: number | null) => void;
   ctx: LaneContext;
 }) {
-  const own = piece.due && piece.due !== lane.college?.deadline ? piece.due : null;
+  // A college's pieces show their own date when it differs from the deadline (an independent piece's is on its lane).
+  const own = lane.college && piece.due && piece.due !== lane.college.deadline ? piece.due : null;
   return (
     <StageSlider
       stage={piece.status}
       href={`${ctx.base}/piece/${piece.id}`}
       name={piece.title}
-      tooltip={`${piece.title}: ${countPhrase(piece)}${ctx.canWrite ? " · drag to another column" : ""}`}
-      movable={ctx.canWrite}
+      tooltip={`${piece.title}: ${countPhrase(piece)}${ctx.canWrite && !lane.submitted ? " · drag to another column" : ""}`}
+      movable={ctx.canWrite && !lane.submitted}
       track={track}
       focusToken={`c:${piece.id}`}
       onMove={(to, token) => ctx.onMove(piece, to, token)}

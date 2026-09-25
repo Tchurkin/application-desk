@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { addCollege, addPiece, signUp } from "./helpers";
+import { addCollege, addPiece, signUp, submitCollege } from "./helpers";
 
 /** Set the open piece's status from its page, and give the save a moment (as desk.spec does). */
 async function setStatus(page: Page, status: string) {
@@ -31,10 +31,11 @@ test("each college gets a lane, most urgent first, unfolded, with each piece in 
   await addPiece(page, "Community essay");
   await setStatus(page, "needs_review");
 
-  // The closest deadline, but everything is in: it goes to the bottom.
+  // The closest deadline, but its application is in: it goes to the bottom.
   await addCollege(page, "Eastbrook College", { deadline: "2030-10-15" });
   await addPiece(page, "Eastbrook short answer");
-  await setStatus(page, "submitted");
+  await setStatus(page, "final");
+  await submitCollege(page, "Eastbrook College");
 
   await addCollege(page, "Westmoor Institute");
   await addPiece(page, "Westmoor essay");
@@ -45,6 +46,7 @@ test("each college gets a lane, most urgent first, unfolded, with each piece in 
 
   const north_ = lane(page, "Northfield University");
   await expect(north_).toContainText("Common App");
+  await expect(north_).toContainText("0/3 final");
   await expect(north_.getByTitle("Regular Decision")).toHaveText("RD");
   await expect(north_).toContainText("Nov 1");
   await expect(lane(page, "Westmoor Institute")).toContainText("no deadline");
@@ -52,7 +54,16 @@ test("each college gets a lane, most urgent first, unfolded, with each piece in 
   await expect(card(page, "Northfield University", "Why Northfield?")).toContainText("0/250w");
   await expect(north_.getByRole("list", { name: "Needs review" }).getByRole("slider")).toHaveCount(2);
   await expect(card(page, "Westmoor Institute", "Westmoor essay")).toHaveAttribute("aria-valuetext", "Final");
-  await expect(card(page, "Eastbrook College", "Eastbrook short answer")).toHaveAttribute("aria-valuetext", "Submitted");
+  // A submitted college is folded, with its date; unfolded, its pieces sit in Final.
+  const east = lane(page, "Eastbrook College");
+  await expect(east.getByTestId("submitted-tag")).toContainText("Submitted");
+  const eastFold = east.getByRole("button", { name: "Pieces of Eastbrook College" });
+  await expect(eastFold).toHaveAttribute("aria-expanded", "false");
+  await expect(east.getByRole("group", { name: "Eastbrook College stages" })).toHaveCount(0);
+  await eastFold.click();
+  // Its pieces went in with it: they open, but no longer move.
+  await expect(east.getByRole("list", { name: "Final" }).getByRole("link", { name: "Eastbrook short answer", exact: true })).toBeVisible();
+  await expect(east.getByRole("slider")).toHaveCount(0);
 
   // Folding a college is remembered; Unfold all brings every card back.
   await north_.getByRole("button", { name: "Pieces of Northfield University" }).click();
@@ -110,8 +121,8 @@ test("dragging a card to another column changes its stage without opening the pi
   const y = from.y + from.height / 2;
   await page.mouse.move(from.x + from.width / 2, y);
   await page.mouse.down();
-  // Into the fourth of five columns: Final.
-  await page.mouse.move(box.x + box.width * 0.7, y, { steps: 10 });
+  // Into the last of four columns: Final.
+  await page.mouse.move(box.x + box.width * 0.9, y, { steps: 10 });
   await page.mouse.up();
   await expect(piece).toHaveAttribute("aria-valuetext", "Final");
   await expect(moved(page)).toContainText("to Final");
@@ -121,7 +132,7 @@ test("dragging a card to another column changes its stage without opening the pi
   await expect(piece).toHaveAttribute("aria-valuetext", "Final");
 });
 
-test("submitting a college's last piece sinks it below the rest", async ({ page }) => {
+test("a college's application is submitted at once: it folds to the bottom, and undoing brings it back", async ({ page }) => {
   await signUp(page, "board-sink");
   await addCollege(page, "Eastbrook College", { deadline: "2030-10-15" });
   await addPiece(page, "Eastbrook short answer");
@@ -130,15 +141,34 @@ test("submitting a college's last piece sinks it below the rest", async ({ page 
 
   await page.goto("/desk");
   await expect.poll(() => laneOrder(page)).toEqual(["Eastbrook College", "Northfield University"]);
+  // A piece goes as far as Final on its own; End takes it there.
   const piece = card(page, "Eastbrook College", "Eastbrook short answer");
   await piece.focus();
   await page.keyboard.press("End");
-  await expect(piece).toHaveAttribute("aria-valuetext", "Submitted");
+  await expect(piece).toHaveAttribute("aria-valuetext", "Final");
+  await expect(lane(page, "Eastbrook College")).toContainText("1/1 final");
+
+  // The whole application goes in with one button.
+  const east = lane(page, "Eastbrook College");
+  await east.getByRole("button", { name: "Submit application" }).click();
+  const confirm = page.getByRole("alertdialog");
+  await expect(confirm).toContainText("Its piece is marked submitted");
+  await confirm.getByRole("button", { name: "Submit", exact: true }).click();
   await expect.poll(() => laneOrder(page)).toEqual(["Northfield University", "Eastbrook College"]);
-  await expect(moved(page)).toContainText("to Submitted");
+  await expect(east.getByTestId("submitted-tag")).toBeVisible();
+  await expect(east.getByRole("button", { name: "Pieces of Eastbrook College" })).toHaveAttribute("aria-expanded", "false");
+  await expect(east.getByRole("group", { name: "Eastbrook College stages" })).toHaveCount(0);
 
   await page.reload();
   await expect.poll(() => laneOrder(page)).toEqual(["Northfield University", "Eastbrook College"]);
+  await expect(east.getByTestId("submitted-tag")).toBeVisible();
+
+  // Undo: back in its place, its piece at Final.
+  await east.getByRole("button", { name: "Undo submit" }).click();
+  await expect.poll(() => laneOrder(page)).toEqual(["Eastbrook College", "Northfield University"]);
+  await expect(card(page, "Eastbrook College", "Eastbrook short answer")).toHaveAttribute("aria-valuetext", "Final");
+  await page.reload();
+  await expect(card(page, "Eastbrook College", "Eastbrook short answer")).toHaveAttribute("aria-valuetext", "Final");
   // The old Progress page is the board now.
   await page.goto("/desk/progress");
   await expect(page).toHaveURL(/\/desk$/);

@@ -173,8 +173,8 @@ export function CollegeRail({
       <p className="px-3 py-4 text-sm text-muted">
         No colleges yet.{" "}
         {collegeHref && (
-          <Link href="/desk" className="underline">
-            Add one on the board
+          <Link href="/desk/add/college" className="underline">
+            Add one
           </Link>
         )}
       </p>

@@ -3,12 +3,14 @@
  * its pieces, plus the small labels the rail, tabs and quick switcher share.
  */
 
-import type { PieceStatus } from "@/lib/domain/colleges";
+import { collegeSubmitted, type PieceStatus } from "@/lib/domain/colleges";
 
 export interface RailCollege {
   id: string;
   name: string;
   deadline: string | null;
+  /** When its application was submitted (migration 20261007). */
+  submitted_at?: string | null;
 }
 
 export interface RailPiece {
@@ -109,7 +111,7 @@ export function railOrder(colleges: RailCollege[], pieces: RailPiece[], today: s
       done,
       total: list.length,
       due: groupDue(list, college?.deadline ?? null, today),
-      finished: list.length > 0 && list.every((p) => p.status === "submitted"),
+      finished: college ? collegeSubmitted(college, list) : list.length > 0 && list.every((p) => p.status === "submitted"),
     };
   };
   const rows = colleges.map((c) => group(c.id, c, c.name, byCollege.get(c.id) ?? []));

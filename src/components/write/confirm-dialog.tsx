@@ -4,19 +4,21 @@ import { useId, useState } from "react";
 import { Modal } from "./modal";
 
 /**
- * Asks before something that can't be undone, in the page (browser dialogs can be blocked).
- * The confirm button has focus, so Enter confirms; Escape or the backdrop cancels.
+ * Asks before something big, in the page (browser dialogs can be blocked). The confirm button
+ * has focus, so Enter confirms; Escape or the backdrop cancels. Red for what can't be undone.
  */
 export function ConfirmDialog({
   question,
   detail,
   confirmLabel = "Delete",
+  tone = "danger",
   onConfirm,
   onCancel,
 }: {
   question: string;
   detail?: string;
   confirmLabel?: string;
+  tone?: "danger" | "primary";
   onConfirm: () => Promise<void> | void;
   onCancel: () => void;
 }) {
@@ -35,7 +37,7 @@ export function ConfirmDialog({
           </button>
           <button
             type="button"
-            className="btn btn-danger"
+            className={`btn ${tone === "primary" ? "btn-primary" : "btn-danger"}`}
             data-autofocus
             disabled={pending}
             onClick={async () => {

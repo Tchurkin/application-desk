@@ -5,9 +5,9 @@ import { useFolds } from "@/components/progress/use-folds";
 import { withLetter, type LetterStatus, type Recommender } from "@/lib/board/letters";
 import type { PieceStatus } from "@/lib/domain/colleges";
 import { localISODate } from "@/lib/progress/due";
-import { applyPieceChange, buildLanes, withPending, type PieceChange } from "@/lib/progress/lanes";
+import { applyPieceChange, buildLanes, withPending, type PieceChange, type ProgressCollege } from "@/lib/progress/lanes";
 import { loadProgress, type ProgressData } from "@/lib/progress/load";
-import { stageLabel } from "@/lib/progress/stages";
+import { stageIndex, stageLabel } from "@/lib/progress/stages";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { RecommendersBar, type LetterActions } from "./letters";
 import { Swimlanes, type BoardMove, type LaneContext } from "./swimlanes";
@@ -113,6 +113,11 @@ export function MasterBoard({
         const id = (p.old as { id?: unknown }).id;
         if (typeof id === "string") apply({ type: "DELETE", id });
       })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "colleges", filter }, again)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "colleges", filter }, again)
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "colleges" }, (p) => {
+        if (held.current.colleges.has((p.old as { id?: string }).id ?? "")) again();
+      })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "recommenders", filter }, again)
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "recommenders", filter }, again)
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "recommenders" }, (p) => {
@@ -151,7 +156,8 @@ export function MasterBoard({
 
   const move: BoardMove = useCallback(
     (piece, to, focusToken) => {
-      if (!canWrite || piece.status === to) return;
+      // The same column is no move: a submitted piece dropped back in Final stays submitted.
+      if (!canWrite || stageIndex(piece.status) === stageIndex(to)) return;
       epoch.current++;
       refocus.current = focusToken;
       setNotice(null);
@@ -284,10 +290,58 @@ export function MasterBoard({
     },
   };
 
+  // Submitting a whole application: the college gets its date, its pieces are marked submitted.
+  // Undoing it puts them back at Final. On a database without submitted_at (migration 20261007)
+  // the pieces alone carry it.
+  const submit = useCallback(
+    async (college: ProgressCollege, on: boolean) => {
+      epoch.current++;
+      setNotice(null);
+      const marked = college.submitted_at !== undefined;
+      if (on && !marked && !data.pieces.some((p) => p.college_id === college.id)) {
+        setNotice({ kind: "error", text: "Run the latest database update to submit a college with no pieces yet." });
+        return;
+      }
+      const at = on ? new Date().toISOString() : null;
+      setData((d) => ({
+        ...d,
+        colleges: d.colleges.map((c) => (c.id === college.id && marked ? { ...c, submitted_at: at } : c)),
+        pieces: d.pieces.map((p) =>
+          p.college_id !== college.id ? p : { ...p, status: on ? "submitted" : p.status === "submitted" ? "final" : p.status },
+        ),
+      }));
+      const sb = supabaseBrowser();
+      let failure: string | null = null;
+      try {
+        if (marked) {
+          const { error } = await sb.from("colleges").update({ submitted_at: at }).eq("id", college.id);
+          if (error) failure = error.message;
+        }
+        if (!failure) {
+          const pieces = sb.from("pieces").update({ status: on ? "submitted" : "final" }).eq("college_id", college.id);
+          const { error } = await (on ? pieces.neq("status", "submitted") : pieces.eq("status", "submitted"));
+          if (error) failure = error.message;
+        }
+      } catch (e) {
+        failure = e instanceof Error ? e.message : "The connection dropped.";
+      }
+      if (failure) {
+        setNotice({ kind: "error", text: `Couldn't ${on ? "submit" : "undo"} ${college.name}. ${failure}` });
+        void refresh();
+      } else {
+        epoch.current++;
+        void refresh();
+        setNotice({ kind: "done", text: on ? `Submitted ${college.name}.` : `${college.name} is back on the board.` });
+      }
+    },
+    [data.pieces, refresh],
+  );
+
   const pieces = useMemo(() => withPending(data.pieces, pending), [data.pieces, pending]);
   const lanes = useMemo(() => buildLanes(data.colleges, pieces, today), [data.colleges, pieces, today]);
-  const ctx: LaneContext = { today, base, canWrite, collegeLinks, onMove: move, letters: letterActions };
-  const keys = lanes.map((l) => l.key);
+  const ctx: LaneContext = { today, base, canWrite, collegeLinks, onMove: move, onSubmit: submit, letters: letterActions };
+  // Submitted colleges fold on their own; Fold all is for the rest.
+  const keys = lanes.filter((l) => !l.submitted).map((l) => l.key);
   const anyFolded = keys.some((k) => folded.has(k));
 
   if (lanes.length === 0) {
@@ -297,7 +351,10 @@ export function MasterBoard({
         <p className="mt-1 text-sm text-muted">
           {collegeLinks ? (
             <>
-              Add a college below, or{" "}
+              <Link href={`${base}/add/college`} className="underline">
+                Add a college
+              </Link>{" "}
+              or an independent piece, or{" "}
               <Link href={`${base}/import`} className="underline">
                 import your essays
               </Link>

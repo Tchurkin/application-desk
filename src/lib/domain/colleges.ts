@@ -44,6 +44,8 @@ export interface College {
   materials_deadline: string | null;
   ai_policy: AiPolicy;
   needs_letters: boolean;
+  /** When the whole application was submitted (migration 20261007); undefined before that. */
+  submitted_at?: string | null;
 }
 
 export interface PieceSummary {
@@ -74,12 +76,21 @@ export function checkCommonApp(colleges: College[]): CommonAppCheck {
   };
 }
 
+/**
+ * A college's application is submitted: marked so with the board's Submit button (migration
+ * 20261007), or, on a database from before that, every one of its pieces is.
+ */
+export function collegeSubmitted(college: { submitted_at?: string | null }, pieces: { status: PieceStatus }[]): boolean {
+  if (college.submitted_at !== undefined) return college.submitted_at !== null;
+  return pieces.length > 0 && pieces.every((p) => p.status === "submitted");
+}
+
 export interface BoardRow {
   college: College;
   pieces: PieceSummary[];
   done: number;
   total: number;
-  /** Every piece submitted (and there is at least one). */
+  /** The application is submitted (on an older database: every piece is, and there is at least one). */
   submitted: boolean;
 }
 
@@ -98,7 +109,7 @@ export function buildBoard(colleges: College[], pieces: PieceSummary[]): BoardRo
   const rows = colleges.map((college) => {
     const ps = byCollege.get(college.id) ?? [];
     const done = ps.filter((p) => p.status === "submitted").length;
-    return { college, pieces: ps, done, total: ps.length, submitted: ps.length > 0 && done === ps.length };
+    return { college, pieces: ps, done, total: ps.length, submitted: collegeSubmitted(college, ps) };
   });
   return rows.sort((a, b) => {
     if (a.submitted !== b.submitted) return a.submitted ? 1 : -1;

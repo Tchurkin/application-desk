@@ -2,7 +2,7 @@ import { shortDate, urgencyOf } from "./due";
 import { URGENCY_TEXT } from "./due-tag";
 import type { BoardStats } from "./summary";
 
-/** The Board's summary: colleges, pieces sent, words written, and the next thing due. */
+/** The Board's summary: colleges, pieces final, words written, and the next thing due. */
 export function StatTiles({ stats, today }: { stats: BoardStats; today: string }) {
   const { next } = stats;
   const tiles = [
@@ -10,13 +10,13 @@ export function StatTiles({ stats, today }: { stats: BoardStats; today: string }
       id: "colleges",
       label: "Colleges",
       value: String(stats.colleges),
-      sub: stats.collegesSubmitted > 0 ? `${stats.collegesSubmitted} fully submitted` : "",
+      sub: stats.collegesSubmitted > 0 ? `${stats.collegesSubmitted} submitted` : "",
     },
     {
       id: "pieces",
-      label: "Pieces submitted",
-      value: `${stats.submitted}/${stats.pieces}`,
-      sub: stats.final > 0 ? `${stats.final} final, not yet sent` : "",
+      label: "Pieces final",
+      value: `${stats.finished}/${stats.pieces}`,
+      sub: stats.review > 0 ? `${stats.review} need${stats.review === 1 ? "s" : ""} review` : "",
     },
     { id: "words", label: "Words written", value: stats.words.toLocaleString("en-US"), sub: "" },
     {

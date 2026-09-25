@@ -6,7 +6,7 @@ import { CollegeFields } from "@/components/college-form";
 import { ConfirmButton } from "@/components/confirm-button";
 import { StatusPill } from "@/components/status-pill";
 import { PIECE_SUMMARY_COLS, todayISO, type CollegeRow, type PieceRow } from "@/lib/data/queries";
-import { APP_SYSTEMS, labelOf, ROUNDS } from "@/lib/domain/colleges";
+import { collegeSubmitted, APP_SYSTEMS, labelOf, ROUNDS } from "@/lib/domain/colleges";
 import { matchCollege } from "@/lib/strategy/catalog";
 import { requireDesk } from "@/lib/supabase/server";
 import { addPiece, deleteCollege, updateCollege } from "../../actions";
@@ -21,7 +21,7 @@ export default async function CollegePage(props: PageProps<"/desk/college/[id]">
   ]);
   if (!college) notFound();
   const list = (pieces ?? []) as PieceRow[];
-  const submitted = list.length > 0 && list.every((p) => p.status === "submitted");
+  const submitted = collegeSubmitted(college, list);
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-8">

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildBoard, checkCommonApp, COMMON_APP_MAX, daysUntil, type College, type PieceSummary } from "./colleges";
+import { buildBoard, checkCommonApp, collegeSubmitted, COMMON_APP_MAX, daysUntil, type College, type PieceSummary } from "./colleges";
 import { countChars, countWords, limitState } from "./count";
 
 function college(id: string, over: Partial<College> = {}): College {
@@ -86,5 +86,19 @@ describe("counts", () => {
   it("counts days until a deadline", () => {
     expect(daysUntil("2026-10-15", "2026-09-23")).toBe(22);
     expect(daysUntil("2026-09-22", "2026-09-23")).toBe(-1);
+  });
+});
+
+describe("collegeSubmitted", () => {
+  const p = (status: "final" | "submitted") => ({ status });
+  it("follows the college's own mark when the database has one", () => {
+    expect(collegeSubmitted({ submitted_at: "2030-10-01T12:00:00Z" }, [])).toBe(true);
+    expect(collegeSubmitted({ submitted_at: null }, [p("submitted"), p("submitted")])).toBe(false);
+  });
+
+  it("falls back to every piece being submitted before that", () => {
+    expect(collegeSubmitted({}, [p("submitted"), p("submitted")])).toBe(true);
+    expect(collegeSubmitted({}, [p("submitted"), p("final")])).toBe(false);
+    expect(collegeSubmitted({}, [])).toBe(false);
   });
 });

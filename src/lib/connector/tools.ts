@@ -70,6 +70,8 @@ interface DeskInfo {
     ai_policy: "allowed" | "no_drafting";
     needs_letters?: boolean;
     has_research?: boolean;
+    /** Migration 20261007. */
+    submitted_at?: string | null;
   }[];
   pieces: {
     id: string;
@@ -166,6 +168,7 @@ export function renderDesk(d: DeskInfo): string {
       `- ${c.name} [college_id: ${c.id}] ${labelOf(ROUNDS, c.round)}, ${labelOf(APP_SYSTEMS, c.app_system)}, deadline ${c.deadline ?? "not set"}` +
         (c.materials_deadline ? `, materials by ${c.materials_deadline}` : "") +
         (c.needs_letters === false ? ", no letters needed" : "") +
+        (c.submitted_at ? `, application submitted ${c.submitted_at.slice(0, 10)}` : "") +
         (c.has_research ? ", has research notes" : "") +
         (c.ai_policy === "no_drafting" ? ` (AI policy: ${POLICY_NOTE})` : ""),
     );

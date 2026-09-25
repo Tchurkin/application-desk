@@ -23,16 +23,23 @@ export async function addCollege(
   name: string,
   opts: { deadline?: string; system?: string; letters?: boolean } = {},
 ) {
-  await page.goto("/desk");
-  const details = page.locator("details", { hasText: "Add a college" });
-  if (!(await details.evaluate((d) => (d as HTMLDetailsElement).open))) await details.locator("summary").click();
-  await details.getByLabel("College", { exact: true }).fill(name);
-  if (opts.system) await details.getByLabel("Applied through").selectOption(opts.system);
-  if (opts.deadline) await details.getByLabel("Application deadline").fill(opts.deadline);
-  if (opts.letters === false) await details.getByLabel("Needs recommendation letters").uncheck();
-  await details.getByRole("button", { name: "Add college" }).click();
+  await page.goto("/desk/add/college");
+  await page.getByLabel("College", { exact: true }).fill(name);
+  if (opts.system) await page.getByLabel("Applied through").selectOption(opts.system);
+  if (opts.deadline) await page.getByLabel("Application deadline").fill(opts.deadline);
+  if (opts.letters === false) await page.getByLabel("Needs recommendation letters").uncheck();
+  await page.getByRole("button", { name: "Add college" }).click();
   await expect(page.getByRole("heading", { name, level: 1 })).toBeVisible();
   return page.url().split("/").pop()!;
+}
+
+/** Submit a college's whole application from the board. */
+export async function submitCollege(page: Page, name: string) {
+  await page.goto("/desk");
+  const lane = page.getByRole("list", { name: "Colleges", exact: true }).getByRole("listitem", { name, exact: true });
+  await lane.getByRole("button", { name: "Submit application" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Submit", exact: true }).click();
+  await expect(lane.getByTestId("submitted-tag")).toBeVisible();
 }
 
 export async function addPiece(page: Page, title: string, limit?: number) {

@@ -4,7 +4,7 @@ import type { CatalogEntry } from "@/lib/strategy/catalog";
 import { chanceOf, formatPercent, levelOf } from "./chance";
 import { daysLabel, shortDate, urgencyOf } from "./due";
 import { formatUSD, isAbroad, moneyRow, sortByCost } from "./money";
-import { boardStats, deadlineRows, firstUnfinished } from "./summary";
+import { boardStats, firstUnfinished } from "./summary";
 
 const TODAY = "2030-09-01";
 
@@ -78,7 +78,19 @@ describe("boardStats", () => {
       piece("s", null, "not_started"),
     ];
     const s = boardStats(cs, ps, TODAY);
-    expect(s).toMatchObject({ colleges: 2, collegesSubmitted: 1, pieces: 4, submitted: 1, final: 1, words: 145 });
+    expect(s).toMatchObject({ colleges: 2, collegesSubmitted: 1, pieces: 4, finished: 2, review: 0, words: 145 });
+  });
+
+  it("counts a college as submitted by its own mark when the database has one", () => {
+    const cs = [
+      college("sent", { name: "Sent", deadline: "2030-09-05", submitted_at: "2030-08-30T12:00:00Z" }),
+      college("open", { name: "Open", deadline: "2030-10-01", submitted_at: null }),
+    ];
+    const ps = [piece("s1", "sent", "final", { due: "2030-09-02" }), piece("o1", "open", "submitted")];
+    const s = boardStats(cs, ps, TODAY);
+    expect(s.collegesSubmitted).toBe(1);
+    // A submitted college's pieces are no longer owed, whatever their own dates.
+    expect(s.next).toEqual({ date: "2030-10-01", days: 30, label: "Open" });
   });
 
   it("finds the next deadline among work still owed, skipping passed and fully submitted colleges", () => {
@@ -105,26 +117,6 @@ describe("boardStats", () => {
 
   it("has no next deadline when nothing is upcoming", () => {
     expect(boardStats([college("a")], [], TODAY).next).toBeNull();
-  });
-});
-
-describe("deadlineRows", () => {
-  it("orders by due, sinks submitted colleges and opens the first unfinished piece", () => {
-    const cs = [
-      college("late", { deadline: "2030-12-01" }),
-      college("early", { deadline: "2030-10-15" }),
-      college("done", { deadline: "2030-10-01" }),
-    ];
-    const ps = [
-      piece("e1", "early", "final", { word_count: 250 }),
-      piece("e2", "early", "not_started"),
-      piece("d1", "done", "submitted"),
-    ];
-    const rows = deadlineRows(cs, ps, TODAY);
-    expect(rows.map((r) => r.college.id)).toEqual(["early", "late", "done"]);
-    expect(rows[0]).toMatchObject({ openPieceId: "e2", done: 0, total: 2, words: 250, days: 44, urgency: "soon" });
-    expect(rows[1]).toMatchObject({ openPieceId: null, total: 0, urgency: "later" });
-    expect(rows[2]).toMatchObject({ submitted: true, openPieceId: "d1" });
   });
 });
 

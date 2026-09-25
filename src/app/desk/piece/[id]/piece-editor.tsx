@@ -272,19 +272,25 @@ export function PieceEditor({
     };
   }, [piece.id, supabase, me, role]);
 
-  // The first words move a piece out of "Not started".
+  // The first words move a piece out of "Not started", only if it still is in the database (it
+  // may have been submitted with its college from the board since this page loaded).
   const onText = useCallback(
     (t: string) => {
       setText(t);
       if (owner && t.trim()) {
         setPieceStatus((st) => {
           if (st !== "not_started") return st;
-          meta.save({ status: "drafting" }, 0);
+          void supabase
+            .from("pieces")
+            .update({ status: "drafting" })
+            .eq("id", piece.id)
+            .eq("status", "not_started")
+            .then(() => {});
           return "drafting";
         });
       }
     },
-    [meta, owner],
+    [owner, supabase, piece.id],
   );
 
   const limit = limitState(text, limitKind, limitValue);
@@ -323,8 +329,9 @@ export function PieceEditor({
                     meta.save({ status: v }, 0);
                   }}
                 >
-                  {PIECE_STATUSES.map((s) => (
-                    <option key={s.id} value={s.id}>
+                  {/* A piece goes in with its whole application (Submit on the board), not on its own. */}
+                  {PIECE_STATUSES.filter((s) => s.id !== "submitted" || pieceStatus === "submitted").map((s) => (
+                    <option key={s.id} value={s.id} disabled={s.id === "submitted"}>
                       {s.label}
                     </option>
                   ))}

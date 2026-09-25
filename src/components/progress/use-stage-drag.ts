@@ -1,13 +1,13 @@
 "use client";
 import { useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
 import type { PieceStatus } from "@/lib/domain/colleges";
-import { STAGES, zoneFromX } from "@/lib/progress/stages";
+import { stageIndex, STAGES, zoneFromX } from "@/lib/progress/stages";
 
 /*
- * Dragging a piece along a track of five stage zones, with Pointer Events so mouse, pen and
+ * Dragging a piece across its lane's stage columns, with Pointer Events so mouse, pen and
  * touch all work (the element sets touch-action: none). The pointer is captured on press, so
- * the drag keeps going when it leaves the chip; the stage is whichever fifth of the track the
- * pointer is over when it's released. A press that barely moves is a click, and the click
+ * the drag keeps going when it leaves the card; the stage is whichever column the pointer is
+ * over when it's released. A press that barely moves is a click, and the click
  * that ends a real drag is swallowed so dragging never also opens the piece.
  */
 
@@ -62,8 +62,7 @@ export function useStageDrag({
     setTimeout(() => (swallowClick.current = false), 0);
     const m = measure(e.clientX);
     if (!m) return;
-    const to = STAGES[m.zone];
-    if (to !== stage) onDrop(to);
+    if (m.zone !== stageIndex(stage)) onDrop(STAGES[m.zone]);
   }
 
   const handlers = enabled

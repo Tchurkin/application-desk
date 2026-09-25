@@ -5,9 +5,11 @@ import {
   buildLanes,
   countLabel,
   countPhrase,
+  finalCount,
+  isFiled,
   nextPiece,
   pieceDue,
-  SHARED_LANE,
+  pieceLaneKey,
   stageGroups,
   stageSummary,
   toProgressPiece,
@@ -46,7 +48,33 @@ describe("buildLanes order", () => {
     expect(order(cs, ps)).toEqual(["soon", "later", "passed", "undated"]);
   });
 
-  it("sinks colleges whose every piece is submitted, even with the closest deadline", () => {
+  it("sinks a submitted college, even with the closest deadline, the latest submitted first", () => {
+    const cs = [
+      { ...college("early", "2030-10-11"), submitted_at: "2030-10-01T12:00:00Z" },
+      { ...college("late", "2030-10-12"), submitted_at: "2030-10-08T12:00:00Z" },
+      { ...college("open", "2030-12-01"), submitted_at: null },
+    ];
+    const lanes = buildLanes(cs, [piece("e1", "early"), piece("o1", "open")], TODAY);
+    expect(lanes.map((l) => l.key)).toEqual(["open", "late", "early"]);
+    expect(lanes[1]).toMatchObject({ submitted: true, submittedAt: "2030-10-08T12:00:00Z" });
+    expect(lanes[0]).toMatchObject({ submitted: false, submittedAt: null });
+  });
+
+  it("files a submitted college away after a few days", () => {
+    const lanes = buildLanes(
+      [
+        { ...college("fresh"), submitted_at: "2030-10-08T23:00:00Z" },
+        { ...college("old"), submitted_at: "2030-10-06T09:00:00Z" },
+        { ...college("open"), submitted_at: null },
+      ],
+      [],
+      TODAY,
+    );
+    const filed = Object.fromEntries(lanes.map((l) => [l.key, isFiled(l, TODAY)]));
+    expect(filed).toEqual({ fresh: false, old: true, open: false });
+  });
+
+  it("on a database without submitted_at, a college is submitted when every piece is", () => {
     const cs = [college("done", "2030-10-11"), college("open", "2030-12-01")];
     const ps = [
       piece("d1", "done", { status: "submitted" }),
@@ -90,15 +118,15 @@ describe("buildLanes order", () => {
     expect(lanes[0]).toMatchObject({ due: "2030-10-15", submitted: false, pieces: [] });
   });
 
-  it("gathers pieces without a college into an Independent pieces lane", () => {
-    const lanes = buildLanes([college("a", "2030-11-01")], [piece("s1", null), piece("a1", "a")], TODAY);
-    expect(lanes.map((l) => l.key)).toEqual(["a", SHARED_LANE]);
-    expect(lanes[1]).toMatchObject({ name: "Independent pieces", college: null, due: null });
-    expect(lanes[1].pieces.map((p) => p.id)).toEqual(["s1"]);
-  });
-
-  it("has no Independent pieces lane when every piece has a college", () => {
-    expect(order([college("a")], [piece("a1", "a")])).toEqual(["a"]);
+  it("gives each piece without a college a lane of its own, named for it", () => {
+    const lanes = buildLanes(
+      [college("a", "2030-11-01")],
+      [piece("s1", null, { title: "Personal statement", due: "2030-10-20" }), piece("s2", null, { title: "Activities list" }), piece("a1", "a")],
+      TODAY,
+    );
+    expect(lanes.map((l) => l.key)).toEqual([pieceLaneKey("s1"), "a", pieceLaneKey("s2")]);
+    expect(lanes[0]).toMatchObject({ name: "Personal statement", college: null, due: "2030-10-20", submitted: false });
+    expect(lanes[0].pieces.map((p) => p.id)).toEqual(["s1"]);
   });
 
   it("leaves out pieces of a college it doesn't know yet", () => {
@@ -130,6 +158,11 @@ describe("stage groups", () => {
     piece("b", "c", { status: "drafting" }),
     piece("d", "c", { status: "final" }),
   ];
+
+  it("counts final pieces, and ones sent with their application", () => {
+    expect(finalCount([...ps, piece("e", "c", { status: "submitted" })])).toBe(3);
+    expect(finalCount([])).toBe(0);
+  });
 
   it("collects pieces by stage, in stage order, skipping empty stages", () => {
     const groups = stageGroups(ps);
@@ -202,6 +235,7 @@ describe("live changes", () => {
     });
     expect(toProgressPiece({ title: "no id" })).toBeNull();
     expect(toProgressPiece({ id: "y", status: "weird" })?.status).toBe("not_started");
+    expect(toProgressPiece({ id: "z", status: "submitted" })?.status).toBe("submitted");
   });
 
   it("updates a piece in place", () => {

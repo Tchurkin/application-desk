@@ -47,9 +47,9 @@ test("a Google Drive folder download lands on the right pieces, and a combined d
   await page.goto(`/desk/piece/${whyId}`);
   await expectEssay(page, "I want to build robots here.");
   await page.goto("/desk");
-  // Independent pieces have their own lane on the board, each at its stage.
-  const independent = page.getByRole("list", { name: "Colleges", exact: true }).getByRole("listitem", { name: "Independent pieces", exact: true });
+  // Each independent piece is a lane of its own on the board, at its stage.
+  const board = page.getByRole("list", { name: "Colleges", exact: true });
   for (const title of ["Personal statement", "Community", "Activity"]) {
-    await expect(independent.getByRole("slider", { name: title, exact: true })).toBeVisible();
+    await expect(board.getByRole("listitem", { name: title, exact: true }).getByRole("slider", { name: title, exact: true })).toBeVisible();
   }
 });

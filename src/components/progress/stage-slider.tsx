@@ -80,7 +80,7 @@ export function StageSlider({
     const to = stageForKey(stage, e.key);
     if (to === null) return;
     e.preventDefault(); // at either end too, so the arrow doesn't scroll the page
-    if (to !== stage) onMove(to, focusToken);
+    if (stageIndex(to) !== stageIndex(stage)) onMove(to, focusToken);
   };
 
   return (

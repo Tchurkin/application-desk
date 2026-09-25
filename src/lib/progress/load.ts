@@ -8,6 +8,8 @@ import type { ProgressCollege, ProgressPiece } from "./lanes";
  */
 
 const COLLEGE_COLS = "id, name, deadline, app_system, round, needs_letters, ai_policy";
+/** Added by migration 20261007. */
+const COLLEGE_NEW_COLS = ", submitted_at";
 const PIECE_COLS = "id, college_id, title, status, word_count, char_count, limit_kind, limit_value, sort, created_at";
 /** Added by migration 20260928. */
 const PIECE_NEW_COLS = ", due";
@@ -29,8 +31,9 @@ const missingColumn = (e: { code?: string } | null) => e?.code === "42703" || e?
 export async function loadProgress(supabase: SupabaseClient, deskId: string): Promise<ProgressData> {
   const piecesQuery = (cols: string) =>
     supabase.from("pieces").select(cols).eq("desk_id", deskId).order("sort").order("created_at");
-  const [colleges, first, recs, lets] = await Promise.all([
-    supabase.from("colleges").select(COLLEGE_COLS).eq("desk_id", deskId).order("name"),
+  const collegesQuery = (cols: string) => supabase.from("colleges").select(cols).eq("desk_id", deskId).order("name");
+  const [firstColleges, first, recs, lets] = await Promise.all([
+    collegesQuery(COLLEGE_COLS + COLLEGE_NEW_COLS),
     piecesQuery(PIECE_COLS + PIECE_NEW_COLS),
     supabase.from("recommenders").select("id, name, role, color, created_at").eq("desk_id", deskId).order("created_at"),
     supabase.from("letters").select("college_id, recommender_id, status").eq("desk_id", deskId),
@@ -38,12 +41,14 @@ export async function loadProgress(supabase: SupabaseClient, deskId: string): Pr
   let pieces = first;
   const behind = missingColumn(pieces.error);
   if (behind) pieces = await piecesQuery(PIECE_COLS);
+  // Before migration 20261007 a college is submitted when every piece is (lanes.ts isSubmitted).
+  const colleges = missingColumn(firstColleges.error) ? await collegesQuery(COLLEGE_COLS) : firstColleges;
   if (colleges.error) throw colleges.error;
   if (pieces.error) throw pieces.error;
   // Without migration 20261005 there are no recommenders yet; the board still works.
   const lettersReady = !recs.error && !lets.error;
   return {
-    colleges: colleges.data as ProgressCollege[],
+    colleges: colleges.data as unknown as ProgressCollege[],
     pieces: pieces.data as unknown as ProgressPiece[],
     recommenders: lettersReady ? ((recs.data ?? []) as Recommender[]) : [],
     letters: lettersReady

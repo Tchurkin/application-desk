@@ -19,20 +19,26 @@ each assistant may do**, and every direct change is kept in the piece's history.
 - **Colleges** with application system (Common App, UC, UCAS, own portal…), round, deadline
   and materials deadline. It warns you past the Common App's 20-college limit and suggests
   which schools to move (the ones that don't need letters).
-- **Pieces of writing** per college, or shared across colleges: prompt, word or character
-  limit, status (not started → submitted), and live count against the limit.
-- **A board** of every college in deadline order with progress per piece. Fully submitted
-  colleges sink to the bottom.
+- **Pieces of writing** per college, or independent (a personal statement): prompt, word or
+  character limit, stage (not started → drafting → needs review → final), and live count
+  against the limit.
+- **One board** for everything: a row per college, most urgent first, with its round, portal,
+  deadline and letters under its name and its pieces as cards in four stage columns (drag a
+  card, or use the arrow keys). A college's application is submitted all at once, with one
+  button: it folds to the bottom, and after a few days it's filed under Submitted.
+- **Recommenders**, each in a color of their own, and which colleges each one writes for (not
+  asked yet, asked, submitted), added by you or by Claude.
+- **Money**: a year's sticker and net price at each college, off the board.
 - **Notes** per piece, kept outside the essay and never counted.
 - **Version history** thinned by age: everything from the last hour, then one an hour back to
   a day, one a day back to a week, one a week before that, always keeping the first version
   and the newest. Restore any of them.
 - **Reopens the piece you were last on.**
-- **Delete my data** in Settings removes your account and everything in it.
-- **Write, Board, Progress and Strategy** pages: a writing workspace with a college rail and
-  tabs, a board of every college, progress by status, and a Strategy page that sorts colleges
-  into reach / target / likely bands by chance of admission (an AI estimate, your own, or the
-  college's published rate from the College Scorecard).
+- **Delete my data** (Settings → Account) removes your account and everything in it.
+- **Write, Board and Strategy** pages: a writing workspace with a college rail and tabs, the
+  board, and a Strategy page that sorts colleges into reach / target / likely bands by chance
+  of admission (an AI estimate, your own, or the college's published rate from the College
+  Scorecard).
 - **Share links** (Settings → Sharing): read only, can suggest, or can edit, with an optional
   password; change a link's level or revoke it at any time. The person opening it just types
   their name; no account needed.
@@ -41,7 +47,7 @@ each assistant may do**, and every direct change is kept in the piece's history.
   normally, and it all shows as suggestions you accept or decline. Ctrl+Z undoes their last
   burst; you can undo an accept or decline. The database enforces who may change the text.
 - **Live**: edits, suggestions and everyone's cursor (with their name) appear as they happen.
-- **Claude and ChatGPT as counselors** (Settings → Connect Claude or ChatGPT): a secret
+- **Claude and ChatGPT as counselors** (Settings → Claude & ChatGPT): a secret
   connector link turns Application Desk into a connector (an MCP server) for Claude (any
   plan, including free) or ChatGPT (Plus and up, developer mode). Depending on what you allow
   for that link, the assistant reads, suggests edits, or writes directly (your text is saved
@@ -58,12 +64,12 @@ each assistant may do**, and every direct change is kept in the piece's history.
   downloaded as a .zip. Each essay is matched to its college and piece before anything is
   imported. Direct Drive import needs a free Google Cloud project: see
   [docs/google-import.md](docs/google-import.md).
-- **Counselor page**: talk to the counselor directly, see what it's doing and what it has done
-  lately, set its speed (Fast, Balanced, Thorough), pause it, update it, or remove it from your
-  computer.
-- **Profile**: sections about you (activities, stories, values, goals) that you write or that
-  Claude writes while interviewing you, one question at a time. Claude reads your profile
-  before helping with any essay.
+- **Counselor page**: talk to the counselor, choosing its model and how hard it thinks right in
+  the message box. Pause it, update it or remove it from your computer in Settings → Counselor.
+- **Profile**: your academics (GPA, test scores, intended major, class rank, coursework), and
+  sections about you (activities, stories, values, goals) that you write or that Claude writes
+  while interviewing you, one question at a time. Paste your transcript and the counselor
+  fills in your academics. Claude reads your profile before helping with any essay.
 
 ## Run it on your computer
 
