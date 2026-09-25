@@ -68,8 +68,8 @@ export async function addCollege(
 export async function submitCollege(page: Page, name: string) {
   await page.goto("/desk");
   const lane = page.getByRole("list", { name: "Colleges", exact: true }).getByRole("listitem", { name, exact: true });
-  await lane.getByRole("button", { name: "Submit application" }).click();
-  await page.getByRole("alertdialog").getByRole("button", { name: "Submit", exact: true }).click();
+  await lane.getByRole("button", { name: "Mark as done", exact: true }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Mark as done", exact: true }).click();
   await expect(lane.getByTestId("submitted-tag")).toBeVisible();
 }
 

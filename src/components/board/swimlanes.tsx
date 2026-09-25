@@ -27,7 +27,7 @@ import { LetterRow, type LetterActions } from "./letters";
  * piece of its own (a personal statement). Drag a card to another column, or focus it and use
  * the arrow keys; click it to open the piece. A college folds up to one line.
  *
- * A college's application is submitted all at once, with its Submit button. A submitted college
+ * A college's application is marked done all at once, with its Mark as done button. A submitted college
  * folds up at the bottom of the board, and after a few days it's filed under Submitted.
  */
 
@@ -201,7 +201,7 @@ function Swimlane({ lane, folded, onFold, ctx }: { lane: Lane; folded: boolean; 
             className={`btn shrink-0 ${lane.submitted ? "" : "border-accent text-accent"}`}
             onClick={() => (lane.submitted ? void ctx.onSubmit(college, false) : setAsking(true))}
           >
-            {lane.submitted ? "Undo submit" : "Submit application"}
+            {lane.submitted ? "Undo" : "Mark as done"}
           </button>
         )}
       </div>
@@ -247,16 +247,16 @@ function Swimlane({ lane, folded, onFold, ctx }: { lane: Lane; folded: boolean; 
 
       {asking && college && (
         <ConfirmDialog
-          question={`Submit ${lane.name}'s application?`}
+          question={`Mark ${lane.name} as done?`}
           detail={
             (lane.pieces.length
-              ? `Its ${lane.pieces.length === 1 ? "piece is" : `${lane.pieces.length} pieces are`} marked submitted, and it moves to the bottom of the board.`
-              : "It moves to the bottom of the board.") +
+              ? `For when you've submitted the application. Its ${lane.pieces.length === 1 ? "piece is" : `${lane.pieces.length} pieces are`} marked submitted, and it moves to the bottom of the board.`
+              : "For when you've submitted the application. It moves to the bottom of the board.") +
             (open > 0
               ? ` ${open} ${open === 1 ? "piece isn't" : "pieces aren't"} final yet; undoing this later puts every piece at Final.`
               : " You can undo this.")
           }
-          confirmLabel="Submit"
+          confirmLabel="Mark as done"
           tone="primary"
           onCancel={() => setAsking(false)}
           onConfirm={async () => {

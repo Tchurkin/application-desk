@@ -150,10 +150,10 @@ test("a college's application is submitted at once: it folds to the bottom, and 
 
   // The whole application goes in with one button.
   const east = lane(page, "Eastbrook College");
-  await east.getByRole("button", { name: "Submit application" }).click();
+  await east.getByRole("button", { name: "Mark as done", exact: true }).click();
   const confirm = page.getByRole("alertdialog");
   await expect(confirm).toContainText("Its piece is marked submitted");
-  await confirm.getByRole("button", { name: "Submit", exact: true }).click();
+  await confirm.getByRole("button", { name: "Mark as done", exact: true }).click();
   await expect.poll(() => laneOrder(page)).toEqual(["Northfield University", "Eastbrook College"]);
   await expect(east.getByTestId("submitted-tag")).toBeVisible();
   await expect(east.getByRole("button", { name: "Pieces of Eastbrook College" })).toHaveAttribute("aria-expanded", "false");
@@ -164,7 +164,7 @@ test("a college's application is submitted at once: it folds to the bottom, and 
   await expect(east.getByTestId("submitted-tag")).toBeVisible();
 
   // Undo: back in its place, its piece at Final.
-  await east.getByRole("button", { name: "Undo submit" }).click();
+  await east.getByRole("button", { name: "Undo", exact: true }).click();
   await expect.poll(() => laneOrder(page)).toEqual(["Eastbrook College", "Northfield University"]);
   await expect(card(page, "Eastbrook College", "Eastbrook short answer")).toHaveAttribute("aria-valuetext", "Final");
   await page.reload();
