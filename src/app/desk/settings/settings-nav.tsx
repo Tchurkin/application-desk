@@ -7,6 +7,7 @@ export const SETTINGS_PAGES = [
   { href: "/desk/settings/sharing", label: "Sharing" },
   { href: "/desk/settings/connectors", label: "Claude & ChatGPT" },
   { href: "/desk/settings/counselor", label: "Counselor" },
+  { href: "/desk/settings/trash", label: "Trash" },
   { href: "/desk/settings/account", label: "Account" },
 ];
 

@@ -525,7 +525,10 @@ export function PieceEditor({
       status={pieceStatus}
       editor={editor}
       history={<History pieceId={piece.id} comparingId={compare?.id ?? null} onCompare={openCompare} tick={historyTick} />}
-      onDeleteCurrent={() => live?.sync.discard()}
+      onDeleteCurrent={async () => {
+        await live?.sync.flush().catch(() => {});
+        live?.sync.discard();
+      }}
     >
       {body}
       {compareView}

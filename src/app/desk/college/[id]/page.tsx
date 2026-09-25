@@ -104,7 +104,7 @@ export default async function CollegePage(props: PageProps<"/desk/college/[id]">
 
       <ConfirmButton
         label="Delete college"
-        question={`Delete ${college.name} and all ${list.length} of its pieces, with their history?`}
+        question={`Delete ${college.name} and ${list.length === 1 ? "its piece" : `all ${list.length} of its pieces`}? It goes to the Trash (Settings → Trash), and you can restore it for 30 days.`}
         onConfirm={deleteCollege.bind(null, college.id)}
       />
     </main>

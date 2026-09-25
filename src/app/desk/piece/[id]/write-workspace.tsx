@@ -45,7 +45,8 @@ export function WriteWorkspace({
   status: PieceStatus;
   editor: Editor | null;
   history: ReactNode;
-  onDeleteCurrent: () => void;
+  /** Before the open piece is deleted: save what was typed (so it's in the Trash), then stop. */
+  onDeleteCurrent: () => Promise<void> | void;
   children: ReactNode;
 }) {
   const [deleting, setDeleting] = useState<RailPiece | null>(null);
@@ -101,11 +102,11 @@ export function WriteWorkspace({
       {deleting && (
         <ConfirmDialog
           question={`Delete "${deleting.title}"?`}
-          detail="Its text, history, notes and suggestions go with it. This can't be undone."
+          detail="It goes to the Trash (Settings → Trash) with its history, notes and suggestions, and you can restore it for 30 days."
           confirmLabel="Delete"
           onCancel={() => setDeleting(null)}
           onConfirm={async () => {
-            if (deleting.id === pieceId) onDeleteCurrent();
+            if (deleting.id === pieceId) await onDeleteCurrent();
             await deletePiece(deleting.id);
           }}
         />

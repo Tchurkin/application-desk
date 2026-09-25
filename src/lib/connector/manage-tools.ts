@@ -154,7 +154,7 @@ export function registerManageTools(server: McpServer, token: string) {
     "delete_college",
     {
       title: "Remove a college",
-      description: "Remove a college from the desk, with all of its pieces, their text and history. This can't be undone.",
+      description: "Remove a college from the desk, with all of its pieces, their text and history. It goes to the student's Trash, where they can restore it for 30 days.",
       inputSchema: z.object({ college_id: z.string().uuid() }),
       annotations: { readOnlyHint: false, destructiveHint: true },
     },
@@ -172,7 +172,7 @@ export function registerManageTools(server: McpServer, token: string) {
     "delete_piece",
     {
       title: "Remove a piece",
-      description: "Remove one piece, with its text and history. This can't be undone.",
+      description: "Remove one piece, with its text and history. It goes to the student's Trash, where they can restore it for 30 days.",
       inputSchema: z.object({ piece_id: z.string().uuid() }),
       annotations: { readOnlyHint: false, destructiveHint: true },
     },

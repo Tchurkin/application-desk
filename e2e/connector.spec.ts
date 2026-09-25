@@ -237,6 +237,9 @@ test("the AI sets up the whole desk from a list, without duplicates, and manages
   await page.goto("/desk");
   await expect(board).not.toContainText("Activity");
   await expect(board.locator("[data-lane]").first().getByTitle("Early Decision")).toHaveText("ED");
+  // What Claude deletes waits in the student's Trash.
+  await page.goto("/desk/settings/trash");
+  await expect(page.getByTestId("trash-item").filter({ hasText: "Activity" })).toContainText("by Claude");
   await page.goto("/desk/settings");
   await expect(page.getByLabel("About you")).toHaveValue("I build robots and run the school maker club.");
 
