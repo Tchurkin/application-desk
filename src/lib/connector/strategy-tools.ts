@@ -171,21 +171,39 @@ export function registerStrategyTools(server: McpServer, token: string) {
     {
       title: "Update the academic profile",
       description:
-        "Save the student's GPA (with its scale and whether weighted, e.g. \"3.92 unweighted\"), test scores (e.g. \"SAT 1480 (760 math)\" or \"test-optional\") and intended major. " +
-        "Fields left out are unchanged. These are the basis for odds estimates.",
+        "Save the student's academics: GPA (with its scale and whether weighted, e.g. \"3.92 unweighted, 4.41 weighted\"), test scores (e.g. \"SAT 1480 (760 math)\" or \"test-optional\"), " +
+        "intended major, class rank, and coursework (from a transcript: a compact summary by year of each course, its level and grade). " +
+        "Fields left out are unchanged; an empty string clears one. These are the basis for odds estimates.",
       inputSchema: z.object({
-        gpa: z.string().max(40).optional(),
+        gpa: z.string().max(80).optional(),
         test_scores: z.string().max(200).optional(),
         intended_major: z.string().max(200).optional(),
+        class_rank: z.string().max(80).optional().describe('e.g. "12 of 412" or "top 5%"'),
+        coursework: z.string().max(4000).optional().describe("Courses by year with level and grade, then totals."),
       }),
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     async (args) => {
       const fields = defined(args);
-      if (!Object.keys(fields).length) return fail("Give at least one of gpa, test_scores, intended_major.");
+      if (!Object.keys(fields).length) return fail("Give at least one of gpa, test_scores, intended_major, class_rank, coursework.");
+      // A database before migration 20261006 has no class rank or coursework, and would drop them silently.
+      const newer = ["class_rank", "coursework"].filter((k) => k in fields);
+      let skipped: string[] = [];
+      if (newer.length) {
+        const { data } = await db().rpc("connector_strategy", { token });
+        const student = (data as { student?: Record<string, unknown> | null } | null)?.student;
+        if (student && !("class_rank" in student)) {
+          skipped = newer;
+          for (const k of newer) delete fields[k as keyof typeof fields];
+          if (!Object.keys(fields).length) {
+            return fail("Class rank and coursework can't be saved yet: this desk's database needs its latest update. Tell the student; the rest of their academics can still be saved.");
+          }
+        }
+      }
       const { error } = await db().rpc("connector_update_academics", { token, fields });
       if (error) return fail(friendly(error.message));
-      return text(`Saved the student's ${Object.keys(fields).join(", ").replace(/_/g, " ")}.`);
+      const note = skipped.length ? ` Not saved (the desk's database needs its latest update): ${skipped.join(", ").replace(/_/g, " ")}.` : "";
+      return text(`Saved the student's ${Object.keys(fields).join(", ").replace(/_/g, " ")}.${note}`);
     },
   );
 }

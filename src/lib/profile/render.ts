@@ -12,7 +12,15 @@ export interface ProfileSection {
 
 /** One reply of connector_profile(token). */
 export interface ProfileInfo {
-  student: { name?: string; about?: string; gpa?: string; test_scores?: string; intended_major?: string } | null;
+  student: {
+    name?: string;
+    about?: string;
+    gpa?: string;
+    test_scores?: string;
+    intended_major?: string;
+    class_rank?: string;
+    coursework?: string;
+  } | null;
   sections: ProfileSection[];
 }
 
@@ -25,6 +33,8 @@ function academics(s: ProfileInfo["student"]): string[] {
   if (s.gpa?.trim()) out.push(`GPA: ${s.gpa.trim()}`);
   if (s.test_scores?.trim()) out.push(`Test scores: ${s.test_scores.trim()}`);
   if (s.intended_major?.trim()) out.push(`Intended major: ${s.intended_major.trim()}`);
+  if (s.class_rank?.trim()) out.push(`Class rank: ${s.class_rank.trim()}`);
+  if (s.coursework?.trim()) out.push(`Coursework (from their transcript):\n${s.coursework.trim()}`);
   return out;
 }
 

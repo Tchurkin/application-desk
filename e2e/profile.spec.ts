@@ -110,3 +110,50 @@ test("starting the interview opens the counselor chat, where it runs, and each t
   expect((await api.rpc("connector_counselor_poll", { token })).data).toMatchObject({ fresh: 1, waiting: 1 });
   await client.close();
 });
+
+test("a pasted transcript goes to the counselor, who fills in the academics", async ({ page }) => {
+  await signUp(page, "transcript");
+  const client = await connect(await makeConnector(page));
+  await page.goto("/desk/profile");
+  const card = page.getByTestId("academics");
+  const transcript = "Grade 11: AP Physics A, AP Calculus BC A-\nCumulative GPA 3.87 unweighted, 4.21 weighted\nClass rank 12/412";
+  await card.getByRole("button", { name: "Paste your transcript" }).click();
+  await card.getByLabel("Your transcript").fill(transcript);
+  await card.getByRole("button", { name: "Send to your counselor" }).click();
+  const status = card.getByTestId("transcript-status");
+  await expect(status).toContainText("Your transcript is with your counselor");
+
+  // The assistant gets it whole, with what to save.
+  const waiting = await call(client, "list_desk_requests");
+  expect(waiting.text).toContain("(kind: transcript)");
+  expect(waiting.text).toContain("AP Calculus BC A-");
+  expect(waiting.text).toContain("update_academics");
+  const id = waiting.text.match(/\[request_id: ([0-9a-f-]{36})\]/)![1];
+  const saved = await call(client, "update_academics", {
+    gpa: "3.87 unweighted, 4.21 weighted",
+    class_rank: "12 of 412",
+    coursework: "Grade 11: AP Physics A, AP Calculus BC A-",
+  });
+  expect(saved.isError, saved.text).toBe(false);
+  expect((await call(client, "answer_request", { request_id: id, answer: "Saved your GPA, class rank and coursework." })).isError).toBe(false);
+
+  // The answer arrives and the fields show what was saved, without a reload.
+  await expect(status).toContainText("Saved your GPA, class rank and coursework.", { timeout: 15_000 });
+  await expect(card.getByLabel("GPA", { exact: true })).toHaveValue("3.87 unweighted, 4.21 weighted", { timeout: 15_000 });
+  await expect(card.getByLabel("Class rank", { exact: true })).toHaveValue("12 of 412");
+  await expect(card.getByLabel("Coursework", { exact: true })).toHaveValue("Grade 11: AP Physics A, AP Calculus BC A-");
+  // The assistant reads them back with the profile.
+  expect((await call(client, "read_profile")).text).toContain("Class rank: 12 of 412");
+
+  // The counselor chat keeps it, folded to one line.
+  await page.goto("/desk/counselor");
+  const chat = page.getByTestId("counselor-chat");
+  await expect(chat.getByText("You shared your transcript")).toBeVisible();
+  await expect(chat).toContainText("Saved your GPA, class rank and coursework.");
+
+  // Academics left Settings.
+  await page.goto("/desk/settings/academics");
+  await expect(page).toHaveURL(/\/desk\/profile/);
+  await expect(page.getByRole("navigation", { name: "Settings" })).toHaveCount(0);
+  await client.close();
+});

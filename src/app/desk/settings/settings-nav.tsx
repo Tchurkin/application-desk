@@ -3,8 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 export const SETTINGS_PAGES = [
-  { href: "/desk/settings", label: "Profile" },
-  { href: "/desk/settings/academics", label: "Academics" },
+  { href: "/desk/settings", label: "General" },
   { href: "/desk/settings/sharing", label: "Sharing" },
   { href: "/desk/settings/connectors", label: "Claude & ChatGPT" },
   { href: "/desk/settings/counselor", label: "Counselor" },

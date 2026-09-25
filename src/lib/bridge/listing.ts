@@ -49,6 +49,7 @@ export const WHAT: Record<RequestKind, string> = {
   odds: "admission odds for every college",
   interview: "the next question in the student's profile interview",
   chat: "a message from the student",
+  transcript: "the student's transcript, to fill in their academics",
 };
 
 const FORMAT = 'The answer is shown as text: paragraphs, **bold** and simple "- " lists work.';
@@ -178,9 +179,31 @@ function chatSteps(r: PendingRequest, o: ListingOptions): string[] {
     "To do: reply as their counselor. If they ask you to do something on the desk (set up colleges, draft or edit a piece, estimate odds, update their profile), " +
       "do it with your tools, within what they allow, and say what you did. " +
       "If you are interviewing them for their profile, this is their answer: save what it tells you with save_profile_section (in their words, with the concrete details), then ask your next question. " +
+      `If they paste their transcript or grades, save their academics with update_academics: ${TRANSCRIPT_FIELDS} ` +
       (o.answer === "reply"
         ? "Your reply is posted to them on the Counselor page (don't call answer_request)."
         : `Reply with answer_request with request_id ${r.id}.`) +
+      ` ${FORMAT}`,
+  ];
+}
+
+/** What to save from a transcript; the chat uses it too, for a transcript pasted there. */
+export const TRANSCRIPT_FIELDS =
+  "gpa as the transcript states it, with its scale and whether weighted (both when it gives both, e.g. \"3.92 unweighted, 4.41 weighted\"); " +
+  "class_rank if it shows one (e.g. \"12 of 412\" or \"top 5%\"); " +
+  "coursework: a compact summary by year, each course with its level (AP, IB, Honors, Dual enrollment) and its grade, then the totals (e.g. \"7 APs, 3 Honors\"); " +
+  "and test_scores only if the transcript lists them. Never guess a grade or number you can't read: leave that field out rather than invent it, and leave intended_major alone.";
+
+function transcriptSteps(r: PendingRequest, o: ListingOptions): string[] {
+  return [
+    `Sent: ${sentAt(r.created_at)}`,
+    "The student pasted their transcript (from their Profile page):",
+    '"""',
+    cut(r.prompt.trim() || "(empty)", MESSAGE_MAX, "transcript cut"),
+    '"""',
+    `To do: ${o.included?.profile ? "Their profile, with the academics already saved, is included below. " : "call read_profile to see the academics already saved. "}` +
+      `Read the transcript and save their academics with update_academics: ${TRANSCRIPT_FIELDS} ` +
+      closeWith(r, o, "a short summary of what you saved, and anything you couldn't read or that looks off") +
       ` ${FORMAT}`,
   ];
 }
@@ -191,6 +214,7 @@ const STEPS: Record<RequestKind, (r: PendingRequest, o: ListingOptions) => strin
   odds: oddsSteps,
   interview: interviewSteps,
   chat: chatSteps,
+  transcript: transcriptSteps,
 };
 
 /** One request: a heading with its ids, then what to do. */
@@ -203,7 +227,7 @@ export function renderRequestList(rows: PendingRequest[], o: ListingOptions = {}
   if (!rows.length) {
     return (
       "Nothing is waiting from the desk right now. The student sends questions and polish requests from the Ask panel beside a piece, " +
-      "odds requests from the Strategy page, interview answers from the Profile page, and messages from the Counselor page; " +
+      "odds requests from the Strategy page, interview answers and transcripts from the Profile page, and messages from the Counselor page; " +
       "if they just sent one, it may take a moment to arrive."
     );
   }

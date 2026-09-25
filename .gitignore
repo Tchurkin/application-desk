@@ -56,3 +56,6 @@ CLAUDE.local.md
 
 # Claude Code session files
 .claude/scheduled_tasks.lock
+
+# Crash dumps from Git Bash tools
+*.stackdump

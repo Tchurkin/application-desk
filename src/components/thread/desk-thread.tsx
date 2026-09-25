@@ -201,7 +201,12 @@ export function DeskThread(p: DeskThreadProps) {
           <ol aria-label={p.title} aria-live="polite" className="flex flex-col gap-3">
             {list.map((r) => (
               <li key={r.id} className="flex flex-col gap-1.5" data-testid={`${p.testId}-turn`}>
-                {r.prompt ? (
+                {r.kind === "transcript" ? (
+                  <details className="max-w-[90%] self-end rounded-md bg-accent-soft px-2.5 py-1.5 text-sm">
+                    <summary className="cursor-pointer">You shared your transcript</summary>
+                    <p className="mt-1 max-h-60 overflow-y-auto font-mono text-xs break-words whitespace-pre-wrap">{r.prompt}</p>
+                  </details>
+                ) : r.prompt ? (
                   <p className="max-w-[90%] self-end rounded-md bg-accent-soft px-2.5 py-1.5 text-sm break-words whitespace-pre-wrap">{r.prompt}</p>
                 ) : (
                   <p className="self-end text-xs text-muted">{p.startedLabel ?? "You"}</p>

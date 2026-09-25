@@ -92,6 +92,7 @@ class Context {
       polish: async () => ({ key: `piece:${r.piece_id}`, text: r.piece_id ? await this.piece(r.piece_id) : null }),
       odds: async () => ({ key: "strategy", text: await this.strategyText() }),
       interview: async () => ({ key: "profile", text: await this.profileText() }),
+      transcript: async () => ({ key: "profile", text: await this.profileText() }),
       chat: async () => ({
         key: "overview",
         text: [await this.profileText(), await this.deskText()].filter(Boolean).join("\n\n") || null,

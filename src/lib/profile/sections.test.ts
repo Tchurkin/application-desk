@@ -51,6 +51,15 @@ describe("profile sections", () => {
 });
 
 describe("the profile as the assistant reads it", () => {
+  it("includes the class rank and coursework read from a transcript", () => {
+    const out = renderProfile({
+      student: { name: "Sam", gpa: "3.9", class_rank: "top 5%", coursework: "Grade 12: AP Chemistry (in progress)" },
+      sections: [],
+    });
+    expect(out).toContain("Class rank: top 5%");
+    expect(out).toContain("Coursework (from their transcript):\nGrade 12: AP Chemistry (in progress)");
+  });
+
   const info = {
     student: { name: "Sam", gpa: "3.9", test_scores: "", intended_major: "Engineering", about: "Builds robots." },
     sections: [
@@ -64,6 +73,7 @@ describe("the profile as the assistant reads it", () => {
     expect(out).toContain("GPA: 3.9");
     expect(out).toContain("Intended major: Engineering");
     expect(out).not.toContain("Test scores");
+    expect(out).not.toContain("Class rank");
     expect(out).toContain("### Robotics [section_id: s1]");
     expect(out).toContain("### (untitled) [section_id: s2]");
     expect(out).toContain("Builds robots.");

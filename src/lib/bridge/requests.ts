@@ -9,7 +9,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  */
 
 export type Assistant = "claude" | "chatgpt";
-export type RequestKind = "ask" | "polish" | "odds" | "interview" | "chat";
+export type RequestKind = "ask" | "polish" | "odds" | "interview" | "chat" | "transcript";
 
 export interface DeskRequest {
   id: string;

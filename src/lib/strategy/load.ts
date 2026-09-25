@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { REQUEST_COLS, type Assistant, type DeskRequest } from "@/lib/bridge/requests";
 import type { CollegeRow } from "@/lib/data/queries";
+import { academicsOf, type Academics } from "@/lib/profile/academics";
 import { buildStrategy, type Baseline, type Strategy } from "./bands";
 import { catalogCandidates, matchCollege, type CatalogEntry } from "./catalog";
 
@@ -11,11 +12,7 @@ import { catalogCandidates, matchCollege, type CatalogEntry } from "./catalog";
  * the page says which features need the update.
  */
 
-export interface Academics {
-  gpa: string;
-  test_scores: string;
-  intended_major: string;
-}
+export type { Academics };
 
 /** A college as the page's client components receive it: row fields plus its catalog baseline. */
 export type StrategyCollegeView = CollegeRow & {
@@ -69,8 +66,7 @@ export async function loadStrategy(supabase: SupabaseClient, deskId: string, use
     };
   });
 
-  const p = profile.data as Partial<Academics> | null;
-  const academics = p && "gpa" in p ? { gpa: p.gpa ?? "", test_scores: p.test_scores ?? "", intended_major: p.intended_major ?? "" } : null;
+  const academics = academicsOf(profile.data as Record<string, unknown> | null)?.academics ?? null;
 
   const reqs = (requests.data ?? []) as unknown as DeskRequest[];
   const labels = new Set((links.data ?? []).map((l: { label: string }) => l.label.toLowerCase()));

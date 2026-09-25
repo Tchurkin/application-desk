@@ -1,40 +1,60 @@
-import Link from "next/link";
+import { AcademicsCard } from "@/components/profile/academics";
 import { InterviewStart } from "@/components/profile/interview-start";
 import { ProfileEditor } from "@/components/profile/profile-editor";
-import { bridgeMissing } from "@/lib/bridge/requests";
+import { bridgeMissing, REQUEST_COLS, type DeskRequest } from "@/lib/bridge/requests";
+import { academicsOf } from "@/lib/profile/academics";
 import { SECTION_COLS, type SectionRow } from "@/lib/profile/sections";
 import { requireDesk } from "@/lib/supabase/server";
 
 export const metadata = { title: "Profile" };
 
 export default async function ProfilePage() {
-  const { supabase, desk } = await requireDesk();
-  const { data, error } = await supabase.from("profile_sections").select(SECTION_COLS).eq("desk_id", desk.id);
+  const { supabase, userId, desk } = await requireDesk();
+  const [{ data, error }, { data: profile }, transcripts] = await Promise.all([
+    supabase.from("profile_sections").select(SECTION_COLS).eq("desk_id", desk.id),
+    // "*" so the academic fields come back when the database has them.
+    supabase.from("profiles").select("*").eq("id", userId).single(),
+    // A transcript still being read (its answer also stays in the counselor chat).
+    supabase
+      .from("desk_requests")
+      .select(REQUEST_COLS)
+      .eq("desk_id", desk.id)
+      .eq("kind", "transcript")
+      .eq("status", "pending")
+      .order("created_at", { ascending: false })
+      .limit(1),
+  ]);
+  const academics = academicsOf(profile);
 
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-8">
       <h1 className="mb-2 font-serif text-3xl">Profile</h1>
       <p className="mb-6 max-w-[66ch] text-sm text-muted">
-        What Claude knows about you: your background, activities, stories, values and goals. Write sections yourself, or let
-        Claude interview you and write them as you talk. Claude reads your profile before helping with any essay, so the more
-        specific it is, the more your essays sound like you. Your grades and scores are in{" "}
-        <Link href="/desk/settings/academics" className="underline underline-offset-2">
-          Settings
-        </Link>
-        .
+        What Claude knows about you: your academics, background, activities, stories, values and goals. Write sections yourself,
+        or let Claude interview you and write them as you talk. Claude reads your profile before helping with any essay, so the
+        more specific it is, the more your essays sound like you.
       </p>
-      {error ? (
-        <p className="rounded-md border border-warn bg-warn-soft px-3 py-2 text-sm">
-          {bridgeMissing(error) ? "Run the latest database update to use your profile." : `Couldn't load your profile (${error.message}).`}
-        </p>
-      ) : (
-        <div className="grid items-start gap-6 lg:grid-cols-[1fr_24rem]">
-          <ProfileEditor deskId={desk.id} initial={(data ?? []) as SectionRow[]} />
-          <div className="lg:sticky lg:top-4">
-            <InterviewStart deskId={desk.id} />
-          </div>
+      <div className="grid items-start gap-6 lg:grid-cols-[1fr_24rem]">
+        <div className="flex min-w-0 flex-col gap-6">
+          <AcademicsCard
+            deskId={desk.id}
+            values={academics?.academics ?? null}
+            full={!!academics?.full}
+            transcript={((transcripts.data ?? []) as unknown as DeskRequest[])[0] ?? null}
+            transcriptReady={!!academics?.full && !transcripts.error}
+          />
+          {error ? (
+            <p className="rounded-md border border-warn bg-warn-soft px-3 py-2 text-sm">
+              {bridgeMissing(error) ? "Run the latest database update to use your profile." : `Couldn't load your profile (${error.message}).`}
+            </p>
+          ) : (
+            <ProfileEditor deskId={desk.id} initial={(data ?? []) as SectionRow[]} />
+          )}
         </div>
-      )}
+        <div className="lg:sticky lg:top-4">
+          <InterviewStart deskId={desk.id} />
+        </div>
+      </div>
     </main>
   );
 }

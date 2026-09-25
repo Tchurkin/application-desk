@@ -64,6 +64,33 @@ describe("renderStrategy", () => {
     expect(out).toContain("[scorecard_id: 1]; Academy of Interactive Entertainment (Lafayette, WA) [scorecard_id: 2]");
   });
 
+  it("adds class rank and coursework from a transcript when there are any", () => {
+    const out = renderStrategy(
+      {
+        student: {
+          name: "Testy",
+          about: "",
+          gpa: "3.9 unweighted",
+          test_scores: "",
+          intended_major: "",
+          class_rank: "12 of 412",
+          coursework: "Grade 11: AP Physics A, AP Calculus BC A",
+        },
+        colleges: [],
+      },
+      catalog,
+    );
+    expect(out).toContain("Academic profile: GPA 3.9 unweighted; class rank 12 of 412.");
+    expect(out).toContain("Coursework (from their transcript): Grade 11: AP Physics A, AP Calculus BC A");
+    // Coursework alone is enough to judge from.
+    const only = renderStrategy(
+      { student: { name: "Testy", about: "", gpa: "", test_scores: "", intended_major: "", coursework: "Grade 11: AP Physics A" }, colleges: [] },
+      catalog,
+    );
+    expect(only).not.toContain("not entered yet");
+    expect(only).toContain("judge from their coursework below");
+  });
+
   it("asks for the academic profile when it's empty, and describes colleges outside the US without odds", () => {
     const out = renderStrategy(
       {

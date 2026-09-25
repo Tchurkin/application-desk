@@ -2,13 +2,14 @@ import Link from "next/link";
 import { BandSections } from "@/components/strategy/band-sections";
 import { OddsRequest } from "@/components/strategy/odds-request";
 import { balanceNote } from "@/lib/strategy/bands";
+import { hasAcademics } from "@/lib/profile/academics";
 import { loadStrategy, type Academics } from "@/lib/strategy/load";
 import { requireDesk } from "@/lib/supabase/server";
 
 const UPDATE_NEEDED = "Run the latest database update to use this.";
 
 function AcademicsCard({ academics }: { academics: Academics | null }) {
-  const filled = academics && (academics.gpa || academics.test_scores || academics.intended_major);
+  const filled = academics && hasAcademics(academics);
   return (
     <section aria-labelledby="academics" className="card flex flex-col gap-2 px-4 py-4">
       <h2 id="academics" className="font-serif text-lg">Academic profile</h2>
@@ -22,15 +23,22 @@ function AcademicsCard({ academics }: { academics: Academics | null }) {
           <dd>{academics.test_scores || "—"}</dd>
           <dt className="text-muted">Intended major</dt>
           <dd>{academics.intended_major || "—"}</dd>
+          {academics.class_rank && (
+            <>
+              <dt className="text-muted">Class rank</dt>
+              <dd>{academics.class_rank}</dd>
+            </>
+          )}
         </dl>
       ) : (
         <p className="text-sm text-muted">
-          Add your GPA, test scores and intended major so an estimate is about you, not the average applicant.
+          Add your GPA, test scores and intended major, or paste your transcript on your Profile, so an estimate is about you,
+          not the average applicant.
         </p>
       )}
       <p className="text-sm">
-        <Link href="/desk/settings/academics" className="text-accent underline">
-          {filled ? "Edit in Settings" : "Add them in Settings"}
+        <Link href="/desk/profile#academics" className="text-accent underline">
+          {filled ? "Edit on your Profile" : "Add them on your Profile"}
         </Link>
       </p>
     </section>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LIST_MAX, PASSAGE_MAX, renderRequest, renderRequestList, type PendingRequest } from "./listing";
+import { LIST_MAX, MESSAGE_MAX, PASSAGE_MAX, renderRequest, renderRequestList, type PendingRequest } from "./listing";
 
 const PIECE = "11111111-1111-4111-8111-111111111111";
 
@@ -63,7 +63,7 @@ describe("renderRequestList", () => {
   });
 
   it("lets the counselor answer by replying, for every kind", () => {
-    const kinds = ["ask", "polish", "odds", "interview", "chat"] as const;
+    const kinds = ["ask", "polish", "odds", "interview", "chat", "transcript"] as const;
     for (const kind of kinds) {
       const t = renderRequest(row(`k-${kind}`, { kind, selection: kind === "polish" ? "My robot." : "" }), {
         answer: "reply",
@@ -81,6 +81,29 @@ describe("renderRequestList", () => {
     expect(t).toContain("a message from the student [request_id: c1] (kind: chat)");
     expect(t).toContain("What should I work on this week?");
     expect(t).toContain("Reply with answer_request with request_id c1");
+  });
+
+  it("hands a pasted transcript over whole, to be read into the academics without guessing", () => {
+    const transcript = "Grade 9: Honors English A, Algebra II A-\nGrade 10: AP World History B+\nCumulative GPA 3.87 unweighted, 4.21 weighted";
+    const tr = row("t1", { kind: "transcript", piece_id: null, piece_title: null, prompt: transcript });
+    const t = renderRequestList([tr]);
+    expect(t).toContain("the student's transcript, to fill in their academics [request_id: t1] (kind: transcript)");
+    expect(t).toContain(`"""\n${transcript}\n"""`);
+    expect(t).toContain("call read_profile");
+    expect(t).toContain("update_academics");
+    expect(t).toContain("class_rank");
+    expect(t).toContain("coursework");
+    expect(t).toContain("Never guess a grade");
+    expect(t).toContain("leave intended_major alone");
+    expect(t).toContain("call answer_request with request_id t1");
+    const withProfile = renderRequest(tr, { answer: "reply", included: { profile: true } });
+    expect(withProfile).toContain("academics already saved, is included below");
+    expect(withProfile).not.toContain("call read_profile");
+    // A long one is cut where the message box cuts.
+    const long = renderRequest(row("t2", { kind: "transcript", piece_id: null, prompt: "x".repeat(MESSAGE_MAX + 10) }));
+    expect(long).toContain("[…cut here: transcript cut]");
+    // Pasted into the chat instead, it's read the same way.
+    expect(renderRequest(row("c2", { kind: "chat", piece_id: null, prompt: transcript }))).toContain("If they paste their transcript or grades");
   });
 
   it("caps how many it lists and how long a passage runs", () => {

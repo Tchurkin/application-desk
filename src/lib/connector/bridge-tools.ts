@@ -47,9 +47,9 @@ export function registerBridgeTools(server: McpServer, token: string) {
     {
       title: "Watch the desk for questions",
       description:
-        "Wait for the student to ask something on the Application Desk website (a question about a piece, a passage to polish, an odds estimate), " +
+        "Wait for the student to ask something on the Application Desk website (a question about a piece, a passage to polish, an odds estimate, a transcript to read), " +
         "up to about 45 seconds, and return it the moment it arrives. Use this when the student says to watch their desk: " +
-        "answer each request (answer_request; for a highlighted passage, versions in <option> tags; set_college_strategy for odds), then call watch_desk again, and keep going until the student says to stop. " +
+        "answer each request (answer_request; for a highlighted passage, versions in <option> tags; set_college_strategy for odds; update_academics for a transcript), then call watch_desk again, and keep going until the student says to stop. " +
         "Keep answers on the desk, not in this chat, apart from a one-line note of what you did.",
       inputSchema: z.object({}),
       annotations: { readOnlyHint: true },
@@ -70,7 +70,7 @@ export function registerBridgeTools(server: McpServer, token: string) {
     {
       title: "List requests from the desk",
       description:
-        "Questions, polish, odds, interview and chat requests the student queued on the Application Desk website, oldest first, " +
+        "Questions, polish, odds, interview, chat and transcript requests the student queued on the Application Desk website, oldest first, " +
         "with the piece, the question, the passage they highlighted, and the tools that finish each one. " +
         "Call this when the student asks you to handle their desk requests, then close each one with answer_request.",
       inputSchema: z.object({}),
@@ -92,7 +92,7 @@ export function registerBridgeTools(server: McpServer, token: string) {
       description:
         "Close a request from list_desk_requests with your answer; it appears on the student's desk right away, beside the piece. " +
         "For a question, the answer itself (a few sentences; paragraphs, **bold** and simple \"- \" lists show as formatting). " +
-        "For polish, a one-line summary after suggest_edits. For odds, a short summary after set_college_strategy.",
+        "For polish, a one-line summary after suggest_edits. For odds, a short summary after set_college_strategy. For a transcript, a short summary after update_academics.",
       inputSchema: z.object({
         request_id: z.string().uuid().describe("The request_id from list_desk_requests."),
         answer: z.string().trim().min(1).max(20000).describe("What the student will read."),

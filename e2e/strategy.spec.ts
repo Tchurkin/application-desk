@@ -206,9 +206,9 @@ test("the connected AI estimates odds: the page waits for it and shows its numbe
   await client.close();
 });
 
-test("the academic profile saves in Settings and reaches the connected AI", async ({ page }) => {
+test("the academic profile saves on the Profile page and reaches the connected AI", async ({ page }) => {
   await signUp(page, "academics");
-  await page.goto("/desk/settings/academics");
+  await page.goto("/desk/profile");
   await page.getByLabel("GPA", { exact: true }).fill("3.9 unweighted");
   await page.getByLabel("Test scores", { exact: true }).fill("SAT 1450 (760 math)");
   await page.getByLabel("Intended major", { exact: true }).fill("Mechanical engineering");
@@ -229,7 +229,7 @@ test("the academic profile saves in Settings and reaches the connected AI", asyn
     "Academic profile: GPA 3.9 unweighted; test scores SAT 1450 (760 math); intended major Mechanical engineering.",
   );
   expect((await call(client, "update_academics", { intended_major: "Aerospace engineering" })).isError).toBe(false);
-  await page.goto("/desk/settings/academics");
+  await page.goto("/desk/profile");
   await expect(page.getByLabel("Intended major", { exact: true })).toHaveValue("Aerospace engineering");
   await expect(page.getByLabel("GPA", { exact: true })).toHaveValue("3.9 unweighted");
   await client.close();

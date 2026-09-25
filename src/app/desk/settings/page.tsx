@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireDesk } from "@/lib/supabase/server";
 import { updateProfile } from "../actions";
 import { SettingsHeader } from "./settings-header";
@@ -8,8 +9,14 @@ export default async function ProfileSettingsPage() {
 
   return (
     <>
-      <SettingsHeader title="Profile">
-        <p>Your desk&apos;s name and how Claude knows you.</p>
+      <SettingsHeader title="General">
+        <p>
+          Your desk&apos;s name and how Claude knows you. Your academics and everything else about you are on your{" "}
+          <Link href="/desk/profile" className="underline underline-offset-2">
+            Profile
+          </Link>
+          .
+        </p>
       </SettingsHeader>
       <form action={updateProfile} className="card flex flex-col gap-4 px-4 py-4">
         <div>

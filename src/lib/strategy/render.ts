@@ -9,7 +9,16 @@ import type { CatalogEntry } from "./match";
  */
 
 export interface StrategyInfo {
-  student: { name: string; about: string; gpa: string; test_scores: string; intended_major: string } | null;
+  student: {
+    name: string;
+    about: string;
+    gpa: string;
+    test_scores: string;
+    intended_major: string;
+    /** Migration 20261006. */
+    class_rank?: string;
+    coursework?: string;
+  } | null;
   colleges: {
     id: string;
     name: string;
@@ -49,12 +58,17 @@ function profileLines(s: StrategyInfo["student"]): string[] {
     s?.gpa && `GPA ${s.gpa}`,
     s?.test_scores && `test scores ${s.test_scores}`,
     s?.intended_major && `intended major ${s.intended_major}`,
+    s?.class_rank && `class rank ${s.class_rank}`,
   ].filter(Boolean);
+  const coursework = s?.coursework?.trim() ?? "";
   lines.push(
     parts.length
       ? `Academic profile: ${parts.join("; ")}.`
-      : "Academic profile: not entered yet. Before estimating odds, ask the student for their GPA, test scores and intended major, and save them with update_academics.",
+      : coursework
+        ? "Academic profile: no GPA, test scores or intended major entered; judge from their coursework below (you may ask for the rest, and save it with update_academics)."
+        : "Academic profile: not entered yet. Before estimating odds, ask the student for their GPA, test scores and intended major, and save them with update_academics.",
   );
+  if (coursework) lines.push(`Coursework (from their transcript): ${clip(coursework, 2000)}`);
   if (s?.about) lines.push(`About the student (in their words): ${s.about}`);
   return lines;
 }
