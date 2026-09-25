@@ -203,3 +203,20 @@ test("delete my data removes the account", async ({ page }) => {
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page.getByText(/Invalid login credentials/i)).toBeVisible();
 });
+
+test("on a wide screen the Write page stays put: only its columns scroll", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await signUp(page, "scrolling");
+  await addCollege(page, "Scroll College");
+  await addPiece(page, "Long one");
+  await essay(page).click();
+  for (let i = 0; i < 40; i++) {
+    await page.keyboard.insertText(`Paragraph ${i}, long enough to take up a line of the essay.`);
+    await page.keyboard.press("Enter");
+  }
+  // The essay's column scrolled to follow the caret; the page and the workspace itself did not.
+  await expect.poll(() => page.evaluate(() => document.querySelector<HTMLElement>("[data-write-scroll]")!.scrollTop)).toBeGreaterThan(0);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+  await expect.poll(() => page.evaluate(() => document.querySelector<HTMLElement>("[data-write-scroll]")!.parentElement!.scrollTop)).toBe(0);
+  await expect(page.getByRole("navigation", { name: "Desk" })).toBeInViewport();
+});

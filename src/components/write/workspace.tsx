@@ -76,9 +76,34 @@ export function Workspace({
     if (!el) return;
     const measure = () => el.style.setProperty("--ws-top", `${Math.max(0, el.getBoundingClientRect().top + window.scrollY)}px`);
     measure();
+    // The header's font can land after the first paint and change its height.
+    void document.fonts?.ready.then(measure);
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
   }, []);
+
+  // On a wide screen nothing but the columns scrolls. A field taking focus, or the editor keeping
+  // its caret in view, can still make the browser scroll the page or the workspace itself (even
+  // with overflow hidden), which slides everything up and leaves blank page below: put it back.
+  useEffect(() => {
+    const el = root.current;
+    if (narrow || !el) return;
+    const pinPage = () => {
+      if (window.scrollY !== 0 || window.scrollX !== 0) window.scrollTo(0, 0);
+    };
+    const pinSelf = () => {
+      if (el.scrollTop !== 0) el.scrollTop = 0;
+      if (el.scrollLeft !== 0) el.scrollLeft = 0;
+    };
+    pinPage();
+    pinSelf();
+    window.addEventListener("scroll", pinPage, { passive: true });
+    el.addEventListener("scroll", pinSelf, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", pinPage);
+      el.removeEventListener("scroll", pinSelf);
+    };
+  }, [narrow]);
 
   // Ctrl/Cmd+\ folds or unfolds the panel; Escape closes the drawer.
   useEffect(() => {
@@ -105,7 +130,7 @@ export function Workspace({
     <div
       ref={root}
       style={{ "--side-w": `${width}px` } as CSSProperties}
-      className={`flex flex-col lg:grid lg:h-[calc(100dvh-var(--ws-top,3.1rem))] lg:overflow-hidden ${
+      className={`flex flex-col lg:grid lg:h-[calc(100dvh-var(--ws-top,3.1rem))] lg:grid-rows-[minmax(0,1fr)] lg:overflow-hidden ${
         shown && !narrow ? "lg:grid-cols-[46px_var(--side-w)_7px_minmax(0,1fr)]" : "lg:grid-cols-[46px_minmax(0,1fr)]"
       }`}
     >
