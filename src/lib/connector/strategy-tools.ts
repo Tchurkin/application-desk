@@ -18,7 +18,8 @@ const HOW_TO_ESTIMATE =
   "To estimate a college's chance: start from its published admission rate (read_strategy), then adjust for how the student's GPA and test scores compare with the college's admitted students (average SAT/ACT), " +
   "how selective the college is for the student's intended major (engineering, computer science and nursing are often far harder than the overall rate), the round (ED and some EA rounds admit at higher rates), " +
   "and anything the student has told you about activities, awards and circumstances. Be honest rather than encouraging: never inflate, and a college admitting under about 15% is a reach for everyone. " +
-  "Put your reasoning in chance_note in one to three sentences the student can read.";
+  "Put your reasoning in chance_note in one to three sentences the student can read. " +
+  "With the chance, set fit_rank (1 = the best fit among all the student's colleges, each its own rank), campus_life and reputation (for their intended major, 0 to 10), judged for this student.";
 
 const Fields = {
   chance_percent: z

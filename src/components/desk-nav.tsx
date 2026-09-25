@@ -6,13 +6,13 @@ import { usePathname } from "next/navigation";
 export function DeskNav({ base, owner }: { base: string; owner: boolean }) {
   const path = usePathname();
   const pages = [
-    { href: `${base}/write`, label: "Write", match: (p: string) => p.startsWith(`${base}/write`) || p.startsWith(`${base}/piece/`) },
     {
       href: base,
       label: "Board",
       match: (p: string) =>
-        p === base || [`${base}/college/`, `${base}/progress`, `${base}/add/`, `${base}/money`].some((prefix) => p.startsWith(prefix)),
+        p === base || [`${base}/college/`, `${base}/progress`, `${base}/add/`].some((prefix) => p.startsWith(prefix)),
     },
+    { href: `${base}/write`, label: "Write", match: (p: string) => p.startsWith(`${base}/write`) || p.startsWith(`${base}/piece/`) },
     { href: `${base}/strategy`, label: "Strategy", match: (p: string) => p.startsWith(`${base}/strategy`) },
     // Only the student's: the people they share with don't see it.
     ...(owner

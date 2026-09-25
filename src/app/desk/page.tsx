@@ -33,9 +33,6 @@ export default async function BoardPage() {
           <Link href="/desk/import" className="btn">
             Import essays
           </Link>
-          <Link href="/desk/money" className="btn">
-            Money
-          </Link>
         </nav>
       </div>
 

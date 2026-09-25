@@ -52,11 +52,15 @@ test("leaving a piece a moment after typing keeps the text", async ({ page }) =>
   await expect(essay(page)).toHaveText("typed then left");
 });
 
-test("reopens the piece you were last on", async ({ page }) => {
+test("the board is home, and Write reopens the piece you were last on", async ({ page }) => {
   await signUp(page, "reopen");
   await addCollege(page, "Reopen College");
   const id = await addPiece(page, "Last one");
   await page.goto("/");
+  await expect(page).toHaveURL(/\/desk$/);
+  const nav = page.getByRole("navigation", { name: "Desk" });
+  await expect(nav.getByRole("link").first()).toHaveText("Board");
+  await nav.getByRole("link", { name: "Write" }).click();
   await expect(page).toHaveURL(new RegExp(`/desk/piece/${id}`));
 });
 

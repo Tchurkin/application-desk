@@ -143,8 +143,9 @@ function oddsSteps(r: PendingRequest, o: ListingOptions): string[] {
   lines.push(
     `To do: ${read} chance_percent (your honest estimate for this student, ` +
       "judged from their profile against the college's published admission rate and admitted scores) with your reasoning in chance_note. " +
-      "Never inflate; a college admitting under about 15% is a reach for everyone. Colleges outside the US that admit on stated grades or exams get their " +
-      "intl_criterion and intl_status instead of a percentage. " +
+      "Never inflate; a college admitting under about 15% is a reach for everyone. Also set, for this student: fit_rank (1 = the best fit among all their colleges, " +
+      "2 the next, and so on, each college its own rank), campus_life and reputation (for their intended major), each 0 to 10. " +
+      "Colleges outside the US that admit on stated grades or exams get their intl_criterion and intl_status instead of a percentage. " +
       closeWith(r, o, "a short summary of how the list is balanced across reach, target and likely"),
   );
   return lines;

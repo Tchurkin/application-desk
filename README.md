@@ -28,12 +28,11 @@ each assistant may do**, and every direct change is kept in the piece's history.
   button: it folds to the bottom, and after a few days it's filed under Submitted.
 - **Recommenders**, each in a color of their own, and which colleges each one writes for (not
   asked yet, asked, submitted), added by you or by Claude.
-- **Money**: a year's sticker and net price at each college, off the board.
 - **Notes** per piece, kept outside the essay and never counted.
 - **Version history** thinned by age: everything from the last hour, then one an hour back to
   a day, one a day back to a week, one a week before that, always keeping the first version
   and the newest. Restore any of them.
-- **Reopens the piece you were last on.**
+- **The board is home**, and Write reopens the piece you were last on.
 - **Delete my data** (Settings → Account) removes your account and everything in it.
 - **Write, Board and Strategy** pages: a writing workspace with a college rail and tabs, the
   board, and a Strategy page that sorts colleges into reach / target / likely bands by chance

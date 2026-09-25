@@ -73,7 +73,7 @@ test("each college's lane shows its details, opens its pieces, and links to its 
   await expect(page.getByRole("heading", { name: "Late College", level: 1 })).toBeVisible();
 });
 
-test("the money table shows catalog averages for a known college, and the college page sums up odds and cost", async ({ page }) => {
+test("the college page sums up odds and cost from the published figures", async ({ page }) => {
   await signUp(page, "money");
   // A real college from the public College Scorecard catalog (published figures, no personal data).
   await addCollege(page, "Massachusetts Institute of Technology");
@@ -83,17 +83,4 @@ test("the money table shows catalog averages for a known college, and the colleg
   await expect(strategy).toContainText("Average acceptance rate");
   await expect(strategy).toContainText(/\$\d{1,3},\d{3}/);
   await expect(strategy.getByRole("link", { name: /All colleges by odds/ })).toHaveAttribute("href", "/desk/strategy");
-
-  await addCollege(page, "Northfield University");
-  // Money has a page of its own, off the board.
-  await page.goto("/desk");
-  await page.getByRole("navigation", { name: "Board actions" }).getByRole("link", { name: "Money" }).click();
-  await expect(page).toHaveURL(/\/desk\/money$/);
-  const money = page.getByRole("table", { name: "Money" });
-  const known = money.getByRole("row").filter({ hasText: "Massachusetts Institute of Technology" });
-  await expect(known).toContainText(/\$\d{1,3},\d{3}/);
-  await expect(known).toContainText("avg");
-  await expect(money.getByRole("row").filter({ hasText: "Northfield University" })).toContainText("Not in the college catalog");
-  // Colleges with a figure come first, cheapest net first.
-  await expect(money.getByRole("rowheader")).toHaveText(["Massachusetts Institute of Technology", "Northfield University"]);
 });

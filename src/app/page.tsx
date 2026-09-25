@@ -7,12 +7,7 @@ export default async function Home() {
   const { data } = await supabase.auth.getClaims();
   const userId = data?.claims?.sub;
   if (userId) {
-    // Reopen the piece the student was last on.
-    const { data: profile } = await supabase.from("profiles").select("last_piece_id").eq("id", userId).single();
-    if (profile?.last_piece_id) {
-      const { data: piece } = await supabase.from("pieces").select("id").eq("id", profile.last_piece_id).maybeSingle();
-      if (piece) redirect(`/desk/piece/${piece.id}`);
-    }
+    // The board is home (Write reopens the piece the student was last on).
     if (data?.claims?.is_anonymous) {
       const { data: shared } = await supabase.rpc("my_shared_desks");
       const first = (shared as { desk_id: string }[] | null)?.[0];

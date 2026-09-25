@@ -50,6 +50,8 @@ describe("renderRequestList", () => {
   it("sends odds requests to read_strategy and set_college_strategy", () => {
     const t = renderRequestList([row("o1", { kind: "odds", piece_id: null, piece_title: null, prompt: "" })]);
     expect(t).toContain("admission odds for every college [request_id: o1]");
+    // Not only the chance: how each college fits the student too.
+    for (const field of ["chance_percent", "fit_rank", "campus_life", "reputation"]) expect(t).toContain(field);
     expect(t).toContain("read_strategy, then set_college_strategy for each college");
     expect(t).toContain("answer_request with request_id o1");
     expect(t).not.toContain("piece_id");

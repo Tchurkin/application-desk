@@ -25,7 +25,8 @@ const POLL_MS = 4000;
 export const ODDS_PROMPT =
   "Estimate my admission chances for every college on my desk. Use read_strategy for my academic profile and each college's published baseline, " +
   "judge my profile against each college's admitted class (my intended major and application round included), and save each chance with " +
-  "set_college_strategy, with your reasoning in chance_note. Then answer this request with a short summary.";
+  "set_college_strategy, with your reasoning in chance_note, along with how well each fits me (fit_rank, 1 = best), its campus life and its " +
+  "reputation for my major (0 to 10). Then answer this request with a short summary.";
 
 export function OddsRequest({
   deskId,

@@ -1,4 +1,4 @@
-import { formatUSD, type Figure, type MoneyRow } from "./money";
+import { formatUSD, type Figure } from "./money";
 
 const AVG_HINT = "The college's average for all students (U.S. College Scorecard), not your price.";
 
@@ -14,40 +14,5 @@ export function MoneyFigure({ figure }: { figure: Figure | null }) {
         </abbr>
       )}
     </span>
-  );
-}
-
-/** Sticker and net cost per year for each college, cheapest net first (the Money page). */
-export function MoneyTable({ rows, needsUpdate }: { rows: MoneyRow[]; needsUpdate: boolean }) {
-  const anyAvg = rows.some((r) => r.sticker?.avg || r.net?.avg);
-  return (
-    <div>
-      <div className="card overflow-x-auto">
-        <table aria-label="Money" className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-line text-left text-xs tracking-wide text-muted uppercase">
-              <th scope="col" className="px-3 py-2 font-medium">College</th>
-              <th scope="col" className="px-3 py-2 text-right font-medium">Sticker / yr</th>
-              <th scope="col" className="px-3 py-2 text-right font-medium">Net / yr</th>
-              <th scope="col" className="px-3 py-2 font-medium">Note</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.id} className="border-b border-line last:border-0">
-                <th scope="row" className="px-3 py-2 text-left font-medium">{r.name}</th>
-                <td className="px-3 py-2 text-right"><MoneyFigure figure={r.sticker} /></td>
-                <td className="px-3 py-2 text-right"><MoneyFigure figure={r.net} /></td>
-                <td className="px-3 py-2 text-muted">{r.note}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {anyAvg && <p className="mt-2 text-xs text-muted">avg: {AVG_HINT}</p>}
-      {needsUpdate && (
-        <p className="mt-2 text-xs text-warn">Run the latest database update to use your own and the AI&apos;s cost figures.</p>
-      )}
-    </div>
   );
 }
