@@ -7,7 +7,7 @@ import { registerStrategyTools } from "@/lib/connector/strategy-tools";
 import { db, INSTRUCTIONS, registerTools, validToken } from "@/lib/connector/tools";
 
 /*
- * The Application Desk connector (an MCP server). A student pastes
+ * The Average App connector (an MCP server). A student pastes
  * https://<site>/api/mcp/<token> into Claude (Settings → Connectors) or ChatGPT
  * (developer mode), and the assistant can work on their whole desk.
  */
@@ -53,7 +53,7 @@ async function handle(request: Request, ctx: RouteContext<"/api/mcp/[token]">) {
       registerBridgeTools(server, token);
     },
     {
-      serverInfo: { name: "application-desk", version: "1.4.0" },
+      serverInfo: { name: "average-app", version: "1.4.0" },
       instructions: INSTRUCTIONS,
     },
   );

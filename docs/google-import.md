@@ -11,7 +11,7 @@ works with uploaded Word files, Drive folder downloads (.zip) and pasted text.
 ## Steps (about five minutes)
 
 1. Open [console.cloud.google.com](https://console.cloud.google.com), sign in, and create a
-   project (for example "Application Desk").
+   project (for example "Average App").
 2. **APIs & Services → Library**: enable **Google Docs API** and **Google Picker API**.
 3. **Google Auth Platform** (or **OAuth consent screen**):
    - Branding: an app name and a support email.
@@ -20,11 +20,11 @@ works with uploaded Word files, Drive folder downloads (.zip) and pasted text.
    - Data access: add the scope `https://www.googleapis.com/auth/drive.file`.
 4. **Clients → Create client** (or **Credentials → Create credentials → OAuth client ID**):
    - Type: **Web application**.
-   - Authorized JavaScript origins: your site, e.g. `https://application-desk-seven.vercel.app`,
+   - Authorized JavaScript origins: your site, e.g. `https://averageapp.com`,
      and `http://localhost:3000` for local development. No redirect URI is needed.
    - Copy the **Client ID**.
 5. **Credentials → Create credentials → API key**. Restrict it: application restriction
-   **Websites** with your site's address (e.g. `https://application-desk-seven.vercel.app/*`), and
+   **Websites** with your site's address (e.g. `https://averageapp.com/*`), and
    API restriction **Google Picker API**. Copy the key.
 6. The **project number** is on the project's dashboard (or **IAM & Admin → Settings**).
 7. Add them to the site's environment (Vercel: Project → Settings → Environment Variables; locally:

@@ -67,7 +67,7 @@ test("download all my writing: every piece as a Word file, and the whole desk", 
     page.waitForEvent("download"),
     page.getByRole("link", { name: "Download all my writing" }).click(),
   ]);
-  expect(download.suggestedFilename()).toMatch(/^Margin writing \d{4}-\d{2}-\d{2}\.zip$/);
+  expect(download.suggestedFilename()).toMatch(/^Average App writing \d{4}-\d{2}-\d{2}\.zip$/);
   const files = unzipSync(new Uint8Array(readFileSync((await download.path())!)));
   expect(Object.keys(files)).toContain("Export College/Why us.docx");
   const word = strFromU8(unzipSync(files["Export College/Why us.docx"])["word/document.xml"]);

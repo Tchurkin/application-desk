@@ -146,7 +146,7 @@ test.describe("on a Windows computer", () => {
     await page.goto(SETTINGS);
 
     const [download] = await Promise.all([page.waitForEvent("download"), card(page).getByRole("button", { name: "Update the counselor" }).click()]);
-    expect(download.suggestedFilename()).toBe("Application Desk counselor setup.cmd");
+    expect(download.suggestedFilename()).toBe("Average App counselor setup.cmd");
     await expect(card(page).getByTestId("counselor-update-pending")).toBeVisible();
     await expect(page.getByTestId("counselor-steps")).toBeVisible();
     const file = readFileSync((await download.path())!, "utf8");

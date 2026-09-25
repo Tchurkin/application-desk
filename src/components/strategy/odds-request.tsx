@@ -10,6 +10,7 @@ import {
   type DeskRequest,
 } from "@/lib/bridge/requests";
 import { ModelPicker, useModelChoice } from "@/components/ask/model-picker";
+import { WATCH_PHRASE } from "@/lib/bridge/watchers";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { LocalDay } from "@/components/local-day";
 import { AnswerText } from "@/components/ask/answer-text";
@@ -141,7 +142,7 @@ export function OddsRequest({
           <p className="font-medium">Waiting for {whoName}…</p>
           <p className="mt-1">
             If your counselor or a {whoName} chat is watching your desk it starts now, and your odds fill in here as it sets
-            them. If not, turn on your counselor in Settings, or say &ldquo;Watch my Application Desk&rdquo; in your {whoName}{" "}
+            them. If not, turn on your counselor in Settings, or say &ldquo;{WATCH_PHRASE}&rdquo; in your {whoName}{" "}
             chat.
           </p>
           <div className="mt-2 flex flex-wrap gap-2">

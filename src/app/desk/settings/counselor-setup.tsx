@@ -1,6 +1,7 @@
 "use client";
 import { useState, useSyncExternalStore } from "react";
 import { downloadInstaller } from "@/lib/counselor/download";
+import { WATCH_PHRASE } from "@/lib/bridge/watchers";
 import { INSTALLER_NAME } from "@/lib/counselor/installer";
 import type { EssayAccess } from "@/lib/domain/share";
 import { createCounselorLink } from "../connector-actions";
@@ -62,7 +63,7 @@ export function CounselorSetup({ withPermissions = true }: { withPermissions?: b
         <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void download()}>
           {busy ? "Preparing…" : "Download the counselor for Windows"}
         </button>
-        {!windows && <span className="text-xs text-warn">This runs on Windows. On a Mac, use a Claude chat with “Watch my Application Desk”.</span>}
+        {!windows && <span className="text-xs text-warn">This runs on Windows. On a Mac, use a Claude chat with “{WATCH_PHRASE}”.</span>}
       </div>
       {error && <p className="rounded-md bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
       {done && <InstallSteps />}

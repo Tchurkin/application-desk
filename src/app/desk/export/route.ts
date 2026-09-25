@@ -117,7 +117,7 @@ export async function GET() {
   return new Response(zip as unknown as BodyInit, {
     headers: {
       "content-type": "application/zip",
-      "content-disposition": `attachment; filename="Margin writing ${date}.zip"`,
+      "content-disposition": `attachment; filename="Average App writing ${date}.zip"`,
       "cache-control": "no-store",
     },
   });

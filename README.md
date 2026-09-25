@@ -1,7 +1,4 @@
-# Margin Application Desk
-
-**Margin** for short: the student's words sit in the middle, and everyone else (parents, the
-counselor, the AI) works from the margin.
+# Average App
 
 A free, open-source place for a high school senior to write every college essay and short
 answer: one desk, every college, every prompt, a live word count against the limit, and a
@@ -49,14 +46,14 @@ each assistant may do**, and every direct change is kept in the piece's history.
   burst; you can undo an accept or decline. The database enforces who may change the text.
 - **Live**: edits, suggestions and everyone's cursor (with their name) appear as they happen.
 - **Claude and ChatGPT as counselors** (Settings → Claude & ChatGPT): a secret
-  connector link turns Application Desk into a connector (an MCP server) for Claude (any
+  connector link turns Average App into a connector (an MCP server) for Claude (any
   plan, including free) or ChatGPT (Plus and up, developer mode). Depending on what you allow
   for that link, the assistant reads, suggests edits, or writes directly (your text is saved
   in History first), and can set up and manage your colleges and pieces, with every prompt,
   word limit and due date. It runs on your own plan, so there's no API key and no per-token
   bill.
 - **Ask from the desk**: questions, "polish this passage" and odds estimates are asked on the
-  website and answered there, by a Claude or ChatGPT chat told to "Watch my Application Desk",
+  website and answered there, by a Claude or ChatGPT chat told to "Watch my Average App",
   or by the **counselor**: a one-file Windows setup that runs Claude Code hidden on your own
   computer. It keeps one Claude session warm, gets each request with the essay or college list
   it's about, and streams its answer onto the page as it writes.

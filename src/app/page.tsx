@@ -17,8 +17,7 @@ export default async function Home() {
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col justify-center px-4 py-16">
-      <h1 className="font-serif text-4xl leading-tight sm:text-5xl">Margin</h1>
-      <p className="mt-1 text-sm tracking-wide text-muted uppercase">Margin Application Desk</p>
+      <h1 className="font-serif text-4xl leading-tight sm:text-5xl">Average App</h1>
       <p className="mt-4 text-lg text-muted">
         Every college, every essay and short answer, in one place. Word counts against the limit, a version history back to
         the first draft, and a board that shows what&apos;s due next. Bring your Google Docs over in a minute.

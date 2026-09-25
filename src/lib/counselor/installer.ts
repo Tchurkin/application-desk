@@ -24,7 +24,7 @@
 import { COUNSELOR_VERSION } from "./version";
 
 export interface InstallerConfig {
-  /** The website, e.g. https://application-desk-seven.vercel.app */
+  /** The website, e.g. https://averageapp.com */
   site: string;
   supabaseUrl: string;
   /** The Supabase publishable (or legacy anon) key; public, it ships in every page. */
@@ -37,18 +37,21 @@ export { COUNSELOR_VERSION };
 
 /** The folder the counselor lives in, under %LOCALAPPDATA%. */
 export const COUNSELOR_DIR = String.raw`ApplicationDesk\Counselor`;
-export const STARTUP_NAME = "Application Desk counselor.lnk";
-export const INSTALLER_NAME = "Application Desk counselor setup.cmd";
+export const STARTUP_NAME = "Average App counselor.lnk";
+/** The shortcut's name before the rename to Average App: removed with it, so an update leaves just one. */
+const OLD_STARTUP_NAME = "Application Desk counselor.lnk";
+const REMOVE_STARTUP = `foreach ($lnkName in @('${STARTUP_NAME}', '${OLD_STARTUP_NAME}')) { Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path ([Environment]::GetFolderPath('Startup')) $lnkName) }`;
+export const INSTALLER_NAME = "Average App counselor setup.cmd";
 
 const MCP_SERVER = "application-desk";
 
 /** The first thing the installer asks, to check Claude Code can reach the desk. */
-export const CHECK_PROMPT = "You are now my Application Desk counselor. Call list_my_desk, then reply with only the desk title.";
+export const CHECK_PROMPT = "You are now my Average App counselor. Call list_my_desk, then reply with only the desk title.";
 
 /** The counselor's standing instructions (its folder's CLAUDE.md). */
-export const COUNSELOR_BRIEF = String.raw`# Application Desk counselor
+export const COUNSELOR_BRIEF = String.raw`# Average App counselor
 
-You are this student's college counselor and writing partner. You work on their Application Desk through the application-desk tools. The student never sees this conversation directly: each message here is one request from their desk (a question beside an essay, a highlighted passage to rewrite, an odds estimate, an interview answer, a transcript to read into their academics, or a message from the Counselor page), and your final reply to it is posted on the desk as your answer.
+You are this student's college counselor and writing partner. You work on their Average App desk through the application-desk tools. The student never sees this conversation directly: each message here is one request from their desk (a question beside an essay, a highlighted passage to rewrite, an odds estimate, an interview answer, a transcript to read into their academics, or a message from the Counselor page), and your final reply to it is posted on the desk as your answer.
 
 Reply to each message with only what the student should read: no preamble, no commentary between tool calls, no sign-off, and don't call answer_request. Each request says what to do and usually includes the essay, college list or profile it is about, so you can often answer right away; use the tools for anything else, and to make changes.
 
@@ -58,7 +61,7 @@ Stay within what the student allows (list_my_desk says). Be honest, specific and
 `;
 
 /** The watcher, saved as watch.ps1 in the counselor's folder. */
-const WATCHER = String.raw`# Application Desk counselor ${COUNSELOR_VERSION}: watches the desk and has Claude Code answer what is asked.
+const WATCHER = String.raw`# Average App counselor ${COUNSELOR_VERSION}: watches the desk and has Claude Code answer what is asked.
 # Started hidden at sign-in. Log: counselor.log in this folder.
 $ErrorActionPreference = 'Continue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -168,7 +171,7 @@ function Start-Claude($model, $effort) {
   } else {
     $session = [guid]::NewGuid().ToString()
     [IO.File]::WriteAllText($SessionFile, $session)
-    $a += @('--session-id', $session, '--name', (Quote 'Application Desk counselor'))
+    $a += @('--session-id', $session, '--name', (Quote 'Average App counselor'))
     $script:Resumed = $false
   }
   $a += @('--mcp-config', (Quote $Mcp), '--strict-mcp-config', '--allowedTools', 'mcp__${MCP_SERVER}', 'WebSearch', 'WebFetch')
@@ -401,7 +404,7 @@ function Remove-Counselor {
   $script:Current = $null
   Stop-Claude $false
   if ($c) { Finish $c.id 'Your counselor was removed from your computer before it could answer this.' }
-  Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path ([Environment]::GetFolderPath('Startup')) '${STARTUP_NAME}')
+  ${REMOVE_STARTUP}
   $session = ''
   if (Test-Path $SessionFile) { $session = ([IO.File]::ReadAllText($SessionFile)).Trim() }
   if ($session) {
@@ -459,7 +462,7 @@ while ($true) {
       if ($detail -like '*not valid*') {
         Log 'Its connector link was revoked, so the counselor is turning itself off.'
         Stop-Claude $false
-        Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path ([Environment]::GetFolderPath('Startup')) '${STARTUP_NAME}')
+        ${REMOVE_STARTUP}
         exit
       }
       $Fails++
@@ -518,12 +521,12 @@ const STOPPER = String.raw`Get-CimInstance Win32_Process -Filter "Name = 'powers
 Get-CimInstance Win32_Process |
   Where-Object { $_.CommandLine -like '*${COUNSELOR_DIR}\mcp.json*' } |
   ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
-Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path ([Environment]::GetFolderPath('Startup')) '${STARTUP_NAME}')
+${REMOVE_STARTUP}
 `;
 
 const TURN_OFF_CMD = String.raw`@echo off
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0stop.ps1"
-echo The Application Desk counselor is off. Double-click the setup file again to turn it back on.
+echo The Average App counselor is off. Double-click the setup file again to turn it back on.
 pause
 `;
 
@@ -537,7 +540,7 @@ $Token = '__TOKEN__'
 $Dir = Join-Path $env:LOCALAPPDATA '${COUNSELOR_DIR}'
 $Shell = New-Object -ComObject WScript.Shell
 $NL = [Environment]::NewLine
-function Say($text, $icon) { [void]$Shell.Popup($text, 0, 'Application Desk counselor', $icon) }
+function Say($text, $icon) { [void]$Shell.Popup($text, 0, 'Average App counselor', $icon) }
 function Save($name, $text) { [IO.File]::WriteAllText((Join-Path $Dir $name), $text, (New-Object System.Text.UTF8Encoding($false))) }
 
 try {
@@ -594,7 +597,7 @@ __TURN_OFF__
   }
   if (-not $ok) {
     $session = [guid]::NewGuid().ToString()
-    $check = & $Claude -p '__CHECK__' --session-id $session --name 'Application Desk counselor' @common 2>&1 | Out-String
+    $check = & $Claude -p '__CHECK__' --session-id $session --name 'Average App counselor' @common 2>&1 | Out-String
     $ok = $LASTEXITCODE -eq 0
   }
   $ErrorActionPreference = 'Stop'
@@ -609,12 +612,13 @@ __TURN_OFF__
   # Start hidden now, and at every sign-in.
   $conhost = Join-Path $env:WINDIR 'System32\conhost.exe'
   $launch = '--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File "' + (Join-Path $Dir 'watch.ps1') + '"'
+  ${REMOVE_STARTUP}
   $lnk = $Shell.CreateShortcut((Join-Path ([Environment]::GetFolderPath('Startup')) '${STARTUP_NAME}'))
   $lnk.TargetPath = $conhost
   $lnk.Arguments = $launch
   $lnk.WorkingDirectory = $env:LOCALAPPDATA
   $lnk.WindowStyle = 7
-  $lnk.Description = 'Answers what you ask on your Application Desk, with Claude Code'
+  $lnk.Description = 'Answers what you ask on your Average App desk, with Claude Code'
   $lnk.Save()
   Start-Process -FilePath $conhost -ArgumentList $launch -WorkingDirectory $env:LOCALAPPDATA
 
@@ -626,7 +630,7 @@ __TURN_OFF__
 `;
 
 const HEADER = [
-  "<# : Application Desk counselor setup - double-click to install",
+  "<# : Average App counselor setup - double-click to install",
   "@echo off",
   'set "APPDESK_SETUP=%~f0"',
   'powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ([IO.File]::ReadAllText($env:APPDESK_SETUP))"',

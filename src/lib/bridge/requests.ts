@@ -35,9 +35,9 @@ export const REQUEST_COLS =
 /** The message that sends the assistant to the desk's queue. */
 export function handoffMessage(kind: RequestKind): string {
   if (kind === "odds") {
-    return "Use my Application Desk connector: handle my pending desk requests. For the odds request, estimate my admission chances for each college on my desk from my profile and set them with set_college_strategy.";
+    return "Use my Average App connector: handle my pending desk requests. For the odds request, estimate my admission chances for each college on my desk from my profile and set them with set_college_strategy.";
   }
-  return "Use my Application Desk connector: handle my pending desk requests (list_desk_requests), then answer each one.";
+  return "Use my Average App connector: handle my pending desk requests (list_desk_requests), then answer each one.";
 }
 
 /** A link that opens the assistant with the message filled in. */

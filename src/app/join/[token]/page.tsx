@@ -12,7 +12,7 @@ export default async function JoinPage(props: PageProps<"/join/[token]">) {
 
   return (
     <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center px-4 py-12">
-      <Link href="/" className="mb-8 text-sm text-muted">Margin</Link>
+      <Link href="/" className="mb-8 text-sm text-muted">Average App</Link>
       {!info?.valid ? (
         <>
           <h1 className="mb-3 font-serif text-3xl">This link doesn&apos;t work</h1>

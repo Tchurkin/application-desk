@@ -70,7 +70,7 @@ type EntryT = z.infer<typeof Entry>;
 /** A database a migration behind: say so instead of a raw Postgres error. */
 function friendly(message: string): string {
   if (/connector_(strategy|set_strategy|update_academics)|schema cache|does not exist/i.test(message)) {
-    return "Strategy isn't available on this desk yet: its database needs the latest update. The student can tell whoever runs their Application Desk.";
+    return "Strategy isn't available on this desk yet: its database needs the latest update. The student can tell whoever runs their Average App.";
   }
   return message;
 }

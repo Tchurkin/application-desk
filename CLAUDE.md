@@ -1,6 +1,6 @@
 @AGENTS.md
 
-# Application Desk
+# Average App
 
 Sample data is always invented, with an obviously fake student ("Testy", `@example.test`).
 Never commit real essays, names or keys.

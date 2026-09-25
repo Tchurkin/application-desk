@@ -42,7 +42,7 @@ export interface Connector {
 }
 
 /** What the student says once in their open Claude/ChatGPT chat. */
-export const WATCH_PHRASE = "Watch my Application Desk";
+export const WATCH_PHRASE = "Watch my Average App";
 /** Watchers check in at least every ~45s; allow for a slow answer in between. */
 export const WATCH_FRESH_MS = 120_000;
 /** Something the assistant did this recently is "now". */

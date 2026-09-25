@@ -65,6 +65,14 @@ describe("counselorInstaller", () => {
     expect(out).toContain("$flags = @('--model', $model, '--effort', $effort)");
   });
 
+  it("removes its startup shortcut under the old name too, so an update over one leaves just one", () => {
+    expect(out).toContain("foreach ($lnkName in @('Average App counselor.lnk', 'Application Desk counselor.lnk'))");
+    // Removed from the website and its link revoked (the watcher), turned off (stop.ps1, also run
+    // first thing by the installer to stop an older one), and just before the new one is made.
+    expect(out.split("foreach ($lnkName in").length - 1).toBe(5);
+    expect(out).not.toContain("GetFolderPath('Startup')) 'Application Desk counselor.lnk'");
+  });
+
   it("can remove itself, its conversation and its folder", () => {
     expect(out).toContain("function Remove-Counselor");
     expect(out).toContain("if ($r.remove) { Remove-Counselor }");
