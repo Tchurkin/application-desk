@@ -71,8 +71,8 @@ You need [Node.js](https://nodejs.org) 20.9 or newer, and either Docker (to run 
 locally) or a free [Supabase](https://supabase.com) project.
 
 ```bash
-git clone https://github.com/Tchurkin/application-desk.git
-cd application-desk
+git clone https://github.com/Tchurkin/margin-application-desk.git
+cd margin-application-desk
 npm install
 cp .env.example .env.local
 ```

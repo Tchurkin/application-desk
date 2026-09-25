@@ -37,7 +37,7 @@ export default async function Home() {
         <Link className="btn" href="/login">Sign in</Link>
       </div>
       <p className="mt-12 text-xs text-muted">
-        Free and open source. <a className="underline" href="https://github.com/Tchurkin/application-desk">Source on GitHub</a>.
+        Free and open source. <a className="underline" href="https://github.com/Tchurkin/margin-application-desk">Source on GitHub</a>.
       </p>
     </main>
   );
