@@ -3,15 +3,11 @@ import { requireDesk } from "@/lib/supabase/server";
 
 export const metadata = { title: "Counselor" };
 
+/** The conversation fills the window under the desk's header; only the messages scroll. */
 export default async function CounselorPage() {
   const { desk } = await requireDesk();
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 py-8">
-      <h1 className="mb-2 font-serif text-3xl">Counselor</h1>
-      <p className="mb-6 max-w-[66ch] text-sm text-muted">
-        Your counselor is Claude, working on your desk on your own Claude plan. Talk to it here, or ask from anywhere on your desk
-        (Ask beside an essay, odds on Strategy, the interview on Profile); the answers arrive as they&apos;re written.
-      </p>
+    <main data-fill-page className="mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col px-4 pt-3 pb-3">
       <CounselorView deskId={desk.id} />
     </main>
   );

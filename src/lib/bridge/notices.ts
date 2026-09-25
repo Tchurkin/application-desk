@@ -42,7 +42,10 @@ export function noticeFor(r: Pick<DeskRequest, "id" | "kind" | "piece_id" | "ans
     case "odds":
       return on("/desk/strategy") ? null : { id: r.id, tab: "Strategy", href: "/desk/strategy", text: `${who} estimated your odds.` };
     case "transcript":
-      return on("/desk/profile") ? null : { id: r.id, tab: "Profile", href: "/desk/profile#academics", text: `${who} read your transcript.` };
+      // The Counselor page shows it too, in the conversation.
+      return on("/desk/profile") || on("/desk/counselor")
+        ? null
+        : { id: r.id, tab: "Profile", href: "/desk/profile#academics", text: `${who} read your transcript.` };
     case "chat":
     case "interview":
       return on("/desk/counselor") ? null : { id: r.id, tab: "Counselor", href: "/desk/counselor", text: `${who} replied on the Counselor page.` };

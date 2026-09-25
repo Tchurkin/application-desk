@@ -7,11 +7,11 @@ import { AnswerText } from "./answer-text";
  * (streamed into the request), what the counselor is doing on it, that the counselor has it, or
  * who it is waiting for. Rewrites being written show how many versions are ready, not their tags.
  */
-export function PendingAnswer({ r, who, doing = null }: { r: DeskRequest; who: string; doing?: string | null }) {
+export function PendingAnswer({ r, who, doing = null, large = false }: { r: DeskRequest; who: string; doing?: string | null; large?: boolean }) {
   if (r.answer) {
     const rewrites = r.kind === "polish" && /<option>/i.test(r.answer) ? parseOptions(r.answer) : null;
     return (
-      <div className="border-l-2 border-accent pl-2.5" aria-busy="true" data-testid="draft-answer">
+      <div className={`border-l-2 border-accent ${large ? "pl-3" : "pl-2.5"}`} aria-busy="true" data-testid="draft-answer">
         <p className="mb-1 font-mono text-[11px] tracking-wide text-muted uppercase">{who} · writing…</p>
         {rewrites ? (
           <p className="text-sm text-muted italic">
@@ -19,7 +19,7 @@ export function PendingAnswer({ r, who, doing = null }: { r: DeskRequest; who: s
           </p>
         ) : (
           <div className="typing">
-            <AnswerText text={r.answer} />
+            <AnswerText text={r.answer} large={large} />
           </div>
         )}
       </div>

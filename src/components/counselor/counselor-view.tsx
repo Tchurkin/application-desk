@@ -7,8 +7,9 @@ import { CounselorSetup } from "@/app/desk/settings/counselor-setup";
 import { counselors, WATCH_PHRASE } from "@/lib/bridge/watchers";
 
 /*
- * The Counselor page: a conversation with the counselor, with its model and how hard it thinks
- * in the message box. Setting it up, pausing and removing it are in Settings → Counselor.
+ * The Counselor page: a conversation with the counselor that fills the page, with its model and
+ * how hard it thinks in the message box. Setting it up, pausing and removing it are in Settings →
+ * Counselor.
  */
 
 const SUGGESTIONS = [
@@ -23,47 +24,42 @@ export function CounselorView({ deskId }: { deskId: string }) {
   const installed = connectors !== null && counselors(connectors).length > 0;
 
   return (
-    <div className="flex flex-col gap-4">
-      {connectors !== null && !installed && <SetupCard />}
-      <DeskThread
-        deskId={deskId}
-        kind="chat"
-        also={["interview", "transcript"]}
-        startedLabel="You started the profile interview"
-        title="Talk to your counselor"
-        intro={
-          <>
-            Ask anything: what to work on, whether your list is balanced, how to start an essay. It can also do things on your desk,
-            like setting up colleges or drafting a piece, within what you allow. It remembers what you&apos;ve told it.
-          </>
-        }
-        inputLabel="Message your counselor"
-        placeholder="Message your counselor…"
-        sendLabel="Send"
-        clearQuestion="Clear this conversation from the page? Your counselor still remembers it."
-        empty={(send, busy) => (
-          <div className="flex flex-col gap-2 text-sm text-muted">
-            <p>Start with one of these, or write your own below.</p>
-            <div role="group" aria-label="Ideas" className="flex flex-wrap gap-1.5">
-              {SUGGESTIONS.map((q) => (
-                <button
-                  key={q}
-                  type="button"
-                  disabled={busy}
-                  className="rounded-full border border-line px-2.5 py-0.5 text-xs hover:border-muted hover:text-ink"
-                  onClick={() => send(q)}
-                >
-                  {q}
-                </button>
-              ))}
-            </div>
+    <DeskThread
+      deskId={deskId}
+      kind="chat"
+      also={["interview", "transcript"]}
+      startedLabel="You started the profile interview"
+      title="Counselor"
+      top={connectors !== null && !installed ? <SetupCard /> : null}
+      empty={(send, busy) => (
+        <div className="flex max-w-xl flex-col items-center gap-4 text-center">
+          <h2 className="font-serif text-2xl">Talk to your counselor</h2>
+          <p className="text-sm text-muted">
+            Your counselor is Claude, on your own Claude plan. Ask anything: what to work on, whether your list is balanced, how to
+            start an essay. It can also do things on your desk, like setting up colleges or drafting a piece, within what you allow.
+            It remembers what you&apos;ve told it.
+          </p>
+          <div role="group" aria-label="Ideas" className="flex flex-wrap justify-center gap-2">
+            {SUGGESTIONS.map((q) => (
+              <button
+                key={q}
+                type="button"
+                disabled={busy}
+                className="rounded-full border border-line bg-panel px-3 py-1.5 text-sm text-muted hover:border-muted hover:text-ink disabled:opacity-50"
+                onClick={() => send(q)}
+              >
+                {q}
+              </button>
+            ))}
           </div>
-        )}
-        inputFirst
-        testId="counselor-chat"
-        className="h-[75vh] min-h-96"
-      />
-    </div>
+        </div>
+      )}
+      inputLabel="Message your counselor"
+      placeholder="Message your counselor…"
+      sendLabel="Send"
+      clearQuestion="Clear this conversation from the page? Your counselor still remembers it."
+      testId="counselor-chat"
+    />
   );
 }
 

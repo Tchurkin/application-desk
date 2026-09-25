@@ -26,6 +26,7 @@ describe("answer notices", () => {
     expect(noticeFor(r("chat"), "/desk/counselor")).toBeNull();
     expect(noticeFor(r("odds"), "/desk/strategy")).toBeNull();
     expect(noticeFor(r("transcript"), "/desk/profile")).toBeNull();
+    expect(noticeFor(r("transcript"), "/desk/counselor")).toBeNull();
     expect(noticeFor(r("ask", "p1"), "/desk/piece/p1")).toBeNull();
     expect(noticeFor(r("ask", null), "/desk")).toBeNull();
   });

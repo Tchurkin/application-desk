@@ -104,6 +104,22 @@ body {
   }
 }
 
+/* A page that fills the window under the desk's header and scrolls inside itself, like the
+   Counselor chat (its main has data-fill-page). The header keeps its height, however it wraps. */
+.desk-shell:has([data-fill-page]) {
+  height: 100dvh;
+  min-height: 0;
+}
+.desk-shell:has([data-fill-page]) > .desk-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+/* There the message box is pinned to the bottom: notes about replies sit above it, not on Send. */
+.desk-shell:has([data-fill-page]) > .desk-notices {
+  bottom: 9rem;
+}
+
 /* The essay editor */
 .essay .ProseMirror {
   font-family: var(--font-serif), Georgia, serif;

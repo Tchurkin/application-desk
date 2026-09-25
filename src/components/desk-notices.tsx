@@ -139,7 +139,7 @@ export function DeskNotices({ deskId }: { deskId: string }) {
       data-testid="desk-notices"
       data-ready={ready ? "true" : "false"}
       role="status"
-      className="pointer-events-none fixed right-4 bottom-4 z-50 flex max-w-sm flex-col gap-2"
+      className="desk-notices pointer-events-none fixed right-4 bottom-4 z-50 flex max-w-sm flex-col gap-2"
     >
       {notice && (
         <div className="card pointer-events-auto flex items-start gap-3 px-4 py-3 text-sm shadow-lg">

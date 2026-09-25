@@ -20,12 +20,12 @@ function Lines({ lines }: { lines: Line[] }) {
   ));
 }
 
-/** The assistant's answer: paragraphs, bold, lists and quotes, rendered as elements. */
-export function AnswerText({ text }: { text: string }) {
+/** The assistant's answer: paragraphs, bold, lists and quotes, rendered as elements. `large` where it's the page's subject (the Counselor chat). */
+export function AnswerText({ text, large = false }: { text: string; large?: boolean }) {
   const blocks = parseAnswer(text);
   if (!blocks.length) return <p className="text-sm text-muted italic">(an empty answer)</p>;
   return (
-    <div className="flex flex-col gap-2 text-sm leading-relaxed break-words">
+    <div className={`flex flex-col gap-2 leading-relaxed break-words ${large ? "text-[15px]" : "text-sm"}`}>
       {blocks.map((b, i) => {
         switch (b.kind) {
           case "heading":
