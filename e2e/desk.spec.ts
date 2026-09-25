@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { addCollege, addPiece, apiClient, essay, signUp, submitCollege, waitSaved } from "./helpers";
+import { addCollege, addPiece, apiClient, codeSignIn, essay, signUp, submitCollege, waitSaved } from "./helpers";
 
 test("a student sets up a college, writes a piece, and it survives a reload", async ({ page }) => {
   await signUp(page, "basic");
@@ -203,9 +203,14 @@ test("delete my data removes the account", async ({ page }) => {
   await expect(page).toHaveURL(/\/\?deleted=1|\/login/);
   await page.goto("/login");
   await page.getByLabel("Email").fill(s.email);
-  await page.getByLabel("Password").fill(s.password);
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByText(/Invalid login credentials/i)).toBeVisible();
+  if (codeSignIn) {
+    await page.getByRole("button", { name: "Email me a code" }).click();
+    await expect(page.getByRole("alert").filter({ hasText: "There's no desk with that email yet" })).toBeVisible();
+  } else {
+    await page.getByLabel("Password").fill(s.password);
+    await page.getByRole("button", { name: "Sign in" }).click();
+    await expect(page.getByText(/Invalid login credentials/i)).toBeVisible();
+  }
 });
 
 test("on a wide screen the Write page stays put: only its columns scroll", async ({ page }) => {

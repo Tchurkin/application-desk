@@ -7,13 +7,44 @@ export function fakeStudent(tag: string) {
   return { name: "Testy", email: `testy+${tag}${n}@example.test`, password: "correct-horse-battery" };
 }
 
+/** Students sign in with an emailed code (NEXT_PUBLIC_SIGN_IN=code), or else with a password. */
+export const codeSignIn = process.env.NEXT_PUBLIC_SIGN_IN === "code";
+
+/** The test database's admin client (its service key exists only in the test environment). */
+export function adminClient() {
+  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
+
+/** A sign-in code for this email, as the email would carry it (without sending one). */
+export async function signInCode(email: string): Promise<string> {
+  const { data, error } = await adminClient().auth.admin.generateLink({ type: "magiclink", email });
+  if (error) throw error;
+  return data.properties.email_otp;
+}
+
 export async function signUp(page: Page, tag: string) {
   const s = fakeStudent(tag);
-  await page.goto("/login?mode=signup");
-  await page.getByLabel("Your first name").fill(s.name);
-  await page.getByLabel("Email").fill(s.email);
-  await page.getByLabel("Password").fill(s.password);
-  await page.getByRole("button", { name: "Create my desk" }).click();
+  if (codeSignIn) {
+    // The account made directly (no email to wait for), then signed in with a real code.
+    const { error } = await adminClient().auth.admin.createUser({
+      email: s.email,
+      password: s.password,
+      email_confirm: true,
+      user_metadata: { display_name: s.name },
+    });
+    if (error) throw error;
+    await page.goto(`/login?step=code&email=${encodeURIComponent(s.email)}`);
+    await page.getByLabel("Code").fill(await signInCode(s.email));
+    await page.getByRole("button", { name: "Sign in" }).click();
+  } else {
+    await page.goto("/login?mode=signup");
+    await page.getByLabel("Your first name").fill(s.name);
+    await page.getByLabel("Email").fill(s.email);
+    await page.getByLabel("Password").fill(s.password);
+    await page.getByRole("button", { name: "Create my desk" }).click();
+  }
   await expect(page).toHaveURL(/\/desk$/);
   return s;
 }

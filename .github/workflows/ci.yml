@@ -51,10 +51,16 @@ jobs:
           eval "$(npx supabase status -o env)"
           echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL" >> "$GITHUB_ENV"
           echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=${PUBLISHABLE_KEY:-$ANON_KEY}" >> "$GITHUB_ENV"
+          # Tests only: makes accounts and sign-in codes directly (e2e/helpers.ts). Never in the app.
+          echo "::add-mask::${SERVICE_ROLE_KEY:-$SECRET_KEY}"
+          echo "SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY:-$SECRET_KEY}" >> "$GITHUB_ENV"
+          echo "MAILPIT_URL=${INBUCKET_URL:-${MAILPIT_URL:-http://127.0.0.1:54324}}" >> "$GITHUB_ENV"
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
         env:
           NEXT_PUBLIC_E2E: "1"
+          # Students sign in with an emailed code here, as the site will once it can send email.
+          NEXT_PUBLIC_SIGN_IN: code
       - uses: actions/upload-artifact@v5
         if: failure()
         with:

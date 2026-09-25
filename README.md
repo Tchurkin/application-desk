@@ -33,6 +33,8 @@ each assistant may do**, and every direct change is kept in the piece's history.
   a day, one a day back to a week, one a week before that, always keeping the first version
   and the newest. Restore any of them.
 - **The board is home**, and Write reopens the piece you were last on.
+- **Sign in with an emailed code** or with Google, no password (once it's set up: see
+  [docs/sign-in.md](docs/sign-in.md)).
 - **Delete my data** (Settings → Account) removes your account and everything in it.
 - **Write, Board and Strategy** pages: a writing workspace with a college rail and tabs, the
   board, and a Strategy page that sorts colleges into reach / target / likely bands by chance
