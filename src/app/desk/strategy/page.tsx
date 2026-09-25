@@ -29,7 +29,7 @@ function AcademicsCard({ academics }: { academics: Academics | null }) {
         </p>
       )}
       <p className="text-sm">
-        <Link href="/desk/settings#academics" className="text-accent underline">
+        <Link href="/desk/settings/academics" className="text-accent underline">
           {filled ? "Edit in Settings" : "Add them in Settings"}
         </Link>
       </p>

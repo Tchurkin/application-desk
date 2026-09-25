@@ -4,7 +4,7 @@ import { addCollege, addPiece, apiClient, essay, expectEssay, expectEssayContain
 /** The student makes a share link in Settings and returns its URL. */
 async function makeLink(page: Page, opts: { role: "suggest" | "view" | "edit"; label?: string; password?: string }) {
   const back = page.url();
-  await page.goto("/desk/settings");
+  await page.goto("/desk/settings/sharing");
   if (opts.label) await page.getByLabel("Who is it for?").fill(opts.label);
   await page.getByLabel("They can").selectOption(opts.role);
   if (opts.password) await page.getByLabel("Password (optional)").fill(opts.password);
@@ -200,7 +200,7 @@ test("passwords are checked, and revoking a link cuts access", async ({ page, br
   await openShared(coach, "Shared essay");
   const pieceUrl = coach.url();
 
-  await page.goto("/desk/settings");
+  await page.goto("/desk/settings/sharing");
   const links = page.getByRole("list", { name: "Share links" });
   await expect(links).toContainText("Joined: Coach");
   await links.getByRole("button", { name: "Revoke" }).click();
@@ -325,7 +325,7 @@ test("people who can edit switch between Editing and Suggesting, suggesters only
   await expectEssay(mom, "Start. Mom was here. Maybe.");
 
   // The student lets Dad edit too: his link changes for him at once.
-  await page.goto("/desk/settings");
+  await page.goto("/desk/settings/sharing");
   await page.getByRole("list", { name: "Share links" }).getByLabel("What Dad can do").selectOption("edit");
   await expect(async () => {
     await dad.reload();

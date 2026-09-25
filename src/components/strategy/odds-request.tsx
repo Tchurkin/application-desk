@@ -122,7 +122,7 @@ export function OddsRequest({
     return (
       <p className="text-sm text-muted">
         Connect Claude or ChatGPT in{" "}
-        <Link href="/desk/settings" className="text-accent underline">Settings</Link>, and it can estimate your odds from your
+        <Link href="/desk/settings/connectors" className="text-accent underline">Settings</Link>, and it can estimate your odds from your
         profile. Until then the published average rate stands in, and you can set any chance yourself.
       </p>
     );

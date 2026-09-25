@@ -112,15 +112,6 @@ export function activityText(c: Connector | null, now: number): string | null {
   return f ? f(c.activity.piece ?? "") : null;
 }
 
-/** How long something took, for people: "14s", "2m 5s", "1h 3m". */
-export function tookText(ms: number): string {
-  const s = Math.max(0, Math.round(ms / 1000));
-  if (s < 60) return `${s}s`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ${s % 60}s`;
-  return `${Math.floor(m / 60)}h ${m % 60}m`;
-}
-
 /** What a counselor is doing on this request, if it is working on it right now. */
 export function activityOn(connectors: Connector[] | null, requestId: string, now: number): string | null {
   const c = (connectors ?? []).find((x) => x.activity?.request === requestId);

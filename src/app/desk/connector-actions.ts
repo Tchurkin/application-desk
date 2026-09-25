@@ -20,7 +20,7 @@ const asSpeed = (v: unknown): CounselorSpeed => (SPEEDS.includes(v as CounselorS
 const missingColumn = (code?: string) => code === "42703" || code === "PGRST204";
 
 function revalidate() {
-  revalidatePath("/desk/settings");
+  revalidatePath("/desk/settings", "layout");
   revalidatePath("/desk/counselor");
 }
 

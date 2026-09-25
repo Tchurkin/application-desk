@@ -12,7 +12,7 @@ const ESSAY_LABEL = { read: "Read only", suggest: "Suggest", edit: "Write" } as 
 
 async function makeConnector(page: Page, opts: { essays?: "read" | "suggest" | "edit"; manage?: boolean } = {}) {
   const back = page.url();
-  await page.goto("/desk/settings");
+  await page.goto("/desk/settings/connectors");
   await page.getByLabel("Assistant").selectOption("Claude");
   const form = page.locator("form", { hasText: "Make a connector link" });
   if (opts.essays) await form.getByRole("radio", { name: ESSAY_LABEL[opts.essays] }).click();
@@ -263,7 +263,7 @@ test("the student decides what each connector may do", async ({ page }) => {
   expect(managed.text).toContain("add, change or remove colleges and pieces");
 
   // Read only: not even suggestions.
-  await page.goto("/desk/settings");
+  await page.goto("/desk/settings/connectors");
   const row = page.getByRole("list", { name: "Connector links" }).getByTestId("connector-link");
   await row.getByRole("radio", { name: "Read only" }).click();
   await expect
@@ -292,7 +292,7 @@ test("revoking a connector link disconnects it, and a made-up link opens nothing
   const client = await connect(await makeConnector(page));
   expect((await call(client, "list_my_desk")).isError).toBe(false);
 
-  await page.goto("/desk/settings");
+  await page.goto("/desk/settings/connectors");
   const list = page.getByRole("list", { name: "Connector links" });
   await expect(list).toContainText("Last used");
   await list.getByRole("button", { name: "Revoke" }).click();

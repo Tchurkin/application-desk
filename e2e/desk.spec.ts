@@ -148,8 +148,7 @@ test("deleting a piece leaves no ghost, even with a write in flight", async ({ p
   const id = await addPiece(page, "Doomed");
   await essay(page).click();
   await page.keyboard.type("going away");
-  await page.getByRole("button", { name: "More", exact: true }).click();
-  await page.getByRole("button", { name: "Delete piece" }).click();
+  await page.getByRole("tablist", { name: "Pieces" }).getByRole("button", { name: "Delete “Doomed”" }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Delete" }).click();
   await expect(page).toHaveURL(new RegExp(`/desk/college/${college}`));
   await page.waitForTimeout(2000);
@@ -194,7 +193,7 @@ test("row-level security: one student can't read or write another's desk", async
 test("delete my data removes the account", async ({ page }) => {
   const s = await signUp(page, "gdpr");
   await addCollege(page, "Gone College");
-  await page.goto("/desk/settings");
+  await page.goto("/desk/settings/account");
   await page.getByLabel('Type "delete" to confirm').fill("delete");
   await page.getByRole("button", { name: "Delete everything" }).click();
   await expect(page).toHaveURL(/\/\?deleted=1|\/login/);

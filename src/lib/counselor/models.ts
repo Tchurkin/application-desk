@@ -45,3 +45,22 @@ export function storeModel(surface: string, model: ModelId | "") {
     // Private mode: just don't remember.
   }
 }
+
+/** What an older counselor's speed meant, for a desk that hasn't stored a model yet. */
+const SPEED_CHOICE: Record<string, { model: ModelId; effort: EffortId }> = {
+  fast: { model: "sonnet", effort: "low" },
+  balanced: { model: "sonnet", effort: "medium" },
+  thorough: { model: "opus", effort: "high" },
+};
+
+/** The model a counselor runs and how hard it thinks, falling back on what its older speed meant. */
+export function counselorChoice(c: { counselor_model?: string | null; counselor_effort?: string | null; counselor_speed?: string | null }): {
+  model: ModelId;
+  effort: EffortId;
+} {
+  const fromSpeed = SPEED_CHOICE[c.counselor_speed ?? "balanced"] ?? SPEED_CHOICE.balanced;
+  return {
+    model: isModel(c.counselor_model) ? c.counselor_model : fromSpeed.model,
+    effort: isEffort(c.counselor_effort) ? c.counselor_effort : fromSpeed.effort,
+  };
+}

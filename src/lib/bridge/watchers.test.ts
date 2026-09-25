@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { activityOn, activityText, counselors, isCounselor, tookText, watcher, type Connector } from "./watchers";
+import { activityOn, activityText, counselors, isCounselor, watcher, type Connector } from "./watchers";
 
 const NOW = Date.parse("2026-09-24T12:00:00Z");
 const ago = (s: number) => new Date(NOW - s * 1000).toISOString();
@@ -42,14 +42,5 @@ describe("what it is doing", () => {
   it("ties it to the request being worked on", () => {
     expect(activityOn([chat, counselor], "r1", NOW)).toBe("reading “Why us”");
     expect(activityOn([chat, counselor], "r2", NOW)).toBeNull();
-  });
-});
-
-describe("tookText", () => {
-  it("reads like a person would say it", () => {
-    expect(tookText(4_200)).toBe("4s");
-    expect(tookText(125_000)).toBe("2m 5s");
-    expect(tookText(3_780_000)).toBe("1h 3m");
-    expect(tookText(-5)).toBe("0s");
   });
 });

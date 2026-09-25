@@ -5,14 +5,14 @@ import { COUNSELOR_VERSION } from "../src/lib/counselor/version";
 import { addCollege, addPiece, apiClient, signUp } from "./helpers";
 
 /*
- * The Counselor page, driven the way the counselor on a student's computer drives the desk: the
- * same database calls its watcher makes (poll, draft, finish, activity, removed) and the same
- * work endpoint, so no real Claude is needed.
+ * The Counselor page and Settings → Counselor, driven the way the counselor on a student's
+ * computer drives the desk: the same database calls its watcher makes (poll, draft, finish,
+ * activity, removed) and the same work endpoint, so no real Claude is needed.
  */
 
 async function makeConnector(page: Page) {
   const back = page.url();
-  await page.goto("/desk/settings");
+  await page.goto("/desk/settings/connectors");
   await page.getByLabel("Assistant").selectOption("Claude");
   await page.getByRole("button", { name: "Make a connector link" }).click();
   const url = await page.getByRole("textbox", { name: "Connector link" }).inputValue();
@@ -40,13 +40,14 @@ function counselorApi(token: string) {
   };
 }
 
+const SETTINGS = "/desk/settings/counselor";
 const chat = (p: Page) => p.getByTestId("counselor-chat");
 const card = (p: Page) => p.getByTestId("counselor-card");
 
 test("talking to the counselor: live drafts, models, pause, and removing it from the computer", async ({ page, request }) => {
   await signUp(page, "counselor");
   await page.goto("/desk/counselor");
-  await expect(card(page)).toContainText("Set up your counselor");
+  await expect(page.getByTestId("counselor-setup-card")).toContainText("Set up your counselor");
 
   // A message waits on the desk until someone picks it up.
   await chat(page).getByRole("button", { name: "What should I work on this week?" }).click();
@@ -55,14 +56,16 @@ test("talking to the counselor: live drafts, models, pause, and removing it from
   const token = (await makeConnector(page)).split("/api/mcp/")[1];
   const c = counselorApi(token);
 
-  // An older counselor shows up with an update on offer.
+  // An older counselor shows up in Settings with an update on offer.
   expect(await c.poll("1")).toMatchObject({ fresh: 1, waiting: 1, speed: "balanced", model: "sonnet", effort: "medium", paused: false, remove: false });
-  await page.goto("/desk/counselor");
+  await page.goto(SETTINGS);
   await expect(card(page).getByTestId("counselor-update")).toBeVisible();
   expect((await c.poll()).fresh).toBe(0);
   await page.reload();
   await expect(card(page).getByTestId("counselor-update")).toHaveCount(0);
   await expect(card(page).getByTestId("counselor-state")).toContainText("On");
+  await page.goto("/desk/counselor");
+  await expect(page.getByTestId("counselor-setup-card")).toHaveCount(0);
   await expect(chat(page)).toContainText("Your counselor has it");
 
   // Its work comes with everything needed to answer by replying.
@@ -84,28 +87,33 @@ test("talking to the counselor: live drafts, models, pause, and removing it from
   expect(finished).toBe(true);
   await expect(chat(page).locator("strong", { hasText: "Why Northfield" })).toBeVisible();
   await expect(chat(page)).not.toContainText("writing…");
-  await expect(page.getByTestId("recent-work")).toContainText("Answered in");
   const { data: again } = await c.rpc("connector_finish_request", { request: id, answer_text: "Again." });
   expect(again).toBe(false);
 
-  // The counselor's model and how hard it thinks.
-  await card(page).getByRole("radiogroup", { name: "Model" }).getByRole("radio", { name: "Opus" }).click();
+  // The counselor's model and how hard it thinks, from the message box.
+  await chat(page).getByLabel("Model").selectOption("opus");
   await expect.poll(async () => (await c.poll()).model).toBe("opus");
-  await card(page).getByRole("radiogroup", { name: "Thinking" }).getByRole("radio", { name: "High" }).click();
+  await chat(page).getByLabel("Thinking").selectOption("high");
   await expect.poll(async () => (await c.poll()).effort).toBe("high");
   expect((await c.poll()).speed).toBe("thorough");
-  await expect(card(page).getByRole("radio", { name: "Opus" })).toHaveAttribute("aria-checked", "true");
+  await page.reload();
+  await expect(chat(page).getByLabel("Model")).toHaveValue("opus");
+  await expect(chat(page).getByLabel("Thinking")).toHaveValue("high");
 
-  // Paused, it picks nothing up; resumed, it does.
+  // Paused in Settings, it picks nothing up; resumed, it does.
+  await page.goto(SETTINGS);
   await card(page).getByRole("button", { name: "Pause" }).click();
   await expect.poll(async () => (await c.poll()).paused).toBe(true);
-  // This one asks for a model of its own.
+  await page.goto("/desk/counselor");
+  await expect(chat(page).getByTestId("watch-status")).toContainText("paused");
+  // A question goes with the model picked for it.
   await chat(page).getByLabel("Model").selectOption("haiku");
+  await expect.poll(async () => (await c.poll()).model).toBe("haiku");
   await chat(page).getByLabel("Message your counselor").fill("Is my list balanced?");
   await chat(page).getByRole("button", { name: "Send", exact: true }).click();
   await expect(chat(page)).toContainText("Is my list balanced?");
   expect(await c.poll()).toMatchObject({ fresh: 0, waiting: 1, paused: true });
-  await page.reload();
+  await page.goto(SETTINGS);
   await expect(card(page).getByTestId("counselor-state")).toContainText("Paused");
   await card(page).getByRole("button", { name: "Resume" }).click();
   await expect.poll(async () => (await c.poll()).fresh).toBe(1);
@@ -119,7 +127,8 @@ test("talking to the counselor: live drafts, models, pause, and removing it from
   expect(await c.poll()).toMatchObject({ remove: true, fresh: 0 });
   expect((await c.rpc("connector_counselor_removed", {})).error).toBeNull();
   await page.reload();
-  await expect(card(page)).toContainText("Set up your counselor");
+  await expect(page.getByTestId("counselor-setup")).toBeVisible();
+  await expect(card(page)).toHaveCount(0);
   await expect(c.poll()).rejects.toThrow(/not valid/);
 });
 
@@ -132,8 +141,9 @@ test.describe("on a Windows computer", () => {
     const old = counselorApi(token);
     await old.poll("1");
     await page.goto("/desk/counselor");
-    await card(page).getByRole("radio", { name: "Haiku" }).click();
+    await chat(page).getByLabel("Model").selectOption("haiku");
     await expect.poll(async () => (await old.poll("1")).model).toBe("haiku");
+    await page.goto(SETTINGS);
 
     const [download] = await Promise.all([page.waitForEvent("download"), card(page).getByRole("button", { name: "Update the counselor" }).click()]);
     expect(download.suggestedFilename()).toBe("Application Desk counselor setup.cmd");

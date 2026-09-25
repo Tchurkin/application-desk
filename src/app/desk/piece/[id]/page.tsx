@@ -17,7 +17,7 @@ export default async function PiecePage(props: PageProps<"/desk/piece/[id]">) {
 
   const [{ data: college }, { data: profile }, { colleges, pieces }] = await Promise.all([
     piece.college_id
-      ? supabase.from("colleges").select("id, name, ai_policy, research").eq("id", piece.college_id).maybeSingle()
+      ? supabase.from("colleges").select("id, name").eq("id", piece.college_id).maybeSingle()
       : Promise.resolve({ data: null }),
     supabase.from("profiles").select("display_name").eq("id", userId).single(),
     loadDesk(supabase, desk.id),
@@ -39,8 +39,6 @@ export default async function PiecePage(props: PageProps<"/desk/piece/[id]">) {
         userId={userId}
         author={profile?.display_name || "Student"}
         collegeName={college?.name ?? null}
-        aiPolicy={college?.ai_policy === "no_drafting" ? "no_drafting" : "allowed"}
-        research={college?.research ?? ""}
         workspace={{ groups, tabs }}
       />
     </main>

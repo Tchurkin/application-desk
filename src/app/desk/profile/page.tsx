@@ -18,7 +18,7 @@ export default async function ProfilePage() {
         What Claude knows about you: your background, activities, stories, values and goals. Write sections yourself, or let
         Claude interview you and write them as you talk. Claude reads your profile before helping with any essay, so the more
         specific it is, the more your essays sound like you. Your grades and scores are in{" "}
-        <Link href="/desk/settings#academics" className="underline underline-offset-2">
+        <Link href="/desk/settings/academics" className="underline underline-offset-2">
           Settings
         </Link>
         .

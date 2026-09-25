@@ -1,8 +1,7 @@
 "use client";
 
 import type { Editor } from "@tiptap/react";
-import { useRouter } from "next/navigation";
-import { useState, useTransition, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { AskPanel } from "@/components/ask/ask-panel";
 import { CollegeRail } from "@/components/write/college-rail";
 import { ConfirmDialog } from "@/components/write/confirm-dialog";
@@ -12,7 +11,6 @@ import { Workspace, type ToolDef } from "@/components/write/workspace";
 import type { PieceStatus } from "@/lib/domain/colleges";
 import type { RailGroup, RailPiece } from "@/lib/write/rail";
 import { deletePiece } from "../../actions";
-import { makeVersion } from "./actions";
 
 const TOOLS: ToolDef[] = [
   { id: "files", label: "Files", hint: "Colleges and pieces", icon: <FilesIcon /> },
@@ -113,32 +111,5 @@ export function WriteWorkspace({
         />
       )}
     </Workspace>
-  );
-}
-
-/** Start a version of this piece: a copy of its text as a new piece, shown beside it as a tab. */
-export function MakeVersion({ pieceId }: { pieceId: string }) {
-  const router = useRouter();
-  const [pending, start] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-  return (
-    <div>
-      <button
-        type="button"
-        className="btn w-full"
-        disabled={pending}
-        onClick={() =>
-          start(async () => {
-            const r = await makeVersion(pieceId);
-            if (r.ok) router.push(`/desk/piece/${r.id}`);
-            else setError(r.error);
-          })
-        }
-      >
-        {pending ? "Making a version…" : "Make a version"}
-      </button>
-      <p className="mt-1 text-xs text-muted">A copy of this text as a new tab, to try another direction without losing this one.</p>
-      {error && <p className="mt-1 text-xs text-danger">{error}</p>}
-    </div>
   );
 }

@@ -23,7 +23,7 @@ async function editChance(page: Page, college: string, chance: string) {
 
 async function makeConnector(page: Page) {
   const back = page.url();
-  await page.goto("/desk/settings");
+  await page.goto("/desk/settings/connectors");
   await page.getByLabel("Assistant").selectOption("Claude");
   await page.getByRole("button", { name: "Make a connector link" }).click();
   const url = await page.getByRole("textbox", { name: "Connector link" }).inputValue();
@@ -123,7 +123,7 @@ test("the connected AI estimates odds: the page waits for it and shows its numbe
   const estimate = page.getByRole("region", { name: "Estimate your odds" });
   // Nothing connected yet: the page points to Settings.
   await expect(estimate).toContainText("Connect Claude or ChatGPT in Settings");
-  await expect(estimate.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/desk/settings");
+  await expect(estimate.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/desk/settings/connectors");
 
   const url = await makeConnector(page);
   await page.goto("/desk/strategy");
@@ -208,7 +208,7 @@ test("the connected AI estimates odds: the page waits for it and shows its numbe
 
 test("the academic profile saves in Settings and reaches the connected AI", async ({ page }) => {
   await signUp(page, "academics");
-  await page.goto("/desk/settings");
+  await page.goto("/desk/settings/academics");
   await page.getByLabel("GPA", { exact: true }).fill("3.9 unweighted");
   await page.getByLabel("Test scores", { exact: true }).fill("SAT 1450 (760 math)");
   await page.getByLabel("Intended major", { exact: true }).fill("Mechanical engineering");
@@ -229,7 +229,7 @@ test("the academic profile saves in Settings and reaches the connected AI", asyn
     "Academic profile: GPA 3.9 unweighted; test scores SAT 1450 (760 math); intended major Mechanical engineering.",
   );
   expect((await call(client, "update_academics", { intended_major: "Aerospace engineering" })).isError).toBe(false);
-  await page.goto("/desk/settings");
+  await page.goto("/desk/settings/academics");
   await expect(page.getByLabel("Intended major", { exact: true })).toHaveValue("Aerospace engineering");
   await expect(page.getByLabel("GPA", { exact: true })).toHaveValue("3.9 unweighted");
   await client.close();

@@ -55,7 +55,7 @@ export function WatchStatus({ connectors, now }: { connectors: Connector[] | nul
       {paused ? (
         <>
           Your counselor is paused.{" "}
-          <Link href="/desk/counselor" className={link}>
+          <Link href="/desk/settings/counselor" className={link}>
             Resume it
           </Link>
         </>
@@ -63,7 +63,7 @@ export function WatchStatus({ connectors, now }: { connectors: Connector[] | nul
         <>
           {counselor ? (doing ? `Your counselor is ${doing}…` : "Your counselor is on and watching your desk: ask away.") : `${w.label} is ${doing ?? "watching your desk: ask away"}${doing ? "…" : "."}`}
           {counselor && isOutdated(w) && (
-            <Link href="/desk/counselor" className={link}>
+            <Link href="/desk/settings/counselor" className={link}>
               Update it for faster answers
             </Link>
           )}
@@ -71,7 +71,7 @@ export function WatchStatus({ connectors, now }: { connectors: Connector[] | nul
       ) : (
         <>
           Not watching.{" "}
-          <Link href="/desk/counselor" className={link}>
+          <Link href="/desk/settings/counselor" className={link}>
             Set up your counselor
           </Link>{" "}
           to have answers arrive on their own, or say &ldquo;{WATCH_PHRASE}&rdquo; in a Claude or ChatGPT chat.

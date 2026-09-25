@@ -363,7 +363,7 @@ export function AskPanel({ deskId, pieceId, pieceTitle, getSelection, collegeNam
           <p className="mb-0.5 font-medium">First, connect Claude or ChatGPT to your desk</p>
           <p>
             Set up your counselor in{" "}
-            <Link href="/desk/settings#counselor" className="underline underline-offset-2">
+            <Link href="/desk/settings/counselor" className="underline underline-offset-2">
               Settings
             </Link>{" "}
             (one download), or make a connector link there, add it to Claude or ChatGPT, and say &ldquo;{WATCH_PHRASE}&rdquo;
@@ -602,9 +602,9 @@ function NoticeLine({ notice }: { notice: Notice }) {
       if (notice.paused) {
         return (
           <p className="text-warn">
-            Saved. Your counselor is paused, so it answers once you resume it on the{" "}
-            <Link className={link} href="/desk/counselor">
-              Counselor page
+            Saved. Your counselor is paused, so it answers once you resume it in{" "}
+            <Link className={link} href="/desk/settings/counselor">
+              Settings
             </Link>
             .
           </p>
@@ -618,7 +618,7 @@ function NoticeLine({ notice }: { notice: Notice }) {
       ) : (
         <p className="text-warn">
           Saved. Nobody is watching your desk right now: turn on your counselor in{" "}
-          <Link className={link} href="/desk/settings#counselor">
+          <Link className={link} href="/desk/settings/counselor">
             Settings
           </Link>
           , or say &ldquo;{WATCH_PHRASE}&rdquo; in your {notice.label} chat, and it picks this up.
@@ -628,7 +628,7 @@ function NoticeLine({ notice }: { notice: Notice }) {
       return (
         <p className="text-warn">
           Saved on your desk. Connect Claude or ChatGPT in{" "}
-          <Link className={link} href="/desk/settings">
+          <Link className={link} href="/desk/settings/connectors">
             Settings
           </Link>
           , then ask it to handle your desk requests and the answer appears here.

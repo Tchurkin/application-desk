@@ -13,6 +13,9 @@
   --warn-soft: #fbf0d9;
   --danger: #a3302a;
   --danger-soft: #f9e3e1;
+  /* Suggested additions (deletions use --danger). */
+  --add: #1f6f4f;
+  --add-soft: #e4f2ea;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -29,6 +32,8 @@
     --warn-soft: #33291a;
     --danger: #ef8a82;
     --danger-soft: #3a211f;
+    --add: #6fc49b;
+    --add-soft: #14291f;
   }
 }
 
@@ -45,6 +50,8 @@
   --color-warn-soft: var(--warn-soft);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
+  --color-add: var(--add);
+  --color-add-soft: var(--add-soft);
   --font-sans: var(--font-geist-sans);
   --font-serif: var(--font-serif);
 }
@@ -94,20 +101,28 @@ body {
 }
 
 /* Suggestions */
-.essay .sugg-ins {
-  color: var(--accent);
-  background: var(--accent-soft);
-  text-decoration: underline;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 3px;
-  border-radius: 2px;
-  cursor: pointer;
+/* Additions are green boxes, deletions red and struck through, in the essay and in the margin. */
+.essay .sugg-ins,
+.sugg-add {
+  color: var(--add);
+  background: var(--add-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--add) 40%, transparent);
+  text-decoration: none;
+  border-radius: 3px;
+  padding: 0 1px;
   white-space: pre-wrap;
 }
-.essay .sugg-del {
+.essay .sugg-del,
+.sugg-cut {
   color: var(--danger);
   background: var(--danger-soft);
   text-decoration: line-through;
+  text-decoration-color: var(--danger);
+  border-radius: 3px;
+  padding: 0 1px;
+}
+.essay .sugg-ins,
+.essay .sugg-del {
   cursor: pointer;
 }
 /* An answer still being written: a blinking caret after its last line. */
@@ -129,9 +144,9 @@ body {
   text-decoration-thickness: 1px;
 }
 .diff-added {
-  background: var(--accent-soft);
+  background: var(--add-soft);
   text-decoration: none;
-  box-shadow: inset 0 -2px 0 var(--accent);
+  box-shadow: inset 0 -2px 0 var(--add);
 }
 
 /* A later paragraph inside a suggested insertion or a rewrite: a paragraph of its own. */

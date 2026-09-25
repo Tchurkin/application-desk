@@ -4,14 +4,15 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, type Keyboard
 import { AnswerText } from "@/components/ask/answer-text";
 import { PendingAnswer } from "@/components/ask/pending-answer";
 import { useConnectors, WatchStatus } from "@/components/ask/watch-status";
-import { ModelPicker, useModelChoice } from "@/components/ask/model-picker";
 import { ConfirmButton } from "@/components/confirm-button";
+import { setCounselorModel } from "@/app/desk/connector-actions";
 import { subscribeDeskRequests } from "@/lib/bridge/live";
 import { MESSAGE_MAX } from "@/lib/bridge/listing";
 import { bridgeMissing, queueRequest, REQUEST_COLS, type DeskRequest, type RequestKind } from "@/lib/bridge/requests";
 import { hasWaiting, mergeRequest, removeRequest, sortThread, THREAD_LIMIT } from "@/lib/bridge/thread";
 import { useNow } from "@/lib/bridge/use-now";
-import { activityOn, counselors } from "@/lib/bridge/watchers";
+import { activityOn, counselors, type Connector } from "@/lib/bridge/watchers";
+import { counselorChoice, EFFORTS, MODELS, type EffortId, type ModelId } from "@/lib/counselor/models";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
 /*
@@ -21,6 +22,33 @@ import { supabaseBrowser } from "@/lib/supabase/client";
  */
 
 const NOT_YET = "Run the latest database update to use this.";
+
+type Choice = { model: ModelId; effort: EffortId };
+
+/** A counselor whose model can be chosen from here (a desk with migration 20261004, a counselor from version 2 on). */
+function choosable(c: Connector | undefined): c is Connector & { id: string } {
+  return !!c?.id && c.counselor_model !== undefined && c.counselor_version !== undefined;
+}
+
+function Pick<T extends string>({ label, options, value, onChange }: { label: string; options: { id: T; label: string }[]; value: T; onChange: (v: T) => void }) {
+  return (
+    <label className="flex items-center gap-1 text-xs text-muted">
+      {label}
+      <select
+        className="rounded-md border border-line bg-panel px-1.5 py-0.5 text-xs text-ink"
+        value={value}
+        aria-label={label}
+        onChange={(e) => onChange(e.target.value as T)}
+      >
+        {options.map((o) => (
+          <option key={o.id} value={o.id}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
 
 export interface DeskThreadProps {
   deskId: string;
@@ -50,8 +78,11 @@ export function DeskThread(p: DeskThreadProps) {
   const supabase = supabaseBrowser();
   const ids = useId();
   const now = useNow(5_000);
-  const { connectors } = useConnectors(deskId);
-  const [model, setModel] = useModelChoice("chat");
+  const { connectors, reload } = useConnectors(deskId);
+  // The counselor's model and how hard it thinks, chosen right here; shown at once, saved for every question after.
+  const counselor = counselors(connectors, now)[0];
+  const [picked, setPicked] = useState<(Choice & { id: string }) | null>(null);
+  const choice: Choice | null = choosable(counselor) ? (picked?.id === counselor.id ? picked : counselorChoice(counselor)) : null;
   const [rows, setRows] = useState<DeskRequest[] | null>(null);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -110,7 +141,7 @@ export function DeskThread(p: DeskThreadProps) {
     setBusy(true);
     setError(null);
     try {
-      const row = await queueRequest(supabase, { deskId, pieceId: null, kind, prompt: text, model });
+      const row = await queueRequest(supabase, { deskId, pieceId: null, kind, prompt: text, model: choice?.model ?? "" });
       setRows((l) => mergeRequest(l ?? [], row, null, shown));
       setDraft("");
     } catch (e) {
@@ -118,6 +149,20 @@ export function DeskThread(p: DeskThreadProps) {
       setError(bridgeMissing(err) || err.code === "23514" ? NOT_YET : `Couldn't send it (${err.message ?? "unknown error"}). Try again.`);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function choose(next: Choice) {
+    if (!choosable(counselor)) return;
+    const id = counselor.id;
+    setPicked({ ...next, id });
+    setError(null);
+    try {
+      await setCounselorModel(id, next.model, next.effort);
+      await reload();
+    } catch (e) {
+      setPicked(null);
+      setError(`Couldn't change the model (${(e as Error).message}).`);
     }
   }
 
@@ -203,7 +248,12 @@ export function DeskThread(p: DeskThreadProps) {
               <button type="submit" className="btn btn-primary" disabled={busy || !draft.trim()}>
                 {p.sendLabel}
               </button>
-              <ModelPicker value={model} onChange={setModel} defaultModel={counselors(connectors)[0]?.counselor_model} />
+              {choice && (
+                <>
+                  <Pick label="Model" options={MODELS} value={choice.model} onChange={(m) => void choose({ ...choice, model: m })} />
+                  <Pick label="Thinking" options={EFFORTS} value={choice.effort} onChange={(e) => void choose({ ...choice, effort: e })} />
+                </>
+              )}
             </span>
             {started && <ConfirmButton label="Start over" confirmLabel="Clear" question={p.clearQuestion} onConfirm={clear} />}
           </div>

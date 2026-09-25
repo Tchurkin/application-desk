@@ -29,7 +29,7 @@ async function write(page: Page, text: string) {
 
 async function makeConnector(page: Page) {
   const back = page.url();
-  await page.goto("/desk/settings");
+  await page.goto("/desk/settings/connectors");
   await page.getByLabel("Assistant").selectOption("Claude");
   await page.getByRole("button", { name: "Make a connector link" }).click();
   const url = await page.getByRole("textbox", { name: "Connector link" }).inputValue();

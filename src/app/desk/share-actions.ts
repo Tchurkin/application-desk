@@ -23,7 +23,7 @@ export async function createShareLink(_prev: CreateLinkState, f: FormData): Prom
     link_password: password,
   });
   if (error) return { error: error.message };
-  revalidatePath("/desk/settings");
+  revalidatePath("/desk/settings", "layout");
   return { token: data as string, role, label };
 }
 
@@ -32,12 +32,12 @@ export async function setShareRole(id: string, role: ShareRole) {
   const { supabase } = await requireDesk();
   const { error } = await supabase.from("share_links").update({ role: asShareRole(role) }).eq("id", id);
   if (error) throw new Error(error.message);
-  revalidatePath("/desk/settings");
+  revalidatePath("/desk/settings", "layout");
 }
 
 export async function revokeShareLink(id: string) {
   const { supabase } = await requireDesk();
   const { error } = await supabase.from("share_links").update({ revoked_at: new Date().toISOString() }).eq("id", id);
   if (error) throw new Error(error.message);
-  revalidatePath("/desk/settings");
+  revalidatePath("/desk/settings", "layout");
 }

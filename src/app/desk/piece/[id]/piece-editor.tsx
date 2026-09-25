@@ -7,12 +7,11 @@ import Placeholder from "@tiptap/extension-placeholder";
 import { UndoCaret } from "@/lib/editor/undo-caret";
 import { EditorContent, useEditor, type Editor, type JSONContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { FormatToolbar } from "@/components/write/format-toolbar";
 import { VersionCompare, type LoadedVersion } from "@/components/write/version-compare";
 import { countLabel, type RailGroup, type RailPiece } from "@/lib/write/rail";
-import { MakeVersion, WriteWorkspace } from "./write-workspace";
-import { ConfirmButton } from "@/components/confirm-button";
+import { WriteWorkspace } from "./write-workspace";
 import { PIECE_STATUSES, labelOf, type PieceStatus } from "@/lib/domain/colleges";
 import { countChars, countWords, limitState, type LimitKind } from "@/lib/domain/count";
 import { HeldSelection } from "@/lib/editor/held-selection";
@@ -26,7 +25,6 @@ import { PieceSync, type SyncStatus } from "@/lib/sync/piece-sync";
 import { colorFor, PieceChannel, type Person } from "@/lib/sync/realtime";
 import { SupabaseUpdateStore } from "@/lib/sync/supabase-store";
 import { listVersions, loadVersion, saveVersion, SNAPSHOT_EVERY, type VersionRow } from "@/lib/sync/versions";
-import { deletePiece } from "../../actions";
 
 export interface PieceMeta {
   id: string;
@@ -88,8 +86,6 @@ export function PieceEditor({
   author,
   collegeName,
   role = "owner",
-  aiPolicy = "allowed",
-  research = "",
   deskId,
   workspace,
 }: {
@@ -101,8 +97,6 @@ export function PieceEditor({
   author: string;
   collegeName: string | null;
   role?: Role;
-  aiPolicy?: "allowed" | "no_drafting";
-  research?: string;
 }) {
   const supabase = supabaseBrowser();
   const owner = role === "owner";
@@ -120,9 +114,28 @@ export function PieceEditor({
   const [text, setText] = useState("");
   const [editor, setEditor] = useState<Editor | null>(null);
   const meta = useMetaSaver(piece.id);
-  // Prompt, Notes and More open above the writing; the prompt starts open when there is one.
-  const [panels, setPanels] = useState({ prompt: !!piece.prompt, notes: false, more: false });
+  // Prompt and Notes open above the writing; the prompt starts open when there is one.
+  const [panels, setPanels] = useState({ prompt: !!piece.prompt, notes: false });
   const togglePanel = (k: keyof typeof panels) => setPanels((p) => ({ ...p, [k]: !p[k] }));
+  /** A fold-out: its button, with what it opens right below it. */
+  const fold = (key: keyof typeof panels, label: string, filled: boolean, content: ReactNode) => (
+    <div>
+      <button
+        type="button"
+        aria-expanded={panels[key]}
+        aria-controls={`${piece.id}-${key}`}
+        onClick={() => togglePanel(key)}
+        className={`rounded-md border px-2.5 py-1 text-sm ${panels[key] ? "border-muted bg-panel text-ink" : "border-line text-muted hover:text-ink"}`}
+      >
+        {label}
+        {filled && !panels[key] && <span aria-hidden className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-accent align-middle" />}
+        <span aria-hidden className="ml-1 text-xs">{panels[key] ? "▴" : "▾"}</span>
+      </button>
+      <div id={`${piece.id}-${key}`} hidden={!panels[key]} className="mt-2">
+        {content}
+      </div>
+    </div>
+  );
 
   // Comparing a version with now: held here so it stays open when the side panel folds.
   const [compare, setCompare] = useState<{ versions: VersionRow[]; id: string } | null>(null);
@@ -363,97 +376,48 @@ export function PieceEditor({
           )}
         </div>
 
-        <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Piece details">
-          {(
-            [
-              ["prompt", "Prompt", !!prompt],
-              ["notes", "Notes", !!notes],
-              ...(owner || !workspace ? ([["more", "More", false]] as const) : []),
-            ] as const
-          ).map(([key, label, filled]) => (
-            <button
-              key={key}
-              type="button"
-              aria-expanded={panels[key]}
-              aria-controls={`${piece.id}-${key}`}
-              onClick={() => togglePanel(key)}
-              className={`rounded-md border px-2.5 py-1 text-sm ${panels[key] ? "border-muted bg-panel text-ink" : "border-line text-muted hover:text-ink"}`}
-            >
-              {label}
-              {filled && !panels[key] && <span aria-hidden className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-accent align-middle" />}
-              <span aria-hidden className="ml-1 text-xs">{panels[key] ? "▴" : "▾"}</span>
-            </button>
-          ))}
-        </div>
-
-        <div id={`${piece.id}-prompt`} hidden={!panels.prompt} className="mt-2">
-          {owner ? (
-            <textarea
-              className="field"
-              rows={3}
-              value={prompt}
-              aria-label="Prompt"
-              placeholder="Paste the question exactly as the college asks it."
-              onChange={(e) => {
-                setPrompt(e.target.value);
-                meta.save({ prompt: e.target.value });
-              }}
-            />
-          ) : (
-            <p className="rounded-md border border-line bg-panel px-3 py-2 text-sm whitespace-pre-wrap">{prompt || "No prompt entered."}</p>
-          )}
-        </div>
-        <div id={`${piece.id}-notes`} hidden={!panels.notes} className="mt-2">
-          {owner ? (
-            <textarea
-              className="field"
-              rows={4}
-              value={notes}
-              aria-label="Notes"
-              placeholder="Ideas, reminders, feedback. Kept apart from the essay and never counted. People you share with can read them."
-              onChange={(e) => {
-                setNotes(e.target.value);
-                meta.save({ notes: e.target.value });
-              }}
-            />
-          ) : (
-            <p className="rounded-md border border-line bg-panel px-3 py-2 text-sm whitespace-pre-wrap">{notes || "No notes."}</p>
-          )}
-        </div>
-        <div id={`${piece.id}-more`} hidden={!panels.more} className="mt-2 flex flex-col gap-3 rounded-md border border-line bg-panel p-3">
-          {owner && (
-            <ChatbotCopy
-              build={() =>
-                chatbotPrompt({
-                  title,
-                  collegeName,
-                  aiPolicy,
-                  prompt,
-                  limitKind,
-                  limitValue,
-                  text,
-                  notes,
-                  research,
-                })
-              }
-            />
-          )}
-          {owner && workspace && <MakeVersion pieceId={piece.id} />}
-          {!workspace && <History pieceId={piece.id} comparingId={compare?.id ?? null} onCompare={openCompare} tick={historyTick} />}
-          {owner && (
-            <div>
-              <ConfirmButton
-                label="Delete piece"
-                question="Delete this piece, its history, notes and suggestions?"
-                onConfirm={async () => {
-                  live?.sync.discard();
-                  await deletePiece(piece.id);
+        <div className="mt-3 flex flex-col gap-2" role="group" aria-label="Piece details">
+          {fold(
+            "prompt",
+            "Prompt",
+            !!prompt,
+            owner ? (
+              <textarea
+                className="field"
+                rows={3}
+                value={prompt}
+                aria-label="Prompt"
+                placeholder="Paste the question exactly as the college asks it."
+                onChange={(e) => {
+                  setPrompt(e.target.value);
+                  meta.save({ prompt: e.target.value });
                 }}
               />
-            </div>
+            ) : (
+              <p className="rounded-md border border-line bg-panel px-3 py-2 text-sm whitespace-pre-wrap">{prompt || "No prompt entered."}</p>
+            ),
+          )}
+          {fold(
+            "notes",
+            "Notes",
+            !!notes,
+            owner ? (
+              <textarea
+                className="field"
+                rows={4}
+                value={notes}
+                aria-label="Notes"
+                placeholder="Ideas, reminders, feedback. Kept apart from the essay and never counted. People you share with can read them."
+                onChange={(e) => {
+                  setNotes(e.target.value);
+                  meta.save({ notes: e.target.value });
+                }}
+              />
+            ) : (
+              <p className="rounded-md border border-line bg-panel px-3 py-2 text-sm whitespace-pre-wrap">{notes || "No notes."}</p>
+            ),
           )}
         </div>
-
         {canWrite && (
           <div className="mt-3 flex flex-wrap items-center gap-3">
             {canEdit && (
@@ -553,7 +517,7 @@ export function PieceEditor({
       countNow={countLabel({ words: countWords(text), chars: countChars(text), kind: limitKind, limit: limitValue })}
       status={pieceStatus}
       editor={editor}
-      history={<History pieceId={piece.id} comparingId={compare?.id ?? null} onCompare={openCompare} tick={historyTick} inPanel />}
+      history={<History pieceId={piece.id} comparingId={compare?.id ?? null} onCompare={openCompare} tick={historyTick} />}
       onDeleteCurrent={() => live?.sync.discard()}
     >
       {body}
@@ -696,16 +660,38 @@ function EssayEditor({
   return <EditorContent editor={editor} />;
 }
 
-/** What a suggestion does, in words; line breaks in it are kept (the list shows them). */
+const cut = (t: string | undefined) => {
+  const s = t ?? "";
+  return s.length > 240 ? `${s.slice(0, 240)}…` : s;
+};
+
+/** What a suggestion does, in words, for screen readers. */
 function describe(s: Suggestion): string {
-  const q = (t: string | undefined) => {
-    const s = t ?? "";
-    return `“${s.slice(0, 240)}${s.length > 240 ? "…" : ""}”`;
-  };
-  if (s.kind === "insert") return `Add ${q(s.body)}`;
-  if (s.kind === "delete") return `Delete ${q(s.quote)}`;
-  return `Replace ${q(s.quote)} with ${q(s.body)}`;
+  if (s.kind === "insert") return `Add “${cut(s.body)}”`;
+  if (s.kind === "delete") return `Delete “${cut(s.quote)}”`;
+  return `Replace “${cut(s.quote)}” with “${cut(s.body)}”`;
 }
+
+/** What a suggestion does, as it looks in the essay: taken out in red, added in green, line breaks kept. */
+function SuggestionText({ s }: { s: Suggestion }) {
+  return (
+    <>
+      <span className="sr-only">{describe(s)}</span>
+      <span aria-hidden className="block font-serif break-words whitespace-pre-wrap">
+        {s.kind !== "insert" && <span className="sugg-cut">{cut(s.quote)}</span>}
+        {s.kind === "replace" && " "}
+        {s.kind !== "delete" && <span className="sugg-add">{cut(s.body)}</span>}
+      </span>
+    </>
+  );
+}
+
+const CARD: Record<Suggestion["kind"], string> = {
+  insert: "border-add/40 bg-add-soft",
+  delete: "border-danger/40 bg-danger-soft",
+  replace: "border-line bg-panel",
+};
+const VERB: Record<Suggestion["kind"], string> = { insert: "Add", delete: "Delete", replace: "Replace" };
 
 function SuggestionsPanel({ live, editor, role, me }: { live: Live; editor: Editor; role: Role; me: string }) {
   const { store } = live;
@@ -760,15 +746,18 @@ function SuggestionsPanel({ live, editor, role, me }: { live: Live; editor: Edit
         {open.map((s) => {
           const r = resolveSuggestion(editor.state, s);
           return (
-            <li key={s.id} className="rounded-md border border-line bg-panel p-2 text-sm" data-testid="suggestion">
+            <li key={s.id} className={`rounded-md border p-2 text-sm ${CARD[s.kind]}`} data-testid="suggestion" data-kind={s.kind}>
               <button type="button" className="block w-full text-left" onClick={() => pick(s.id)}>
-                <span className="block text-xs text-muted">
+                <span className="mb-1 block text-xs text-muted">
+                  <span aria-hidden className={`font-medium ${s.kind === "insert" ? "text-add" : s.kind === "delete" ? "text-danger" : "text-ink"}`}>
+                    {VERB[s.kind]} ·{" "}
+                  </span>
                   {s.author_name || "Someone"}
                   {s.source === "ai" && " · AI"}
                   {r.stale && !r.gone && " · the text changed since"}
                   {r.gone && " · its text is gone"}
                 </span>
-                <span className="break-words whitespace-pre-wrap">{describe(s)}</span>
+                <SuggestionText s={s} />
                 {s.note && <span className="mt-1 block text-xs text-muted">Why: {s.note}</span>}
               </button>
               <div className="mt-2 flex gap-2">
@@ -827,120 +816,48 @@ function History({
   comparingId,
   onCompare,
   tick,
-  inPanel = false,
 }: {
   pieceId: string;
   comparingId: string | null;
   onCompare: (versions: VersionRow[], id: string) => void;
   /** Bumped after a restore, to list the version it saved. */
   tick: number;
-  inPanel?: boolean;
 }) {
   const supabase = supabaseBrowser();
-  const [openState, setOpen] = useState(false);
-  // In the side panel it is always open (the tool button opens and closes the panel).
-  const open = inPanel || openState;
   const [versions, setVersions] = useState<VersionRow[] | null>(null);
 
   useEffect(() => {
-    if (open) listVersions(supabase, pieceId).then(setVersions, () => setVersions([]));
-  }, [open, supabase, pieceId, tick]);
+    listVersions(supabase, pieceId).then(setVersions, () => setVersions([]));
+  }, [supabase, pieceId, tick]);
 
   return (
-    <div className={inPanel ? "p-3" : ""}>
-      {!inPanel && (
-        <button type="button" className="label cursor-pointer" onClick={() => setOpen(!open)} aria-expanded={open}>
-          History {open ? "▾" : "▸"}
-        </button>
-      )}
-      {open && (
-        <div className="flex flex-col gap-2">
-          {versions === null ? (
-            <p className="text-sm text-muted">Loading…</p>
-          ) : versions.length === 0 ? (
-            <p className="text-sm text-muted">No saved versions yet.</p>
-          ) : (
-            <>
-              <p className="text-xs text-muted">Pick a version to see it beside the piece as it is now, with what changed since.</p>
-              <ul className="max-h-64 overflow-y-auto rounded-md border border-line bg-panel text-sm" aria-label="Saved versions">
-                {versions.map((v) => (
-                  <li key={v.id}>
-                    <button
-                      type="button"
-                      className={`flex w-full justify-between gap-2 px-2 py-1 text-left hover:bg-bg ${comparingId === v.id ? "bg-accent-soft" : ""}`}
-                      onClick={() => onCompare(versions, v.id)}
-                    >
-                      <span>{new Date(v.at).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}</span>
-                      <span className="text-muted">{v.words} words</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </div>
+    <div className="flex flex-col gap-2 p-3">
+      {versions === null ? (
+        <p className="text-sm text-muted">Loading…</p>
+      ) : versions.length === 0 ? (
+        <p className="text-sm text-muted">No saved versions yet.</p>
+      ) : (
+        <>
+          <p className="text-xs text-muted">Pick a version to see it beside the piece as it is now, with what changed since.</p>
+          <ul className="max-h-[70vh] overflow-y-auto rounded-md border border-line bg-panel text-sm" aria-label="Saved versions">
+            {versions.map((v) => (
+              <li key={v.id}>
+                <button
+                  type="button"
+                  className={`flex w-full justify-between gap-2 px-2 py-1 text-left hover:bg-bg ${comparingId === v.id ? "bg-accent-soft" : ""}`}
+                  onClick={() => onCompare(versions, v.id)}
+                >
+                  <span>{new Date(v.at).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}</span>
+                  <span className="text-muted">{v.words} words</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
     </div>
   );
 }
-
-/** Everything a chatbot needs to help with this piece, with the desk's rules. */
-function chatbotPrompt(p: {
-  title: string;
-  collegeName: string | null;
-  aiPolicy: "allowed" | "no_drafting";
-  prompt: string;
-  limitKind: LimitKind;
-  limitValue: number | null;
-  text: string;
-  notes: string;
-  research: string;
-}): string {
-  const limit =
-    p.limitKind === "none" || !p.limitValue ? "no limit" : `${p.limitValue} ${p.limitKind === "chars" ? "characters" : "words"}`;
-  return [
-    "I'm a high school senior working on a college application essay. Help me as a skilled college counselor and writing partner.",
-    "",
-    `Piece: ${p.title}${p.collegeName ? ` for ${p.collegeName}` : ""}`,
-    `Prompt: ${p.prompt || "(not entered)"}`,
-    `Limit: ${limit}`,
-    ...(p.aiPolicy === "no_drafting" ? [`Note: I marked ${p.collegeName ?? "this college"} as not allowing AI help with drafting.`] : []),
-    "",
-    "My draft:",
-    p.text || "(I haven't started yet.)",
-    ...(p.notes ? ["", "My notes:", p.notes] : []),
-    ...(p.research ? ["", `My research on ${p.collegeName}:`, p.research] : []),
-    "",
-    "What I'd like: ",
-  ].join("\n");
-}
-
-function ChatbotCopy({ build }: { build: () => string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <div>
-      <p className="label">Ask a chatbot</p>
-      <button
-        type="button"
-        className="btn w-full"
-        onClick={async () => {
-          await navigator.clipboard.writeText(build());
-          setCopied(true);
-          setTimeout(() => setCopied(false), 4000);
-        }}
-      >
-        {copied ? "Copied. Paste it into a chat." : "Copy this piece for a chatbot"}
-      </button>
-      <p className="mt-1 text-xs text-muted">
-        Copies the prompt, your draft, notes and research, for{" "}
-        <a className="underline" href="https://claude.ai/new" target="_blank" rel="noreferrer">Claude</a> or{" "}
-        <a className="underline" href="https://chatgpt.com/" target="_blank" rel="noreferrer">ChatGPT</a>. To have edits arrive here
-        as suggestions, connect one in Settings.
-      </p>
-    </div>
-  );
-}
-
 
 type EditMode = "editing" | "suggesting";
 const modeKey = (role: Role) => `desk:mode:${role}`;
