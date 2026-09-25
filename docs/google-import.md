@@ -3,7 +3,8 @@
 The Import page can read essays straight from a student's Google Drive: they pick the docs in
 Google's own file picker, and every tab of a doc becomes its own piece. It asks only for access to
 the files they pick (the `drive.file` scope, which Google does not require an app review for), and
-everything happens in the student's browser: the docs never pass through this site's server.
+the docs are read in the student's browser. Only the text of the pieces they choose to import is
+sent to this site's server, to save on their desk.
 
 It needs a free Google Cloud project with three values. Without them the Import page still
 works with uploaded Word files, Drive folder downloads (.zip) and pasted text.

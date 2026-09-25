@@ -4,7 +4,8 @@ import { googleDocSources, type GDoc, type SourceDoc } from "./sources";
  * Importing straight from Google Drive, in the browser: Google's sign-in asks the student for
  * access to only the files they pick (the drive.file scope), Google's Picker lets them pick
  * docs (several at once, from inside a folder), and the Docs API reads each one with all of its
- * tabs. Nothing goes through this site's server, and it never sees the rest of their Drive.
+ * tabs. Only the text of the pieces they choose to import goes to this site's server (to save
+ * it), and it never sees the rest of their Drive.
  *
  * Needs a Google Cloud project: NEXT_PUBLIC_GOOGLE_CLIENT_ID (OAuth client), NEXT_PUBLIC_GOOGLE_API_KEY
  * and NEXT_PUBLIC_GOOGLE_APP_ID (the project number). See docs/google-import.md.

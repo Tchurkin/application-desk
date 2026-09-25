@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LegalLinks } from "@/components/legal";
 import { supabaseServer } from "@/lib/supabase/server";
 import { JoinForm } from "./join-form";
 
@@ -30,6 +31,7 @@ export default async function JoinPage(props: PageProps<"/join/[token]">) {
           <JoinForm token={token} needsPassword={!!info.needs_password} />
         </>
       )}
+      <LegalLinks className="mt-10 text-xs text-muted" />
     </main>
   );
 }

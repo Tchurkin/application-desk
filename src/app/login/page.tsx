@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LegalLinks } from "@/components/legal";
 import { codeSignIn, googleSignIn } from "@/lib/auth/mode";
 import { continueWithGoogle, signIn, signUp } from "./actions";
 import { CodeForm, SendCodeForm } from "./code-sign-in";
@@ -93,6 +94,24 @@ export default async function LoginPage(props: PageProps<"/login">) {
           )}
         </p>
       )}
+
+      <p className="mt-8 text-xs text-muted">
+        {signup ? (
+          <>
+            By starting a desk you agree to the{" "}
+            <Link className="underline underline-offset-2" href="/terms">
+              Terms
+            </Link>{" "}
+            and the{" "}
+            <Link className="underline underline-offset-2" href="/privacy">
+              Privacy policy
+            </Link>
+            .
+          </>
+        ) : (
+          <LegalLinks />
+        )}
+      </p>
     </main>
   );
 }
