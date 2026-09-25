@@ -123,6 +123,78 @@ export function PieceEditor({
   // Prompt, Notes and More open above the writing; the prompt starts open when there is one.
   const [panels, setPanels] = useState({ prompt: !!piece.prompt, notes: false, more: false });
   const togglePanel = (k: keyof typeof panels) => setPanels((p) => ({ ...p, [k]: !p[k] }));
+
+  // Comparing a version with now: held here so it stays open when the side panel folds.
+  const [compare, setCompare] = useState<{ versions: VersionRow[]; id: string } | null>(null);
+  const [historyTick, setHistoryTick] = useState(0);
+  const [restore, setRestore] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
+  const restoring = useRef(false);
+  const comparingId = useRef<string | null>(null);
+  useEffect(() => {
+    comparingId.current = compare?.id ?? null;
+  }, [compare]);
+
+  const loadForCompare = useCallback(
+    async (id: string): Promise<LoadedVersion> => {
+      const full = await loadVersion(supabase, id);
+      return { text: full.plain_text, content: full.content as JSONContent };
+    },
+    [supabase],
+  );
+
+  async function restoreVersion(id: string, v: LoadedVersion) {
+    if (!editor || restoring.current) return;
+    restoring.current = true;
+    setRestore({ busy: true, error: null });
+    try {
+      // Today's text is kept as a version first; if that can't be saved, nothing is restored.
+      const now = textOf(editor);
+      if (now.trim() && now !== v.text) {
+        const saved = await saveVersion(supabase, piece.id, `${me.name || "You"}, before restoring`, editor.getJSON(), now).catch(() => false);
+        if (!saved) {
+          setRestore({ busy: false, error: "Couldn't save your current text to History first, so nothing was restored. Check your connection and try again." });
+          return;
+        }
+      }
+      // Closed, or moved to another version, while that was saving: leave the essay alone.
+      if (comparingId.current !== id || editor.isDestroyed) return;
+      // An ordinary edit: it syncs to everyone like any other change.
+      editor
+        .chain()
+        .command(({ tr }) => {
+          tr.setMeta(DIRECT_EDIT, true);
+          return true;
+        })
+        .setContent(v.content)
+        .run();
+      setCompare(null);
+      setHistoryTick((t) => t + 1);
+      setRestore({ busy: false, error: null });
+    } catch (e) {
+      setRestore({ busy: false, error: `Couldn't restore it (${(e as Error).message}).` });
+    } finally {
+      restoring.current = false;
+      setRestore((r) => (r.busy ? { ...r, busy: false } : r));
+    }
+  }
+
+  const openCompare = (versions: VersionRow[], id: string) => {
+    setRestore({ busy: false, error: null });
+    setCompare({ versions, id });
+  };
+  const compareView = compare && (
+    <VersionCompare
+      versions={compare.versions}
+      id={compare.id}
+      load={loadForCompare}
+      editor={editor}
+      onPick={(id) => !restoring.current && setCompare((c) => (c ? { ...c, id } : c))}
+      onRestore={owner && editor ? (v) => void restoreVersion(compare.id, v) : null}
+      restoring={restore.busy}
+      error={restore.error}
+      onClose={() => setCompare(null)}
+    />
+  );
   // Editing or Suggesting. The student and people on a "can edit" link switch between them (the
   // student starts in Editing, others in Suggesting; the choice is remembered per browser).
   // "Can suggest" links only suggest, and read-only links only read.
@@ -367,7 +439,7 @@ export function PieceEditor({
             />
           )}
           {owner && workspace && <MakeVersion pieceId={piece.id} />}
-          {!workspace && <History pieceId={piece.id} editor={editor} canRestore={owner} author={me.name} />}
+          {!workspace && <History pieceId={piece.id} comparingId={compare?.id ?? null} onCompare={openCompare} tick={historyTick} />}
           {owner && (
             <div>
               <ConfirmButton
@@ -464,7 +536,14 @@ export function PieceEditor({
       </aside>
     </div>
   );
-  if (!workspace) return body;
+  if (!workspace) {
+    return (
+      <>
+        {body}
+        {compareView}
+      </>
+    );
+  }
   return (
     <WriteWorkspace
       workspace={workspace}
@@ -474,10 +553,11 @@ export function PieceEditor({
       countNow={countLabel({ words: countWords(text), chars: countChars(text), kind: limitKind, limit: limitValue })}
       status={pieceStatus}
       editor={editor}
-      history={<History pieceId={piece.id} editor={editor} canRestore author={me.name} inPanel />}
+      history={<History pieceId={piece.id} comparingId={compare?.id ?? null} onCompare={openCompare} tick={historyTick} inPanel />}
       onDeleteCurrent={() => live?.sync.discard()}
     >
       {body}
+      {compareView}
     </WriteWorkspace>
   );
 }
@@ -650,7 +730,9 @@ function SuggestionsPanel({ live, editor, role, me }: { live: Live; editor: Edit
         <p className="text-sm text-muted">
           {role === "owner"
             ? "Suggestions from the people you share with, and from Claude, appear here beside your essay."
-            : "None yet. Your suggestions appear here for the writer to accept or decline."}
+            : role === "view"
+              ? "No suggestions yet."
+              : "None yet. Your suggestions appear here for the writer to accept or decline."}
         </p>
       </div>
     );
@@ -736,18 +818,22 @@ function SuggestionsPanel({ live, editor, role, me }: { live: Live; editor: Edit
   );
 }
 
+/**
+ * The piece's saved versions. Picking one opens the side-by-side comparison, which the piece
+ * editor holds (so it stays open when the side panel folds).
+ */
 function History({
   pieceId,
-  editor,
-  canRestore,
-  author,
+  comparingId,
+  onCompare,
+  tick,
   inPanel = false,
 }: {
   pieceId: string;
-  /** The piece as it is now, to compare with (and to restore into, for the student). */
-  editor: Editor | null;
-  canRestore: boolean;
-  author: string;
+  comparingId: string | null;
+  onCompare: (versions: VersionRow[], id: string) => void;
+  /** Bumped after a restore, to list the version it saved. */
+  tick: number;
   inPanel?: boolean;
 }) {
   const supabase = supabaseBrowser();
@@ -755,39 +841,10 @@ function History({
   // In the side panel it is always open (the tool button opens and closes the panel).
   const open = inPanel || openState;
   const [versions, setVersions] = useState<VersionRow[] | null>(null);
-  const [comparing, setComparing] = useState<string | null>(null);
 
-  const reload = useCallback(() => listVersions(supabase, pieceId).then(setVersions, () => setVersions([])), [supabase, pieceId]);
   useEffect(() => {
-    if (open) void reload();
-  }, [open, reload]);
-
-  const load = useCallback(
-    async (id: string): Promise<LoadedVersion> => {
-      const full = await loadVersion(supabase, id);
-      return { text: full.plain_text, content: full.content as JSONContent };
-    },
-    [supabase],
-  );
-
-  async function restore(v: LoadedVersion) {
-    if (!editor) return;
-    // Today's text is kept as a version first, so restoring never loses anything.
-    const now = textOf(editor);
-    if (now.trim() && now !== v.text) await saveVersion(supabase, pieceId, `${author || "You"}, before restoring`, editor.getJSON(), now);
-    // An ordinary edit: it syncs to everyone like any other change.
-    editor
-      .chain()
-      .command(({ tr }) => {
-        tr.setMeta(DIRECT_EDIT, true);
-        return true;
-      })
-      .setContent(v.content)
-      .run();
-    setComparing(null);
-    if (!inPanel) setOpen(false);
-    void reload();
-  }
+    if (open) listVersions(supabase, pieceId).then(setVersions, () => setVersions([]));
+  }, [open, supabase, pieceId, tick]);
 
   return (
     <div className={inPanel ? "p-3" : ""}>
@@ -810,8 +867,8 @@ function History({
                   <li key={v.id}>
                     <button
                       type="button"
-                      className={`flex w-full justify-between gap-2 px-2 py-1 text-left hover:bg-bg ${comparing === v.id ? "bg-accent-soft" : ""}`}
-                      onClick={() => setComparing(v.id)}
+                      className={`flex w-full justify-between gap-2 px-2 py-1 text-left hover:bg-bg ${comparingId === v.id ? "bg-accent-soft" : ""}`}
+                      onClick={() => onCompare(versions, v.id)}
                     >
                       <span>{new Date(v.at).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}</span>
                       <span className="text-muted">{v.words} words</span>
@@ -822,17 +879,6 @@ function History({
             </>
           )}
         </div>
-      )}
-      {comparing && versions && (
-        <VersionCompare
-          versions={versions}
-          id={comparing}
-          load={load}
-          editor={editor}
-          onPick={setComparing}
-          onRestore={canRestore && editor ? (v) => void restore(v) : null}
-          onClose={() => setComparing(null)}
-        />
       )}
     </div>
   );

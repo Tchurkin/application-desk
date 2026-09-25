@@ -1,7 +1,7 @@
 "use client";
 
 import type { Editor, JSONContent } from "@tiptap/react";
-import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Modal } from "@/components/write/modal";
 import type { VersionRow } from "@/lib/sync/versions";
 import { wordDiff, type DiffSegment } from "@/lib/write/diff";
@@ -61,6 +61,21 @@ function Marked({ segments }: { segments: DiffSegment[] }) {
   );
 }
 
+/** A button that stays focusable while unavailable (disabling the focused button would drop focus out of the dialog). */
+function StepButton({ off, onClick, label, children, primary = false }: { off: boolean; onClick: () => void; label?: string; children: React.ReactNode; primary?: boolean }) {
+  return (
+    <button
+      type="button"
+      className={`btn ${primary ? "btn-primary" : ""} ${off ? "cursor-not-allowed opacity-50" : ""}`}
+      aria-disabled={off}
+      aria-label={label}
+      onClick={() => !off && onClick()}
+    >
+      {children}
+    </button>
+  );
+}
+
 export function VersionCompare({
   versions,
   id,
@@ -68,6 +83,8 @@ export function VersionCompare({
   editor,
   onPick,
   onRestore,
+  restoring = false,
+  error = null,
   onClose,
 }: {
   /** Newest first, as the History list shows them. */
@@ -80,11 +97,15 @@ export function VersionCompare({
   onPick: (id: string) => void;
   /** Restore the version; null when this person can't. */
   onRestore: ((v: LoadedVersion) => void) | null;
+  /** A restore is under way: nothing else can be done until it finishes. */
+  restoring?: boolean;
+  /** Why the last restore didn't happen. */
+  error?: string | null;
   onClose: () => void;
 }) {
   const ids = useId();
   const [loaded, setLoaded] = useState<Record<string, LoadedVersion>>({});
-  const [failed, setFailed] = useState<string | null>(null);
+  const [failed, setFailed] = useState<Record<string, string>>({});
   const now = useLiveText(editor);
   const at = versions.findIndex((v) => v.id === id);
   const version = versions[at];
@@ -95,7 +116,7 @@ export function VersionCompare({
     let alive = true;
     load(id).then(
       (v) => alive && setLoaded((l) => ({ ...l, [id]: v })),
-      (e: Error) => alive && setFailed(e.message || "Couldn't load that version."),
+      (e: Error) => alive && setFailed((f) => ({ ...f, [id]: e.message || "Couldn't load that version." })),
     );
     return () => {
       alive = false;
@@ -116,28 +137,45 @@ export function VersionCompare({
     }
     const range = from.scrollHeight - from.clientHeight;
     const ratio = range > 0 ? from.scrollTop / range : 0;
-    echo.current = to;
+    const before = to.scrollTop;
     to.scrollTop = ratio * (to.scrollHeight - to.clientHeight);
+    // Only a pane that actually moved answers with a scroll event of its own.
+    if (to.scrollTop !== before) echo.current = to;
   };
 
   const older = at >= 0 && at < versions.length - 1 ? versions[at + 1] : null;
   const newer = at > 0 ? versions[at - 1] : null;
 
-  const onKeyDown = (e: KeyboardEvent) => {
-    const t = e.target as HTMLElement;
-    if (t.closest("input, textarea, select")) return;
-    if (e.key === "ArrowLeft" && older) {
-      e.preventDefault();
-      onPick(older.id);
-    } else if (e.key === "ArrowRight" && newer) {
-      e.preventDefault();
-      onPick(newer.id);
-    }
-  };
+  // ← and → wherever focus is (and Esc, if focus has fallen out of the dialog).
+  const keys = useRef({ older, newer, restoring, onPick, onClose });
+  useEffect(() => {
+    keys.current = { older, newer, restoring, onPick, onClose };
+  });
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t?.closest?.("input, textarea, select, [contenteditable='true']")) return;
+      const k = keys.current;
+      if (e.key === "ArrowLeft" && k.older && !k.restoring) {
+        e.preventDefault();
+        k.onPick(k.older.id);
+      } else if (e.key === "ArrowRight" && k.newer && !k.restoring) {
+        e.preventDefault();
+        k.onPick(k.newer.id);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        k.onClose();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+
+  const pane = "essay min-h-0 flex-1 overflow-y-auto px-4 pb-6 font-serif leading-relaxed whitespace-pre-wrap outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset";
 
   return (
     <Modal labelledBy={`${ids}-h`} onClose={onClose} placement="fill" className="flex flex-col">
-      <div className="flex min-h-0 flex-1 flex-col" onKeyDown={onKeyDown} data-testid="version-compare">
+      <div className="flex min-h-0 flex-1 flex-col" data-testid="version-compare">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line px-4 py-3">
           <div className="min-w-0 flex-1">
             <h2 id={`${ids}-h`} className="font-serif text-lg">
@@ -149,47 +187,62 @@ export function VersionCompare({
                 ? diff.removed || diff.added
                   ? `Since then: ${diff.removed} word${diff.removed === 1 ? "" : "s"} taken out, ${diff.added} added`
                   : "Nothing has changed since then."
-                : failed ?? "Loading…"}
+                : (failed[id] ?? "Loading…")}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <button type="button" className="btn" disabled={!older} onClick={() => older && onPick(older.id)} aria-label="Older version">
+            <StepButton off={!older || restoring} onClick={() => older && onPick(older.id)} label="Older version">
               ← Older
-            </button>
+            </StepButton>
             <span className="text-xs text-muted">
               {at + 1} of {versions.length}
             </span>
-            <button type="button" className="btn" disabled={!newer} onClick={() => newer && onPick(newer.id)} aria-label="Newer version">
+            <StepButton off={!newer || restoring} onClick={() => newer && onPick(newer.id)} label="Newer version">
               Newer →
-            </button>
+            </StepButton>
             {onRestore && (
-              <button type="button" className="btn btn-primary" disabled={!current} onClick={() => current && onRestore(current)}>
-                Restore this version
-              </button>
+              <StepButton primary off={!current || restoring} onClick={() => current && onRestore(current)}>
+                {restoring ? "Restoring…" : "Restore this version"}
+              </StepButton>
             )}
             <button type="button" className="btn" onClick={onClose} data-autofocus>
               Close
             </button>
           </div>
+          {error && (
+            <p role="alert" className="w-full rounded-md bg-danger-soft px-3 py-1.5 text-sm text-danger">
+              {error}
+            </p>
+          )}
         </div>
         <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-2">
-          <section aria-label="Then" className="flex min-h-0 flex-col border-b border-line md:border-r md:border-b-0">
-            <p className="label px-4 pt-3">Then</p>
+          <section className="flex min-h-0 flex-col border-b border-line md:border-r md:border-b-0">
+            <p className="label px-4 pt-3" id={`${ids}-then`}>
+              Then
+            </p>
             <div
               ref={left}
+              role="region"
+              aria-labelledby={`${ids}-then`}
+              tabIndex={0}
               onScroll={() => follow(left.current, right.current)}
-              className="essay min-h-0 flex-1 overflow-y-auto px-4 pb-6 font-serif leading-relaxed whitespace-pre-wrap"
+              className={pane}
               data-testid="version-preview"
             >
               {diff ? diff.left.length ? <Marked segments={diff.left} /> : <em className="text-muted">(empty)</em> : null}
             </div>
           </section>
-          <section aria-label="Now" className="flex min-h-0 flex-col">
-            <p className="label px-4 pt-3">Now</p>
+          <section className="flex min-h-0 flex-col">
+            <p className="label px-4 pt-3" id={`${ids}-now`}>
+              Now
+            </p>
             <div
               ref={right}
+              role="region"
+              aria-labelledby={`${ids}-now`}
+              tabIndex={0}
               onScroll={() => follow(right.current, left.current)}
-              className="essay min-h-0 flex-1 overflow-y-auto px-4 pb-6 font-serif leading-relaxed whitespace-pre-wrap"
+              className={pane}
               data-testid="version-now"
             >
               {diff ? diff.right.length ? <Marked segments={diff.right} /> : <em className="text-muted">(empty)</em> : null}

@@ -47,9 +47,13 @@ export async function saveVersion(
   });
   // A deleted piece refuses the insert; nothing to thin.
   if (error) return false;
-  const all = await listVersions(supabase, pieceId);
-  const keep = new Set(trimHistory(all.map((v) => ({ ...v, at: Date.parse(v.at) })), Date.now()).map((v) => v.id));
-  const drop = all.filter((v) => !keep.has(v.id)).map((v) => v.id);
-  if (drop.length) await supabase.from("piece_versions").delete().in("id", drop);
+  try {
+    const all = await listVersions(supabase, pieceId);
+    const keep = new Set(trimHistory(all.map((v) => ({ ...v, at: Date.parse(v.at) })), Date.now()).map((v) => v.id));
+    const drop = all.filter((v) => !keep.has(v.id)).map((v) => v.id);
+    if (drop.length) await supabase.from("piece_versions").delete().in("id", drop);
+  } catch {
+    // Thinning can wait for the next save; the version itself is kept.
+  }
   return true;
 }

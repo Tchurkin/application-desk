@@ -77,8 +77,7 @@ export default async function BoardPage() {
 
       <section className="mt-10">
         <h2 className="mb-1 font-serif text-xl">Independent pieces</h2>
-        <p className="mb-2 text-sm text-muted">Pieces of their own, not tied to one college, like your personal statement.</p>
-        <p className="mb-3 text-sm text-muted">Writing that isn&apos;t tied to one college, like the Common App personal essay.</p>
+        <p className="mb-3 text-sm text-muted">Pieces of their own, not tied to one college, like your personal statement.</p>
         <PieceChips pieces={shared} pieceHref={pieceHref} />
         <form action={addPiece.bind(null, null)} className="flex flex-wrap gap-2">
           <input className="field max-w-xs" name="title" placeholder="e.g. Personal essay" required aria-label="New independent piece title" />
