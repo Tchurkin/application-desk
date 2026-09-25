@@ -198,4 +198,81 @@ export function registerManageTools(server: McpServer, token: string) {
       }
     },
   );
+
+  const recommenderId = z.string().uuid().describe("The recommender_id from list_my_desk.");
+
+  server.registerTool(
+    "save_recommender",
+    {
+      title: "Add or change a recommender",
+      description:
+        "Add someone writing the student's recommendation letters (a teacher, their school counselor, a coach), or change one's name or role (pass recommender_id). " +
+        "Each shows on the board in a color of their own. To say which colleges they write for, pass college_ids here or use set_letter.",
+      inputSchema: z.object({
+        recommender_id: recommenderId.optional().describe("Omit to add a new recommender."),
+        name: z.string().min(1).max(120).optional().describe('As the student calls them, e.g. "Ms. Rivera".'),
+        role: z.string().max(200).optional().describe('e.g. "Physics teacher" or "School counselor".'),
+        college_ids: z.array(z.string().uuid()).max(60).optional().describe("Colleges this recommender writes a letter for (added as not asked yet)."),
+      }),
+      annotations: { readOnlyHint: false, destructiveHint: false },
+    },
+    async ({ recommender_id, college_ids, ...fields }) => {
+      try {
+        if (!recommender_id && !fields.name) return fail("A new recommender needs a name.");
+        const id = (await rpc("connector_save_recommender", {
+          token,
+          recommender: recommender_id ?? null,
+          fields: defined(fields),
+        })) as string;
+        for (const college of college_ids ?? []) {
+          await rpc("connector_set_letter", { token, recommender: id, college, letter_status: "planned" });
+        }
+        const added = college_ids?.length ? ` Writing for ${college_ids.length} college${college_ids.length === 1 ? "" : "s"}.` : "";
+        return text(`${recommender_id ? "Recommender updated" : "Recommender added"} [recommender_id: ${id}].${added}`);
+      } catch (e) {
+        return fail((e as Error).message);
+      }
+    },
+  );
+
+  server.registerTool(
+    "set_letter",
+    {
+      title: "Set a recommendation letter",
+      description:
+        "Say that a recommender writes a letter for a college, and how far along it is: planned (not asked yet), requested (asked), submitted. status none takes the letter off that college.",
+      inputSchema: z.object({
+        recommender_id: recommenderId,
+        college_id: z.string().uuid().describe("The college_id from list_my_desk."),
+        status: z.enum(["planned", "requested", "submitted", "none"]),
+      }),
+      annotations: { readOnlyHint: false, destructiveHint: false },
+    },
+    async ({ recommender_id, college_id, status }) => {
+      try {
+        await rpc("connector_set_letter", { token, recommender: recommender_id, college: college_id, letter_status: status });
+        return text(status === "none" ? "Letter taken off." : "Letter set.");
+      } catch (e) {
+        return fail((e as Error).message);
+      }
+    },
+  );
+
+  server.registerTool(
+    "delete_recommender",
+    {
+      title: "Remove a recommender",
+      description: "Remove a recommender and every letter they were down to write.",
+      inputSchema: z.object({ recommender_id: recommenderId }),
+      annotations: { readOnlyHint: false, destructiveHint: true },
+    },
+    async ({ recommender_id }) => {
+      try {
+        await rpc("connector_delete_recommender", { token, recommender: recommender_id });
+        return text("Recommender removed.");
+      } catch (e) {
+        return fail((e as Error).message);
+      }
+    },
+  );
 }

@@ -40,38 +40,34 @@ test("the tiles count colleges, submitted pieces and words, and show the next de
   await expect(page.getByTestId("tile-colleges")).toContainText("1 fully submitted");
 });
 
-test("the deadlines table orders by due, sinks a submitted college and opens the first unfinished piece", async ({ page }) => {
+test("each college's lane shows its details, opens its pieces, and links to its page", async ({ page }) => {
   await signUp(page, "deadlines");
-  await addCollege(page, "Late College", { deadline: "2030-12-01" });
-  const early = await addCollege(page, "Early College", { deadline: "2030-10-15" });
+  await addCollege(page, "Late College", { deadline: "2030-12-01", letters: false });
+  const early = await addCollege(page, "Early College", { deadline: "2030-10-15", system: "coalition" });
   await addPiece(page, "Finished answer");
   await setStatus(page, "final");
   await page.goto(`/desk/college/${early}`);
   const open = await addPiece(page, "Open answer");
-  await addCollege(page, "Done College", { deadline: "2030-10-01" });
-  await addPiece(page, "Done essay");
-  await setStatus(page, "submitted");
-
-  const table = page.getByRole("table", { name: "Deadlines" });
-  const earlyLink = table.getByRole("link", { name: "Early College", exact: true });
-  await expect(async () => {
-    await page.goto("/desk");
-    expect(await table.getByRole("rowheader").allTextContents()).toEqual(["Early College", "Late College", "Done College"]);
-    // "Finished answer" is final, so the college opens on the piece still to write.
-    expect(await earlyLink.getAttribute("href")).toContain(open);
-  }).toPass({ timeout: 20_000 });
-
-  await expect(table.getByRole("row").filter({ hasText: "Early College" })).toContainText("0/2 submitted");
-  await expect(table.getByRole("row").filter({ hasText: "Late College" })).toContainText("No pieces");
-  // A college with no pieces opens its page, where pieces are added.
-  await expect(table.getByRole("link", { name: "Late College", exact: true })).toHaveAttribute("href", /\/desk\/college\//);
-
-  await earlyLink.click();
-  await expect(page).toHaveURL(new RegExp(open));
-  await expect(essay(page)).toBeVisible();
 
   await page.goto("/desk");
-  await table.getByRole("link", { name: "Details for Late College" }).click();
+  const board = page.getByRole("list", { name: "Colleges", exact: true });
+  const earlyLane = board.getByRole("listitem", { name: "Early College", exact: true });
+  await expect(earlyLane).toContainText("Coalition");
+  await expect(earlyLane.getByTitle("Regular Decision")).toHaveText("RD");
+  await expect(earlyLane).toContainText("Oct 15");
+  await expect(earlyLane).toContainText("0/2 submitted");
+  await expect(earlyLane.getByRole("group", { name: "Letters for Early College" })).toContainText("none yet");
+  await expect(board.getByRole("listitem", { name: "Late College", exact: true }).getByRole("group", { name: "Letters for Late College" })).toContainText(
+    "none needed",
+  );
+  await expect(earlyLane.getByRole("list", { name: "Final" }).getByRole("slider")).toHaveCount(1);
+
+  // A card opens its piece; the college's name opens its page.
+  await earlyLane.getByRole("slider", { name: "Open answer" }).click();
+  await expect(page).toHaveURL(new RegExp(open));
+  await expect(essay(page)).toBeVisible();
+  await page.goto("/desk");
+  await board.getByRole("link", { name: "Late College", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Late College", level: 1 })).toBeVisible();
 });
 

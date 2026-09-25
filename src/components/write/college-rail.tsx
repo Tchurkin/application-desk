@@ -7,6 +7,7 @@ import { labelOf, PIECE_STATUSES, type PieceStatus } from "@/lib/domain/colleges
 import { PREF } from "@/lib/write/layout";
 import { countLabel, groupMeta, pickCollegePiece, SHARED, type RailGroup, type RailPiece } from "@/lib/write/rail";
 import { usePref, writePref } from "./hooks";
+import { ChevronIcon } from "./icons";
 
 const DOT: Record<PieceStatus, string> = {
   not_started: "border border-muted bg-transparent",
@@ -97,7 +98,16 @@ export function CollegeRail({
     }
     // Already on it: the click folds or unfolds instead.
     if (target.id === currentId) setOpen(g.key, !isOpen(g));
-    else router.push(pieceHref(target.id));
+    else {
+      // Unfold at once; the piece follows as soon as it has loaded.
+      if (!isOpen(g)) setOpen(g.key, true);
+      router.push(pieceHref(target.id));
+    }
+  };
+
+  /** Start loading a piece the pointer is over, so clicking it opens it sooner. */
+  const warm = (id: string | undefined) => {
+    if (id && id !== currentId) router.prefetch(pieceHref(id));
   };
 
   const activate = (item: Item) => {
@@ -199,6 +209,7 @@ export function CollegeRail({
           e.stopPropagation();
           if (!here) router.push(pieceHref(p.id));
         }}
+        onMouseEnter={() => warm(p.id)}
         title={p.title}
         className={`flex cursor-pointer items-center gap-2 pr-3 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset ${indent} ${
           level === 1 ? `border-l-2 py-2 ${here ? "border-accent" : "border-transparent"}` : "py-1"
@@ -239,6 +250,7 @@ export function CollegeRail({
                 current ? "border-accent" : "border-transparent"
               } ${g.finished ? "opacity-60" : ""}`}
               onClick={() => openGroup(g)}
+              onMouseEnter={() => warm(pickCollegePiece(g.pieces)?.id)}
               title={g.total ? "Open the first piece still being worked on" : undefined}
             >
               <span
@@ -251,7 +263,7 @@ export function CollegeRail({
                   setOpen(g.key, !open);
                 }}
               >
-                ▶
+                <ChevronIcon />
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-medium">{g.name}</span>

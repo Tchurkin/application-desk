@@ -2,7 +2,7 @@ import { labelOf, PIECE_STATUSES, type PieceStatus } from "@/lib/domain/colleges
 import { STAGES } from "./stages";
 
 /*
- * The Progress board is derived, never edited as cards: one lane per college, built from the
+ * The board's lanes are derived, never edited as cards: one lane per college, built from the
  * desk's pieces, in the same urgency order as the Write rail. The shapes here are the subset
  * of CollegeRow / PieceRow the board needs, so loadDesk's rows fit them as they are.
  */
@@ -11,6 +11,11 @@ export interface ProgressCollege {
   id: string;
   name: string;
   deadline: string | null;
+  /** How the student applies, the round, and whether it asks for letters (shown under its name). */
+  app_system?: string;
+  round?: string;
+  needs_letters?: boolean;
+  ai_policy?: string;
 }
 
 export interface ProgressPiece {

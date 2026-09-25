@@ -77,3 +77,9 @@ export const PlusIcon = () => (
     <path d="M12 5v14M5 12h14" />
   </svg>
 );
+
+export const ChevronIcon = () => (
+  <svg {...base} width={14} height={14} strokeWidth={2.2}>
+    <path d="M9 6l6 6-6 6" />
+  </svg>
+);

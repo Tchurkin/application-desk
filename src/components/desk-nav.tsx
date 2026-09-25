@@ -7,8 +7,7 @@ export function DeskNav({ base, owner }: { base: string; owner: boolean }) {
   const path = usePathname();
   const pages = [
     { href: `${base}/write`, label: "Write", match: (p: string) => p.startsWith(`${base}/write`) || p.startsWith(`${base}/piece/`) },
-    { href: base, label: "Board", match: (p: string) => p === base || p.startsWith(`${base}/college/`) },
-    { href: `${base}/progress`, label: "Progress", match: (p: string) => p.startsWith(`${base}/progress`) },
+    { href: base, label: "Board", match: (p: string) => p === base || p.startsWith(`${base}/college/`) || p.startsWith(`${base}/progress`) },
     { href: `${base}/strategy`, label: "Strategy", match: (p: string) => p.startsWith(`${base}/strategy`) },
     // Only the student's: the people they share with don't see it.
     ...(owner

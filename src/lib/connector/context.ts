@@ -5,7 +5,7 @@ import type { RequestKind } from "@/lib/bridge/requests";
 import { renderProfile, type ProfileInfo } from "@/lib/profile/render";
 import { catalogCandidates, matchCollege } from "@/lib/strategy/catalog";
 import { renderStrategy, type StrategyInfo } from "@/lib/strategy/render";
-import { loadPiece, renderDesk, renderPiece } from "./tools";
+import { loadDeskInfo, loadPiece, renderDesk, renderPiece } from "./tools";
 
 /*
  * Requests from the desk together with what answering them needs: the piece a question is about
@@ -73,8 +73,8 @@ class Context {
 
   /** The desk at a glance: every college, deadline and piece. */
   deskText(): Promise<string | null> {
-    this.desk ??= Promise.resolve(this.sb.rpc("connector_desk", { token: this.token })).then(
-      ({ data, error }) => (error ? null : `# Their whole desk, for context\n${renderDesk(data as Parameters<typeof renderDesk>[0])}`),
+    this.desk ??= loadDeskInfo(this.sb, this.token).then(
+      (d) => `# Their whole desk, for context\n${renderDesk(d)}`,
       () => null,
     );
     return this.desk;

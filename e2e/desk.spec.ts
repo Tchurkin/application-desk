@@ -22,9 +22,9 @@ test("a student sets up a college, writes a piece, and it survives a reload", as
   await expect(page.getByTestId("count")).toContainText("6 / 5 words");
 
   await page.goto("/desk");
-  const board = page.getByRole("list", { name: "Colleges by deadline" });
+  const board = page.getByRole("list", { name: "Colleges", exact: true });
   // Typing moved the piece from "Not started" to "Drafting".
-  await expect(board.getByRole("link", { name: /Why Northfield\?/ })).toContainText("Drafting");
+  await expect(board.getByRole("slider", { name: "Why Northfield?" })).toHaveAttribute("aria-valuetext", "Drafting");
 });
 
 test("a letter typed just before a reload is not lost", async ({ page }) => {
@@ -83,10 +83,11 @@ test("the board orders by deadline and sinks fully submitted colleges", async ({
   await addPiece(page, "Tech essay");
 
   await page.goto("/desk");
-  const names = await page.locator("[data-college] a.text-lg").allTextContents();
+  const board = page.getByRole("list", { name: "Colleges", exact: true });
+  const names = await board.locator(":scope > li").evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")));
   expect(names).toEqual(["Early College", "Virginia", "Virginia Tech", "Late College", "Done College"]);
-  const virginia = page.locator("[data-college]", { has: page.getByRole("link", { name: "Virginia", exact: true }) });
-  await expect(virginia).toContainText("No pieces yet");
+  await expect(board.getByRole("listitem", { name: "Virginia", exact: true })).toContainText("No pieces yet");
+  await expect(board.getByRole("listitem", { name: "Virginia Tech", exact: true }).getByRole("slider", { name: "Tech essay" })).toBeVisible();
 });
 
 test("warns past 20 Common App colleges and suggests the no-letter ones", async ({ page }) => {
@@ -111,7 +112,7 @@ test("history keeps the first save, compares a version with now side by side, an
   await waitSaved(page);
   // Leave, come back, keep writing: the text the last session ended with is kept.
   await page.goto("/desk");
-  await page.getByRole("list", { name: "Colleges by deadline" }).getByRole("link", { name: /Drafts/ }).click();
+  await page.getByRole("list", { name: "Colleges", exact: true }).getByRole("slider", { name: "Drafts" }).click();
   await essay(page).click();
   await page.keyboard.press("End");
   await page.keyboard.insertText(", continued");

@@ -102,6 +102,9 @@ const DOING: Record<string, (piece: string) => string> = {
   order_profile_sections: () => "organizing your profile",
   delete_profile_section: () => "organizing your profile",
   update_my_profile: () => "updating your profile",
+  save_recommender: () => "updating your recommenders",
+  set_letter: () => "updating your letters",
+  delete_recommender: () => "updating your recommenders",
   writing: () => "writing",
 };
 

@@ -116,11 +116,12 @@ export async function updateProfile(f: FormData) {
   revalidatePath("/desk", "layout");
 }
 
-export async function deleteMyAccount(f: FormData) {
-  if (s(f, "confirm") !== "delete") fail('Type "delete" to confirm.');
+/** Deletes everything; on a problem, says what it was (the form shows it) rather than throwing. */
+export async function deleteMyAccount(_prev: { error?: string }, f: FormData): Promise<{ error?: string }> {
+  if (s(f, "confirm").trim().toLowerCase() !== "delete") return { error: 'Type "delete" to confirm.' };
   const { supabase } = await requireDesk();
   const { error } = await supabase.rpc("delete_my_account");
-  if (error) fail(error.message);
+  if (error) return { error: `Nothing was deleted: ${error.message}` };
   await supabase.auth.signOut();
   redirect("/?deleted=1");
 }

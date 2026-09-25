@@ -16,6 +16,15 @@
   /* Suggested additions (deletions use --danger). */
   --add: #1f6f4f;
   --add-soft: #e4f2ea;
+  /* Recommenders, one color each (src/lib/board/letters.ts). */
+  --rec-0: #2f5fc4;
+  --rec-1: #b8531d;
+  --rec-2: #7446c7;
+  --rec-3: #127a74;
+  --rec-4: #b3336f;
+  --rec-5: #8a6a0b;
+  --rec-6: #4f7a1c;
+  --rec-7: #5b6472;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -34,6 +43,14 @@
     --danger-soft: #3a211f;
     --add: #6fc49b;
     --add-soft: #14291f;
+    --rec-0: #86a8f2;
+    --rec-1: #f0a06e;
+    --rec-2: #b89af0;
+    --rec-3: #62cbc3;
+    --rec-4: #ee8ab6;
+    --rec-5: #e0c065;
+    --rec-6: #a7d67a;
+    --rec-7: #aab3c0;
   }
 }
 
@@ -209,4 +226,31 @@ body {
   line-height: normal;
   white-space: nowrap;
   user-select: none;
+}
+
+/* A recommender's chip: their color, tinted; filled once their letter is sent. */
+.rec-0 { --rec: var(--rec-0); }
+.rec-1 { --rec: var(--rec-1); }
+.rec-2 { --rec: var(--rec-2); }
+.rec-3 { --rec: var(--rec-3); }
+.rec-4 { --rec: var(--rec-4); }
+.rec-5 { --rec: var(--rec-5); }
+.rec-6 { --rec: var(--rec-6); }
+.rec-7 { --rec: var(--rec-7); }
+.rec-chip {
+  color: var(--rec);
+  background: color-mix(in srgb, var(--rec) 12%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--rec) 45%, transparent);
+}
+.rec-chip.is-planned {
+  background: var(--panel);
+  border-style: dashed;
+}
+.rec-chip.is-submitted {
+  color: var(--panel);
+  background: var(--rec);
+  border-color: var(--rec);
+}
+.rec-dot {
+  background: var(--rec);
 }

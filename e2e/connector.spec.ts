@@ -212,9 +212,9 @@ test("the AI sets up the whole desk from a list, without duplicates, and manages
   expect(filled.text).toContain("due 2030-12-01");
 
   await page.goto("/desk");
-  const board = page.getByRole("list", { name: "Colleges by deadline" });
-  await expect(board.locator("[data-college]")).toHaveCount(2);
-  await expect(board.locator("[data-college]").first()).toContainText("Northfield University");
+  const board = page.getByRole("list", { name: "Colleges", exact: true });
+  await expect(board.locator("[data-lane]")).toHaveCount(2);
+  await expect(board.locator("[data-lane]").first()).toContainText("Northfield University");
   await expect(board).toContainText("Why Northfield?");
   await expect(board).toContainText("Activity");
 
@@ -236,12 +236,37 @@ test("the AI sets up the whole desk from a list, without duplicates, and manages
   await expect(page.getByLabel("Limit", { exact: true })).toHaveValue("300");
   await page.goto("/desk");
   await expect(board).not.toContainText("Activity");
-  await expect(board.locator("[data-college]").first()).toContainText("Early Decision");
+  await expect(board.locator("[data-lane]").first().getByTitle("Early Decision")).toHaveText("ED");
   await page.goto("/desk/settings");
   await expect(page.getByLabel("About you")).toHaveValue("I build robots and run the school maker club.");
 
   const bad = await call(client, "update_college", { college_id: northfield, deadline: "Nov 1" });
   expect(bad.isError).toBe(true);
+  await client.close();
+});
+
+test("the AI adds recommenders and their letters, and the board shows them", async ({ page }) => {
+  await signUp(page, "connrecs");
+  const north = await addCollege(page, "Northfield University");
+  const client = await connect(await makeConnector(page));
+
+  const saved = await call(client, "save_recommender", { name: "Ms. Rivera", role: "Physics teacher", college_ids: [north] });
+  expect(saved.isError, saved.text).toBe(false);
+  const id = saved.text.match(/recommender_id: ([0-9a-f-]{36})/)![1];
+  expect((await call(client, "set_letter", { recommender_id: id, college_id: north, status: "requested" })).isError).toBe(false);
+  const desk = await call(client, "list_my_desk");
+  expect(desk.text).toContain("Letters: Ms. Rivera (asked)");
+  expect(desk.text).toContain(`Ms. Rivera [recommender_id: ${id}], Physics teacher: 1 letter`);
+
+  await page.goto("/desk");
+  const lane = page.getByRole("list", { name: "Colleges", exact: true }).getByRole("listitem", { name: "Northfield University", exact: true });
+  await expect(lane.getByRole("button", { name: "Ms. Rivera: Asked" })).toBeVisible();
+
+  expect((await call(client, "save_recommender", {})).isError).toBe(true);
+  expect((await call(client, "delete_recommender", { recommender_id: id })).isError).toBe(false);
+  expect((await call(client, "list_my_desk")).text).not.toContain("Ms. Rivera");
+  await page.reload();
+  await expect(lane.getByRole("button", { name: /^Ms\. Rivera/ })).toHaveCount(0);
   await client.close();
 });
 

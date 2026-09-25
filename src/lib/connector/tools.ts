@@ -23,6 +23,7 @@ You can work in two ways; follow what the student asks for:
 You can also set up and manage the whole desk:
 - When the student gives you a list of colleges, look up each one's application system, round, deadlines and current supplemental essay prompts with word limits (search the web if you can; say which details you couldn't confirm), then call set_up_colleges once with all of them. It adds each college with a piece for every prompt, and never duplicates a college or piece already on the desk.
 - create_piece adds one essay or short answer; update_college and update_piece change any detail (deadlines, prompts, word or character limits, due dates, status, notes, research); delete_college and delete_piece remove them. When pieces are missing their prompt or limit, fill them in (set_up_colleges again, or update_piece).
+- Recommenders: save_recommender adds a teacher, counselor or coach writing the student's letters (or changes one), set_letter says which colleges each writes for and whether the letter is asked for or submitted, and delete_recommender removes one. list_my_desk shows them.
 The student decides what you may do: list_my_desk says whether you may write essays directly or only suggest (or only advise), and whether you may manage colleges and pieces. Stay within it; if something isn't allowed, say what you would do and that they can allow it in Settings.
 
 Profile: the student's Profile page holds sections about them (background, activities, stories, values, goals), written by them or by you. read_profile shows them; save_profile_section adds or rewrites one; order_profile_sections and delete_profile_section organize them; update_my_profile sets their name and "about me". read_piece includes the profile, so use it for every essay. When the student asks you to interview them, ask one question at a time, follow up on specifics (moments, people, numbers, what changed), and after each answer save what you learned into well-organized sections in the student's own words; never invent details.
@@ -81,7 +82,28 @@ interface DeskInfo {
     limit_value: number | null;
     due?: string | null;
   }[];
+  /** Who writes the student's letters, and for which colleges (migration 20261005). */
+  recommenders?: {
+    id: string;
+    name: string;
+    role: string;
+    letters: { college_id: string; college: string; status: "planned" | "requested" | "submitted" }[];
+  }[];
 }
+
+/** The desk as list_my_desk shows it, with its recommenders when the database has them. */
+export async function loadDeskInfo(sb: SupabaseClient, token: string): Promise<DeskInfo> {
+  const [desk, recs] = await Promise.all([
+    sb.rpc("connector_desk", { token }),
+    Promise.resolve(sb.rpc("connector_recommenders", { token })).catch(() => null),
+  ]);
+  if (desk.error) throw new Error(desk.error.message);
+  const d = desk.data as DeskInfo;
+  if (recs && !recs.error) d.recommenders = recs.data as DeskInfo["recommenders"];
+  return d;
+}
+
+const LETTER_WORDS = { planned: "not asked yet", requested: "asked", submitted: "submitted" } as const;
 
 /** One line telling the assistant what it may do on this desk. */
 export function permissionsLine(p: Permissions): string {
@@ -133,6 +155,10 @@ export function renderDesk(d: DeskInfo): string {
     `  - ${p.title} [piece_id: ${p.id}] ${labelOf(PIECE_STATUSES, p.status)}, ${p.word_count} words, limit ${limitLine(p.limit_kind, p.limit_value)}` +
     (p.due ? `, due ${p.due}` : "") +
     (p.prompt ? `\n    Prompt: ${p.prompt.length > 160 ? `${p.prompt.slice(0, 160)}…` : p.prompt}` : "\n    Prompt: (none entered)");
+  const lettersOf = (collegeId: string) =>
+    (d.recommenders ?? []).flatMap((r) =>
+      r.letters.filter((l) => l.college_id === collegeId).map((l) => `${r.name} (${LETTER_WORDS[l.status] ?? l.status})`),
+    );
   lines.push("", "## Colleges (by deadline)");
   if (!d.colleges.length) lines.push("None yet.");
   for (const c of d.colleges) {
@@ -143,12 +169,22 @@ export function renderDesk(d: DeskInfo): string {
         (c.has_research ? ", has research notes" : "") +
         (c.ai_policy === "no_drafting" ? ` (AI policy: ${POLICY_NOTE})` : ""),
     );
+    const letters = lettersOf(c.id);
+    if (letters.length) lines.push(`  Letters: ${letters.join(", ")}`);
     for (const p of piecesFor(c.id)) lines.push(pieceLine(p));
   }
   const shared = piecesFor(null);
   if (shared.length) {
     lines.push("", "## Independent pieces (not tied to one college, like a personal statement)");
     for (const p of shared) lines.push(pieceLine(p));
+  }
+  if (d.recommenders) {
+    lines.push("", "## Recommenders (who writes the student's letters)");
+    if (!d.recommenders.length) lines.push("None yet.");
+    for (const r of d.recommenders) {
+      const n = r.letters.length;
+      lines.push(`- ${r.name} [recommender_id: ${r.id}]${r.role ? `, ${r.role}` : ""}: ${n ? `${n} letter${n === 1 ? "" : "s"}` : "no colleges yet"}`);
+    }
   }
   return lines.join("\n");
 }
@@ -238,9 +274,11 @@ export function registerTools(server: McpServer, token: string) {
       annotations: { readOnlyHint: true },
     },
     async () => {
-      const { data, error } = await db().rpc("connector_desk", { token });
-      if (error) return fail(error.message);
-      return text(renderDesk(data as DeskInfo));
+      try {
+        return text(renderDesk(await loadDeskInfo(db(), token)));
+      } catch (e) {
+        return fail((e as Error).message);
+      }
     },
   );
 

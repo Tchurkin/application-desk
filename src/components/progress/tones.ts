@@ -23,6 +23,15 @@ export const BAR_TONE: Record<PieceStatus, string> = {
   submitted: "bg-accent",
 };
 
+/** A card's left edge on the board, by stage. */
+export const CARD_EDGE: Record<PieceStatus, string> = {
+  not_started: "border-l-line",
+  drafting: "border-l-muted",
+  needs_review: "border-l-warn",
+  final: "border-l-accent/60",
+  submitted: "border-l-accent",
+};
+
 export const DUE_TONE: Record<DueTone, string> = {
   passed: "text-muted line-through",
   soon: "font-medium text-danger",
