@@ -57,11 +57,7 @@ export function ShareCreator() {
             ))}
           </select>
         </div>
-        <div>
-          <label className="label" htmlFor="share-password">Password (optional)</label>
-          <input className="field" id="share-password" name="password" type="password" autoComplete="new-password" />
-        </div>
-        <div className="flex items-end">
+        <div className="flex items-end sm:col-span-2">
           <button className="btn btn-primary" type="submit" disabled={pending}>
             {pending ? "Making link…" : "Make a share link"}
           </button>

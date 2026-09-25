@@ -14,13 +14,12 @@ export async function createShareLink(_prev: CreateLinkState, f: FormData): Prom
   const { supabase, desk } = await requireDesk();
   const role = asShareRole(f.get("role"));
   const label = String(f.get("label") ?? "").trim().slice(0, 80);
-  const password = String(f.get("password") ?? "");
-  if (password && password.length < 6) return { error: "Use at least 6 characters for the password, or leave it blank." };
+  // The password is the desk's own, for every link (setSharePassword).
   const { data, error } = await supabase.rpc("create_share_link", {
     d: desk.id,
     link_role: role,
     link_label: label,
-    link_password: password,
+    link_password: "",
   });
   if (error) return { error: error.message };
   revalidatePath("/desk/settings", "layout");
@@ -40,4 +39,23 @@ export async function revokeShareLink(id: string) {
   const { error } = await supabase.from("share_links").update({ revoked_at: new Date().toISOString() }).eq("id", id);
   if (error) throw new Error(error.message);
   revalidatePath("/desk/settings", "layout");
+}
+
+export interface SharePasswordState {
+  saved?: "set" | "cleared";
+  error?: string;
+}
+
+/** The one password every share link asks for the first time someone opens it; blank turns it off. */
+export async function setSharePassword(_prev: SharePasswordState, f: FormData): Promise<SharePasswordState> {
+  const { supabase, desk } = await requireDesk();
+  const pw = f.get("clear") ? "" : String(f.get("password") ?? "");
+  if (!f.get("clear") && pw.length < 6) return { error: "Use at least 6 characters for the password." };
+  const { error } = await supabase.rpc("set_share_password", { d: desk.id, pw });
+  if (error) {
+    const missing = error.code === "PGRST202" || error.code === "42883";
+    return { error: missing ? "Run the latest database update to use this." : error.message };
+  }
+  revalidatePath("/desk/settings", "layout");
+  return { saved: pw ? "set" : "cleared" };
 }

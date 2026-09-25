@@ -4,10 +4,11 @@ import { requireDesk } from "@/lib/supabase/server";
 import { revokeShareLink } from "../../share-actions";
 import { SettingsHeader } from "../settings-header";
 import { ShareCreator, ShareRoleSelect } from "../share-creator";
+import { SharePassword } from "./share-password";
 
 export default async function SharingSettingsPage() {
   const { supabase, desk } = await requireDesk();
-  const [{ data: links }, { data: members }] = await Promise.all([
+  const [{ data: links }, { data: members }, password, older] = await Promise.all([
     supabase
       .from("share_links")
       .select("id, role, label, created_at")
@@ -15,6 +16,15 @@ export default async function SharingSettingsPage() {
       .is("revoked_at", null)
       .order("created_at", { ascending: false }),
     supabase.from("desk_members").select("user_id, display_name, link_id, joined_at").eq("desk_id", desk.id),
+    // Whether the desk has a share password (migration 20261010); the table is missing before it.
+    supabase.from("share_passwords").select("desk_id").eq("desk_id", desk.id).maybeSingle(),
+    // Links made before that with a password of their own (counted, never read).
+    supabase
+      .from("share_links")
+      .select("id", { count: "exact", head: true })
+      .eq("desk_id", desk.id)
+      .is("revoked_at", null)
+      .not("password_hash", "is", null),
   ]);
 
   return (
@@ -26,6 +36,12 @@ export default async function SharingSettingsPage() {
           at any time, and revoke it to cut off everyone who joined through it.
         </p>
       </SettingsHeader>
+      {!password.error && (
+        <section className="card mb-6 px-4 py-4" aria-labelledby="share-password-h">
+          <h3 id="share-password-h" className="mb-2 font-medium">Share password</h3>
+          <SharePassword on={!!password.data} olderLinks={older.count ?? 0} />
+        </section>
+      )}
       <section className="card px-4 py-4" aria-label="New share link">
         <ShareCreator />
       </section>

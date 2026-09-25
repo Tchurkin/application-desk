@@ -1,6 +1,6 @@
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { expect, test, type Page } from "@playwright/test";
-import { addCollege, apiClient, signUp } from "./helpers";
+import { addCollege, signUp, studentClient } from "./helpers";
 
 /*
  * The Strategy page: colleges in Reach / Target / Likely by their chance (the published average
@@ -177,8 +177,7 @@ test("the connected AI estimates odds: the page waits for it and shows its numbe
 
   // The assistant closes the request (answer_request, tested with the bridge tools); here the
   // student's own session stands in for it.
-  const api = apiClient();
-  await api.auth.signInWithPassword({ email: student.email, password: student.password });
+  const api = await studentClient(student);
   const { data: closed } = await api
     .from("desk_requests")
     .update({ status: "answered", answer: "Northfield looks Likely; Purdue stays a Target.", answered_by: "Claude" })

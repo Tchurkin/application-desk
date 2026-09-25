@@ -96,6 +96,16 @@ export function apiClient() {
   return createClient(url, key, { auth: { persistSession: false } });
 }
 
+/** An API client signed in as this student, the way the site signs them in. */
+export async function studentClient(s: { email: string; password: string }) {
+  const api = apiClient();
+  const { error } = codeSignIn
+    ? await api.auth.verifyOtp({ email: s.email, token: await signInCode(s.email), type: "email" })
+    : await api.auth.signInWithPassword({ email: s.email, password: s.password });
+  if (error) throw error;
+  return api;
+}
+
 /** The essay's own text: other people's carets and suggestion widgets left out. */
 export async function essayText(page: Page) {
   return essay(page).evaluate((el) => {

@@ -5,9 +5,14 @@ import { addCollege, addPiece, apiClient, essay, expectEssay, expectEssayContain
 async function makeLink(page: Page, opts: { role: "suggest" | "view" | "edit"; label?: string; password?: string }) {
   const back = page.url();
   await page.goto("/desk/settings/sharing");
+  if (opts.password) {
+    // One password for every link, set on the Sharing page.
+    await page.getByLabel("Password", { exact: true }).fill(opts.password);
+    await page.getByRole("button", { name: "Set password" }).click();
+    await expect(page.getByRole("status").filter({ hasText: "Saved" })).toBeVisible();
+  }
   if (opts.label) await page.getByLabel("Who is it for?").fill(opts.label);
   await page.getByLabel("They can").selectOption(opts.role);
-  if (opts.password) await page.getByLabel("Password (optional)").fill(opts.password);
   await page.getByRole("button", { name: "Make a share link" }).click();
   const url = await page.getByRole("textbox", { name: "Share link" }).inputValue();
   await page.goto(back);

@@ -40,8 +40,8 @@ each assistant may do**, and every direct change is kept in the piece's history.
   board, and a Strategy page that sorts colleges into reach / target / likely bands by chance
   of admission (an AI estimate, your own, or the college's published rate from the College
   Scorecard).
-- **Share links** (Settings → Sharing): read only, can suggest, or can edit, with an optional
-  password; change a link's level or revoke it at any time. The person opening it just types
+- **Share links** (Settings → Sharing): read only, can suggest, or can edit, one link per person,
+  with one optional password for all of them; change a link's level or revoke it at any time. The person opening it just types
   their name; no account needed.
 - **Editing and Suggesting**: you, and anyone on a can-edit link, switch between changing the
   text directly and suggesting. Someone on a can-suggest link types, deletes and pastes
