@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { codeSignIn, fakeStudent, signUp } from "./helpers";
+import { adminClient, apiClient, codeSignIn, fakeStudent, signUp } from "./helpers";
 
 /*
  * Signing in with a code emailed to the student. The local Supabase keeps its email in Mailpit
@@ -60,5 +60,26 @@ test.describe("with an emailed code", () => {
     await tab.getByRole("button", { name: "Email me a code" }).click();
     await expect(tab.getByRole("alert").filter({ hasText: "There's no desk with that email yet" })).toBeVisible();
     await other.close();
+  });
+
+  test("a password someone set on a student's email before they arrived stops working once they sign in", async () => {
+    const s = fakeStudent("squatter");
+    const admin = adminClient();
+    // Someone signs up with the student's email and a password of their own; it stays unconfirmed.
+    const { data: made, error } = await admin.auth.admin.createUser({ email: s.email, password: "squatters-password" });
+    expect(error).toBeNull();
+
+    // The student signs in with a code emailed to them, which confirms the email (asking for it
+    // does, with Confirm email off as here; typing it in does, with it on).
+    const student = apiClient();
+    expect((await student.auth.signInWithOtp({ email: s.email, options: { shouldCreateUser: false } })).error).toBeNull();
+    const verified = await student.auth.verifyOtp({ email: s.email, token: await codeFromEmail(s.email), type: "email" });
+    expect(verified.error).toBeNull();
+
+    const { error: refused } = await apiClient().auth.signInWithPassword({ email: s.email, password: "squatters-password" });
+    expect(refused?.code).toBe("invalid_credentials");
+    // Passwords as such still work here: it was that one that went.
+    expect((await admin.auth.admin.updateUserById(made.user!.id, { password: s.password })).error).toBeNull();
+    expect((await apiClient().auth.signInWithPassword({ email: s.email, password: s.password })).error).toBeNull();
   });
 });

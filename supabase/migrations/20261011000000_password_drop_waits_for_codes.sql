@@ -1,0 +1,22 @@
+-- The trigger from 20261009 waits until the site signs in with codes.
+--
+-- It drops a password when the account's email is confirmed. With passwords still in use, that
+-- breaks every new account: Supabase confirms a password sign-up (Confirm email off) or the
+-- student's confirmation click (on) right after the password is set, so the student can sign in
+-- once and never again. It belongs only to sign-in by code, where no student has a password, so
+-- it is switched on with the rest of that (supabase/sign-in-code.sql, docs/sign-in.md). The
+-- function stays; nothing calls it until then.
+--
+-- If 20261009 already ran here, accounts made with a password since then have lost it. While the
+-- site still signs in with passwords, this lists them:
+--
+--   select id, email, created_at from auth.users
+--   where not coalesce(is_anonymous, false) and email_confirmed_at is not null
+--     and coalesce(encrypted_password, '') = '';
+--
+-- They get back in with a code once that is on. To let one in sooner with a temporary password:
+--
+--   update auth.users set encrypted_password = extensions.crypt('<temporary password>', extensions.gen_salt('bf'))
+--   where id = '<id>';
+
+drop trigger if exists forget_unconfirmed_password on auth.users;

@@ -55,6 +55,11 @@ jobs:
           echo "::add-mask::${SERVICE_ROLE_KEY:-$SECRET_KEY}"
           echo "SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY:-$SECRET_KEY}" >> "$GITHUB_ENV"
           echo "MAILPIT_URL=${INBUCKET_URL:-${MAILPIT_URL:-http://127.0.0.1:54324}}" >> "$GITHUB_ENV"
+      - name: Sign in by code, as the site will (docs/sign-in.md)
+        run: |
+          eval "$(npx supabase status -o env)"
+          command -v psql >/dev/null || (sudo apt-get update && sudo apt-get install -y postgresql-client)
+          psql "${DB_URL:-postgresql://postgres:postgres@127.0.0.1:54322/postgres}" -v ON_ERROR_STOP=1 -f supabase/sign-in-code.sql
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
         env:
