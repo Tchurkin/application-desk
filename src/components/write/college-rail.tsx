@@ -7,7 +7,7 @@ import { labelOf, PIECE_STATUSES, type PieceStatus } from "@/lib/domain/colleges
 import { PREF } from "@/lib/write/layout";
 import { countLabel, groupMeta, pickCollegePiece, SHARED, type RailGroup, type RailPiece } from "@/lib/write/rail";
 import { usePref, writePref } from "./hooks";
-import { ChevronIcon } from "./icons";
+import { ChevronIcon, FilesIcon } from "./icons";
 
 const DOT: Record<PieceStatus, string> = {
   not_started: "border border-muted bg-transparent",
@@ -212,7 +212,7 @@ export function CollegeRail({
         onMouseEnter={() => warm(p.id)}
         title={p.title}
         className={`flex cursor-pointer items-center gap-2 pr-3 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset ${indent} ${
-          level === 1 ? `border-l-2 py-2 ${here ? "border-accent" : "border-transparent"}` : "py-1"
+          level === 1 ? `rounded-md border py-2 ${here ? "border-accent/60" : "border-transparent"}` : "py-1"
         } ${here ? "bg-accent-soft text-ink" : "text-ink/85 hover:bg-bg"}`}
       >
         <StatusDot status={status} />
@@ -223,7 +223,7 @@ export function CollegeRail({
   };
 
   return (
-    <ul role="tree" aria-label="Colleges and pieces" className="py-1 text-sm" onKeyDown={onKeyDown}>
+    <ul role="tree" aria-label="Colleges and pieces" className="flex flex-col gap-1.5 p-2 text-sm" onKeyDown={onKeyDown}>
       {groups.map((g) => {
         if (loose(g)) return g.pieces.map((p) => pieceRow(p, g, 1));
         const open = isOpen(g);
@@ -243,12 +243,12 @@ export function CollegeRail({
               else refs.current.delete(g.key);
             }}
             onFocus={(e) => e.target === e.currentTarget && setFocusKey(g.key)}
-            className="group/college outline-none"
+            className={`group/college overflow-hidden rounded-md border outline-none ${current ? "border-accent/60" : "border-line"}`}
           >
             <div
-              className={`flex cursor-pointer items-start gap-1.5 border-l-2 py-2 pr-3 pl-1.5 hover:bg-bg group-focus-visible/college:ring-2 group-focus-visible/college:ring-accent group-focus-visible/college:ring-inset ${
-                current ? "border-accent" : "border-transparent"
-              } ${g.finished ? "opacity-60" : ""}`}
+              className={`flex cursor-pointer items-start gap-1.5 bg-bg py-2 pr-3 pl-1.5 hover:bg-line/60 group-focus-visible/college:ring-2 group-focus-visible/college:ring-accent group-focus-visible/college:ring-inset ${
+                g.finished ? "opacity-60" : ""
+              }`}
               onClick={() => openGroup(g)}
               onMouseEnter={() => warm(pickCollegePiece(g.pieces)?.id)}
               title={g.total ? "Open the first piece still being worked on" : undefined}
@@ -265,8 +265,11 @@ export function CollegeRail({
               >
                 <ChevronIcon />
               </span>
+              <span aria-hidden className="mt-0.5 shrink-0 text-muted [&_svg]:size-4">
+                <FilesIcon />
+              </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate font-medium">{g.name}</span>
+                <span className="block truncate font-semibold">{g.name}</span>
                 <span className="block truncate text-xs text-muted">{meta}</span>
                 {g.total > 0 && (
                   <span aria-hidden className="mt-1 block h-1 overflow-hidden rounded-full bg-line">
@@ -276,7 +279,7 @@ export function CollegeRail({
               </span>
             </div>
             {open && (
-              <ul role="group" className="pb-1">
+              <ul role="group" className="border-t border-line bg-panel py-1">
                 {g.pieces.map((p) => pieceRow(p, g, 2))}
               </ul>
             )}

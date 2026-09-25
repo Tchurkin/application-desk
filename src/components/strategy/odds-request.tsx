@@ -11,6 +11,8 @@ import {
 } from "@/lib/bridge/requests";
 import { ModelPicker, useModelChoice } from "@/components/ask/model-picker";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { LocalDay } from "@/components/local-day";
+import { AnswerText } from "@/components/ask/answer-text";
 
 /*
  * "Estimate my odds with Claude": queue an odds request on the desk and open the assistant with
@@ -160,7 +162,11 @@ export function OddsRequest({
       {answered ? (
         <div role="status" className="rounded-md border border-line px-3 py-2">
           <p className="font-medium">{answered.answered_by || whoName} answered</p>
-          {answered.answer && <p className="mt-1 whitespace-pre-wrap">{answered.answer}</p>}
+          {answered.answer && (
+            <div className="mt-1">
+              <AnswerText text={answered.answer} />
+            </div>
+          )}
         </div>
       ) : (
         last &&
@@ -168,12 +174,19 @@ export function OddsRequest({
           <details className="text-muted">
             <summary className="cursor-pointer">
               Last estimated
-              {last.answered_at
-                ? ` ${new Date(last.answered_at).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}`
-                : ""}
+              {last.answered_at && (
+                <>
+                  {" "}
+                  <LocalDay at={last.answered_at} />
+                </>
+              )}
               {last.answered_by ? ` by ${last.answered_by}` : ""}
             </summary>
-            {last.answer && <p className="mt-1 whitespace-pre-wrap text-ink">{last.answer}</p>}
+            {last.answer && (
+              <div className="mt-1 text-ink">
+                <AnswerText text={last.answer} />
+              </div>
+            )}
           </details>
         )
       )}

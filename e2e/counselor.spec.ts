@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { expect, test, type Page } from "@playwright/test";
 import { COUNSELOR_VERSION } from "../src/lib/counselor/version";
-import { addCollege, addPiece, apiClient, signUp } from "./helpers";
+import { addCollege, addPiece, apiClient, signUp, studentClient } from "./helpers";
 
 /*
  * The Counselor page and Settings → Counselor, driven the way the counselor on a student's
@@ -178,4 +178,41 @@ test("the desk shows what an assistant is doing through the connector", async ({
   if (!(await page.getByTestId("ask-panel").isVisible())) await page.getByRole("button", { name: "Ask", exact: true }).click();
   await expect(page.getByTestId("watch-status")).toContainText("Your counselor is reading “Why us”");
   await client.close();
+});
+
+test("an answer that arrives on another page lights up its tab and says where it is", async ({ page }) => {
+  const student = await signUp(page, "notice");
+  await page.goto("/desk/counselor");
+  await chat(page).getByLabel("Message your counselor").fill("Is my list balanced?");
+  await chat(page).getByRole("button", { name: "Send", exact: true }).click();
+  await expect(chat(page)).toContainText("Is my list balanced?");
+
+  // Off on the board when the answer comes in.
+  await page.goto("/desk");
+  await expect(page.getByTestId("desk-notices")).toHaveAttribute("data-ready", "true");
+  const api = await studentClient(student);
+  const { data: answered } = await api
+    .from("desk_requests")
+    .update({ status: "answered", answer: "Yes, it's **balanced**.", answered_by: "Claude", answered_at: new Date().toISOString() })
+    .eq("kind", "chat")
+    .eq("status", "pending")
+    .select("id");
+  expect(answered).toHaveLength(1);
+
+  const note = page.getByRole("status").filter({ hasText: "Claude replied on the Counselor page." });
+  // Realtime, or the backstop poll if the update beat the subscription.
+  await expect(note).toBeVisible({ timeout: 15_000 });
+  const tab = page.getByRole("navigation", { name: "Desk" }).getByRole("link", { name: /^Counselor/ });
+  await expect(tab).toHaveAccessibleName("Counselor (new reply)");
+  await page.reload();
+  await expect(tab).toHaveAccessibleName("Counselor (new reply)");
+
+  await tab.click();
+  await expect(page).toHaveURL(/\/desk\/counselor$/);
+  await expect(chat(page)).toContainText("Yes, it's balanced.");
+  await expect(tab).toHaveAccessibleName("Counselor");
+  // Read: back on the board, the dot stays gone.
+  await page.goto("/desk");
+  await expect(page.getByTestId("desk-notices")).toHaveAttribute("data-ready", "true");
+  await expect(tab).toHaveAccessibleName("Counselor");
 });

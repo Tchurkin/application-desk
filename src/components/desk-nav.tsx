@@ -1,10 +1,16 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useCallback, useSyncExternalStore } from "react";
+import type { NoticeTab } from "@/lib/bridge/notices";
+import { subscribeUnread, unreadSnapshot, unreadTabs } from "@/lib/bridge/unread";
 
 /** The desk's top-level pages. `base` is "/desk" for the owner, "/shared/<id>" for members. */
-export function DeskNav({ base, owner }: { base: string; owner: boolean }) {
+export function DeskNav({ base, owner, deskId }: { base: string; owner: boolean; deskId?: string }) {
   const path = usePathname();
+  // Tabs with a reply from Claude not looked at yet (the student's own desk only).
+  const subscribe = useCallback((onChange: () => void) => (deskId ? subscribeUnread(deskId, onChange) : () => {}), [deskId]);
+  const unread = unreadTabs(useSyncExternalStore(subscribe, () => (deskId ? unreadSnapshot(deskId) : "[]"), () => "[]"));
   const pages = [
     {
       href: base,
@@ -34,6 +40,12 @@ export function DeskNav({ base, owner }: { base: string; owner: boolean }) {
             className={`rounded-md px-3 py-1 ${active ? "bg-panel font-medium text-ink shadow-sm" : "text-muted hover:text-ink"}`}
           >
             {p.label}
+            {owner && !active && unread.has(p.label as NoticeTab) && (
+              <>
+                <span aria-hidden className="ml-1.5 inline-block size-2 rounded-full bg-accent align-middle" />
+                <span className="sr-only"> (new reply)</span>
+              </>
+            )}
           </Link>
         );
       })}

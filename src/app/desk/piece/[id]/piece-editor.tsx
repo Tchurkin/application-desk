@@ -35,6 +35,8 @@ export interface PieceMeta {
   limit_value: number | null;
   status: PieceStatus;
   notes: string;
+  /** Its own due date; empty means the college's deadline. */
+  due?: string | null;
 }
 
 export type Role = "owner" | "edit" | "suggest" | "view";
@@ -111,6 +113,7 @@ export function PieceEditor({
   const [pieceStatus, setPieceStatus] = useState<PieceStatus>(piece.status);
   const [limitKind, setLimitKind] = useState<LimitKind>(piece.limit_kind);
   const [limitValue, setLimitValue] = useState<number | null>(piece.limit_value);
+  const [due, setDue] = useState<string | null>(piece.due ?? null);
   const [text, setText] = useState("");
   const [editor, setEditor] = useState<Editor | null>(null);
   const meta = useMetaSaver(piece.id);
@@ -367,6 +370,20 @@ export function PieceEditor({
                   <option value="chars">characters</option>
                   <option value="none">no limit</option>
                 </select>
+              </span>
+              <span className="flex items-center gap-1" title={collegeName ? "Empty: the college's deadline" : undefined}>
+                <label htmlFor={`${piece.id}-due`}>Due</label>
+                <input
+                  id={`${piece.id}-due`}
+                  className="rounded-md border border-line bg-panel px-1.5 py-0.5 text-ink"
+                  type="date"
+                  value={due ?? ""}
+                  onChange={(e) => {
+                    const v = e.target.value || null;
+                    setDue(v);
+                    meta.save({ due: v }, 0);
+                  }}
+                />
               </span>
             </>
           ) : (

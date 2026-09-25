@@ -10,7 +10,7 @@ export default async function PiecePage(props: PageProps<"/desk/piece/[id]">) {
   const { supabase, userId, desk } = await requireDesk();
   const { data: piece } = await supabase
     .from("pieces")
-    .select("id, college_id, title, prompt, limit_kind, limit_value, status, notes")
+    .select("id, college_id, title, prompt, limit_kind, limit_value, status, notes, due")
     .eq("id", id)
     .maybeSingle<PieceMeta>();
   if (!piece) notFound();

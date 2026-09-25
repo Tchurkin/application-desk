@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
-import { useRef, useState, useSyncExternalStore } from "react";
+import { useRef, useState } from "react";
+import { LocalDay } from "@/components/local-day";
 import { DueTag } from "@/components/progress/due-cell";
 import { StageSlider } from "@/components/progress/stage-slider";
 import { BAR_TONE, CARD_EDGE } from "@/components/progress/tones";
@@ -55,18 +56,15 @@ const PORTAL_SHORT: Record<string, string> = {
 /** The cards' columns (the header and each lane line up on it). */
 const COLUMNS = "grid grid-cols-1 gap-2 sm:grid-cols-4";
 
-const dayOf = (at: string, zone?: string) =>
-  new Date(at).toLocaleDateString("en-US", { month: "short", day: "numeric", ...(zone ? { timeZone: zone } : {}) });
-const still = () => () => {};
-
-/** "Submitted Nov 1", on the student's own calendar (the server renders UTC; the browser takes over). */
+/** "Submitted Nov 1", on the student's own calendar. */
 function SubmittedOn({ at }: { at: string | null }) {
-  const day = useSyncExternalStore(
-    still,
-    () => (at ? dayOf(at) : ""),
-    () => (at ? dayOf(at, "UTC") : ""),
+  return at ? (
+    <>
+      Submitted <LocalDay at={at} />
+    </>
+  ) : (
+    <>Submitted</>
   );
-  return <>{day ? `Submitted ${day}` : "Submitted"}</>;
 }
 
 export function Swimlanes({
@@ -153,7 +151,7 @@ function Swimlane({ lane, folded, onFold, ctx }: { lane: Lane; folded: boolean; 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
             {nameHref ? (
-              <Link href={nameHref} title={college ? "Details and new pieces" : "Open"} className="font-medium hover:underline">
+              <Link href={nameHref} title={college ? "Deadline, details and new pieces" : "Open"} className="font-medium hover:underline">
                 {lane.name}
               </Link>
             ) : (

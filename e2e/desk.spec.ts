@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { addCollege, addPiece, apiClient, codeSignIn, essay, signUp, submitCollege, waitSaved } from "./helpers";
 
 test("a student sets up a college, writes a piece, and it survives a reload", async ({ page }) => {
@@ -228,4 +228,36 @@ test("on a wide screen the Write page stays put: only its columns scroll", async
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
   await expect.poll(() => page.evaluate(() => document.querySelector<HTMLElement>("[data-write-scroll]")!.parentElement!.scrollTop)).toBe(0);
   await expect(page.getByRole("navigation", { name: "Desk" })).toBeInViewport();
+});
+
+/** A piece's own fields (not its text) saved: the update request came back. */
+const savedPiece = (page: Page) =>
+  page.waitForResponse((r) => r.url().includes("/rest/v1/pieces") && r.request().method() === "PATCH" && r.ok());
+
+test("a piece gets a due date of its own, shown on the board", async ({ page }) => {
+  await signUp(page, "due");
+  const lanes = page.getByRole("list", { name: "Colleges", exact: true });
+  const due = page.getByLabel("Due", { exact: true });
+
+  // An independent piece: its date is its lane's.
+  await page.goto("/desk/add/piece");
+  await page.getByLabel("Title").fill("Personal statement");
+  await page.getByRole("button", { name: "Add piece" }).click();
+  await expect(page).toHaveURL(/\/desk\/piece\//);
+  await expect(essay(page)).toBeVisible();
+  await expect(due).toHaveValue("");
+  await Promise.all([savedPiece(page), due.fill("2030-10-15")]);
+  await page.reload();
+  await expect(due).toHaveValue("2030-10-15");
+  await page.goto("/desk");
+  await expect(lanes.getByRole("listitem", { name: "Personal statement", exact: true })).toContainText("Oct 15");
+
+  // A college's piece shows its own date on its card when it isn't the college deadline.
+  await addCollege(page, "Testy College", { deadline: "2030-11-01" });
+  await addPiece(page, "Why us?");
+  await Promise.all([savedPiece(page), due.fill("2030-10-20")]);
+  await page.goto("/desk");
+  const lane = lanes.getByRole("listitem", { name: "Testy College", exact: true });
+  await expect(lane).toContainText("Nov 1");
+  await expect(lane.getByRole("slider", { name: "Why us?", exact: true })).toContainText("Oct 20");
 });

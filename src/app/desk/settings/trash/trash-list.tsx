@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
-import { useState, useSyncExternalStore } from "react";
+import { useState } from "react";
+import { LocalDay } from "@/components/local-day";
 import { ConfirmButton } from "@/components/confirm-button";
 import { deleteForever, restoreFromTrash } from "./actions";
 
@@ -15,14 +16,6 @@ export interface TrashItem {
   daysLeft: number;
 }
 
-const dayOf = (at: string, zone?: string) =>
-  new Date(at).toLocaleDateString("en-US", { month: "short", day: "numeric", ...(zone ? { timeZone: zone } : {}) });
-const still = () => () => {};
-
-/** The day, on the student's own calendar (the server renders UTC; the browser takes over). */
-function Day({ at }: { at: string }) {
-  return <>{useSyncExternalStore(still, () => dayOf(at), () => dayOf(at, "UTC"))}</>;
-}
 
 export function TrashList({ items }: { items: TrashItem[] }) {
   const [restored, setRestored] = useState<{ title: string; href: string } | null>(null);
@@ -66,7 +59,7 @@ export function TrashList({ items }: { items: TrashItem[] }) {
                   {item.kind === "college" ? `college, ${item.detail}` : item.detail ? `piece for ${item.detail}` : "independent piece"}
                 </span>
                 <span className="block text-xs text-muted">
-                  Deleted <Day at={item.deleted_at} />
+                  Deleted <LocalDay at={item.deleted_at} />
                   {item.deleted_by ? ` by ${item.deleted_by}` : ""} · kept {item.daysLeft} more day{item.daysLeft === 1 ? "" : "s"}
                 </span>
               </span>

@@ -22,8 +22,9 @@ export type Block =
 
 type Of<K extends Block["kind"]> = Extract<Block, { kind: K }>;
 
-// **bold**, __bold__, `code`, *italic* (the italic must hug its text, so "2 * 3 * 4" stays).
-const INLINE = /\*\*([^*\n]+?)\*\*|__([^_\n]+?)__|`([^`\n]+)`|\*([^*\s](?:[^*\n]*?[^*\s])?)\*/g;
+// **bold**, __bold__, `code`, *italic* (the italic must hug its text, so "2 * 3 * 4" stays, and
+// can't sit inside a word, so A-level grades like "A*A*A" stay).
+const INLINE = /\*\*([^*\n]+?)\*\*|__([^_\n]+?)__|`([^`\n]+)`|(?<![\p{L}\p{N}])\*([^*\s](?:[^*\n]*?[^*\s])?)\*(?![\p{L}\p{N}])/gu;
 
 export function parseInline(s: string): Line {
   const out: Line = [];

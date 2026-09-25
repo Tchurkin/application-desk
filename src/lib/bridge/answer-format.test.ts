@@ -16,6 +16,7 @@ describe("parseInline", () => {
 
   it("doesn't mistake arithmetic or snake_case for emphasis", () => {
     expect(parseInline("2 * 3 * 4 and piece_id")).toEqual([{ text: "2 * 3 * 4 and piece_id" }]);
+    expect(parseInline("Imperial asks A*A*A; you have A*AA.")).toEqual([{ text: "Imperial asks A*A*A; you have A*AA." }]);
   });
 
   it("keeps markup-looking text as plain text (React renders it as text)", () => {
