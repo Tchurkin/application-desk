@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { FormattedTextarea } from "@/components/formatted-textarea";
 import { requireDesk } from "@/lib/supabase/server";
 import { updateProfile } from "../actions";
 import { SettingsHeader } from "./settings-header";
@@ -29,7 +30,7 @@ export default async function ProfileSettingsPage() {
         </div>
         <div>
           <label className="label" htmlFor="about">About you</label>
-          <textarea
+          <FormattedTextarea
             className="field"
             id="about"
             name="about"

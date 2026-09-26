@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useId, useRef, useState } from "react";
 import { updateAcademics, type AcademicsState } from "@/app/desk/profile/actions";
 import { AnswerText } from "@/components/ask/answer-text";
+import { FormattedTextarea } from "@/components/formatted-textarea";
+import { LengthNote } from "@/components/length-note";
 import { ModelPicker, useModelChoice } from "@/components/ask/model-picker";
 import { PendingAnswer } from "@/components/ask/pending-answer";
 import { useConnectors, WatchStatus } from "@/components/ask/watch-status";
@@ -144,14 +146,14 @@ export function AcademicsCard({
           <textarea
             id={`${ids}-t`}
             className="field min-h-40 font-mono text-xs"
-            maxLength={MESSAGE_MAX}
             value={text}
             autoFocus
             placeholder="Copy everything from your transcript (the PDF, or your school's portal) and paste it here: courses, grades, GPA, rank."
             onChange={(e) => setText(e.target.value)}
           />
+          <LengthNote length={text.length} max={MESSAGE_MAX} over="paste the part with your courses, grades, GPA and rank." />
           <div className="flex flex-wrap items-center gap-2">
-            <button type="button" className="btn btn-primary" disabled={busy || !text.trim()} onClick={() => void send()}>
+            <button type="button" className="btn btn-primary" disabled={busy || !text.trim() || text.length > MESSAGE_MAX} onClick={() => void send()}>
               {busy ? "Sending…" : "Send to your counselor"}
             </button>
             <button
@@ -287,7 +289,7 @@ function AcademicsForm({ values, full }: { values: Academics; full: boolean }) {
           <label className="label" htmlFor={`${ids}-coursework`}>
             Coursework
           </label>
-          <textarea
+          <FormattedTextarea
             className="field"
             id={`${ids}-coursework`}
             name="coursework"

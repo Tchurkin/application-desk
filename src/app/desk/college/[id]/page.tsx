@@ -4,6 +4,7 @@ import { DueTag } from "@/components/board/due-tag";
 import { StrategySummary } from "@/components/board/strategy-summary";
 import { CollegeFields } from "@/components/college-form";
 import { ConfirmButton } from "@/components/confirm-button";
+import { FormattedTextarea } from "@/components/formatted-textarea";
 import { StatusPill } from "@/components/status-pill";
 import { PIECE_SUMMARY_COLS, todayISO, type CollegeRow, type PieceRow } from "@/lib/data/queries";
 import { collegeSubmitted, APP_SYSTEMS, labelOf, ROUNDS } from "@/lib/domain/colleges";
@@ -89,7 +90,7 @@ export default async function CollegePage(props: PageProps<"/desk/college/[id]">
           <CollegeFields college={college} />
           <div>
             <label className="label" htmlFor="research">Your research notes</label>
-            <textarea
+            <FormattedTextarea
               className="field"
               id="research"
               name="research"

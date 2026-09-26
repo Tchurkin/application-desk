@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AnswerText } from "@/components/ask/answer-text";
 import type { CollegeRow } from "@/lib/data/queries";
 import type { CatalogEntry } from "@/lib/strategy/catalog";
 import { chanceOf, formatPercent, LEVEL_LABEL, SOURCE_LABEL, type OddsLevel } from "./chance";
@@ -56,7 +57,11 @@ export function StrategySummary({
           {money.note && <dd className="mt-0.5 text-xs text-muted">{money.note}</dd>}
         </div>
       </dl>
-      {college.chance_note && <p className="mt-3 text-sm text-muted">{college.chance_note}</p>}
+      {college.chance_note && (
+        <div className="mt-3 text-muted">
+          <AnswerText text={college.chance_note} />
+        </div>
+      )}
       {abroad && college.intl_criterion && (
         <p className="mt-3 text-sm"><span className="text-muted">What decides it:</span> {college.intl_criterion}</p>
       )}

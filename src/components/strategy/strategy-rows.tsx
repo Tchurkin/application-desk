@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
+import { AnswerText } from "@/components/ask/answer-text";
 import { barWidth, formatMoney, formatPercent, SOURCE_LABEL, type Band, type StrategyRow } from "@/lib/strategy/bands";
 import type { StrategyCollegeView } from "@/lib/strategy/load";
 import { StrategyEditor } from "./strategy-editor";
@@ -103,8 +104,8 @@ export function OddsRow({ row, editable }: { row: StrategyRow<StrategyCollegeVie
       {open === "why" && (
         <tr>
           <td colSpan={ODDS_COLUMNS} id={noteId} className="bg-bg px-3 py-2 text-sm whitespace-normal">
-            <span className="font-medium">{chance?.source === "ai" ? "The AI's reasoning: " : "Reasoning: "}</span>
-            {note}
+            <p className="mb-1 font-medium">{chance?.source === "ai" ? "The AI's reasoning" : "Reasoning"}</p>
+            <AnswerText text={note} />
           </td>
         </tr>
       )}

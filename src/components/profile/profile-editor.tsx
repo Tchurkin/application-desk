@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ConfirmButton } from "@/components/confirm-button";
+import { FormattedTextarea } from "@/components/formatted-textarea";
 import { mergeSection, moveSection, nextSort, removeSection, SECTION_COLS, sortSections, type SectionRow } from "@/lib/profile/sections";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
@@ -200,7 +201,7 @@ function SectionCard({
           ↓
         </button>
       </div>
-      <textarea
+      <FormattedTextarea
         className="field min-h-24 resize-y"
         rows={Math.min(16, Math.max(3, draft.body.split("\n").length + 1))}
         value={draft.body}

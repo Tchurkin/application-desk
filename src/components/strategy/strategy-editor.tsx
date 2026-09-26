@@ -1,6 +1,7 @@
 "use client";
 import { useState, useTransition, type FormEvent, type ReactNode } from "react";
 import { updateStrategy } from "@/app/desk/strategy/actions";
+import { FormattedTextarea } from "@/components/formatted-textarea";
 import { formatPercent } from "@/lib/strategy/bands";
 import type { StrategyCollegeView } from "@/lib/strategy/load";
 
@@ -114,7 +115,7 @@ export function StrategyEditor({
             )}
           </div>
           <Field id={id("note")} label="Reasoning">
-            <textarea
+            <FormattedTextarea
               className="field"
               id={id("note")}
               name="chance_note"

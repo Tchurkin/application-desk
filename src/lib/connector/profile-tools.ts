@@ -2,7 +2,7 @@ import "server-only";
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { bridgeMissing } from "@/lib/bridge/requests";
-import { renderProfile, type ProfileInfo } from "@/lib/profile/render";
+import { renderProfilePart, type ProfileInfo } from "@/lib/profile/render";
 import { db, fail, text } from "./tools";
 
 /*
@@ -28,13 +28,14 @@ export function registerProfileTools(server: McpServer, token: string) {
     {
       title: "Read the student's profile",
       description:
-        "The student's Profile page: their academics and every section about them (background, activities, stories, values, goals, and anything else they or you added), with section ids.",
-      inputSchema: z.object({}),
+        "The student's Profile page: their academics and every section about them (background, activities, stories, values, goals, and anything else they or you added), with section ids. " +
+        "It is the ground truth about the student. A long profile comes in parts: each reply says which part it is and how to ask for the next; read them all.",
+      inputSchema: z.object({ part: z.number().int().min(1).optional().describe("Which part of a long profile, from 1 (the default).") }),
       annotations: { readOnlyHint: true },
     },
-    async () => {
+    async ({ part }) => {
       try {
-        return text(renderProfile((await rpc("connector_profile", { token })) as ProfileInfo));
+        return text(renderProfilePart((await rpc("connector_profile", { token })) as ProfileInfo, part ?? 1).text);
       } catch (e) {
         return fail((e as Error).message);
       }
