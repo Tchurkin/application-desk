@@ -5,6 +5,10 @@
 -- order, all or nothing. Running it again is safe: it does nothing when everything is there.
 -- At the end it lists every migration your database has.
 --
+-- A migration that was skipped (a later one is already here) is applied too, unless a later one
+-- already here changes some of the same things: applying it then would put back their older
+-- versions, so nothing is changed and it says what is in the way.
+--
 -- Built from supabase/migrations by src/lib/db/setup-sql.ts; don't edit it by hand.
 
 create schema if not exists average_app;
@@ -17,8 +21,10 @@ declare
   marked text[];
   cli text[] := '{}';
   have boolean[];
-  first_missing int;
-  gap text;
+  -- For each migration, the later ones that change some of the same things, and what.
+  clash jsonb := '{"1":{"2":"function can_read_desk, function can_write_desk, function handle_new_user and 1 more","8":"policy \"add updates\" on piece_updates","9":"policy \"add updates\" on piece_updates","17":"function handle_new_user"},"2":{"3":"function check_suggestion_update","8":"function check_suggestion_update","9":"function can_suggest_desk, function create_share_link","17":"function handle_new_user","18":"function join_desk, function link_info"},"3":{"4":"function connector_add_suggestions","5":"function connector_add_suggestions, function connector_desk","8":"function check_suggestion_update","9":"function connector_add_suggestions, function connector_desk","15":"function connector_desk","20":"function connector_link"},"4":{"5":"function connector_add_suggestions","9":"function connector_add_suggestions, function connector_create_piece, function connector_write"},"5":{"9":"function connector_add_suggestions, function connector_delete_college, function connector_delete_piece and 4 more","15":"function connector_desk","16":"function connector_delete_college, function connector_delete_piece"},"6":{"12":"function connector_requests","14":"function connector_strategy, function connector_update_academics"},"8":{"9":"function can_edit_text, policy \"add updates\" on piece_updates"},"9":{"10":"constraint desk_requests_kind_check, function connector_counselor_poll","11":"function connector_counselor_poll","12":"function connector_counselor_poll","14":"constraint desk_requests_kind_check, function connector_profile","15":"function connector_desk","16":"function connector_delete_college, function connector_delete_piece","20":"function connector_allow"},"10":{"11":"column connector_links.counselor_remove, function connector_counselor_poll, function connector_counselor_removed","12":"function connector_counselor_poll","14":"constraint desk_requests_kind_check"},"11":{"12":"function connector_counselor_poll"},"17":{"19":"trigger forget_unconfirmed_password"},"21":{"22":"function join_desk_by_name, function set_desk_sharing"}}';
+  late boolean[] := '{}';
+  blocked text;
   applied int := 0;
 begin
   select coalesce(array_agg(version), '{}') into marked from average_app.migrations;
@@ -52,14 +58,21 @@ begin
   ];
 
   for i in 1 .. array_length(names, 1) loop
+    late[i] := false;
     if not have[i] then
-      first_missing := coalesce(first_missing, i);
-    elsif first_missing is not null then
-      gap := coalesce(gap || ', ', '') || names[i];
+      for j in i + 1 .. array_length(names, 1) loop
+        if have[j] then
+          late[i] := true;
+          if clash -> i::text ? j::text then
+            blocked := coalesce(blocked || '; ', '') || format('%s is missing, and %s, already here, changes the same things (%s)',
+              names[i], names[j], clash -> i::text ->> j::text);
+          end if;
+        end if;
+      end loop;
     end if;
   end loop;
-  if gap is not null then
-    raise exception 'Nothing was changed: % is missing, but later migrations are already applied (%). Applying it now could undo them, so get help first.', names[first_missing], gap;
+  if blocked is not null then
+    raise exception 'Nothing was changed: %. Applying the missing one now would undo part of the later one, so get help first.', blocked;
   end if;
 
   -- Remember what is already here, so a later run needn't work it out again.
@@ -288,7 +301,7 @@ grant execute on function public.compact_piece(uuid, text, bigint, timestamptz) 
 $m20260923000000$;
     insert into average_app.migrations (version, name) values ('20260923000000', '20260923000000_init');
     applied := applied + 1;
-    raise notice 'Applied %', '20260923000000_init';
+    raise notice 'Applied %', '20260923000000_init' || case when late[1] then ' (it had been skipped)' else '' end;
   end if;
 
   if not have[2] then
@@ -596,7 +609,7 @@ create policy "piece channel: send" on realtime.messages
 $m20260924000000$;
     insert into average_app.migrations (version, name) values ('20260924000000', '20260924000000_sharing');
     applied := applied + 1;
-    raise notice 'Applied %', '20260924000000_sharing';
+    raise notice 'Applied %', '20260924000000_sharing' || case when late[2] then ' (it had been skipped)' else '' end;
   end if;
 
   if not have[3] then
@@ -802,7 +815,7 @@ $$;
 $m20260925000000$;
     insert into average_app.migrations (version, name) values ('20260925000000', '20260925000000_connectors');
     applied := applied + 1;
-    raise notice 'Applied %', '20260925000000_connectors';
+    raise notice 'Applied %', '20260925000000_connectors' || case when late[3] then ' (it had been skipped)' else '' end;
   end if;
 
   if not have[4] then
@@ -914,7 +927,7 @@ grant execute on function public.connector_create_piece(text, uuid, text, text, 
 $m20260926000000$;
     insert into average_app.migrations (version, name) values ('20260926000000', '20260926000000_connector_editing');
     applied := applied + 1;
-    raise notice 'Applied %', '20260926000000_connector_editing';
+    raise notice 'Applied %', '20260926000000_connector_editing' || case when late[4] then ' (it had been skipped)' else '' end;
   end if;
 
   if not have[5] then
@@ -1182,7 +1195,7 @@ grant execute on function public.connector_update_profile(text, jsonb) to anon, 
 $m20260927000000$;
     insert into average_app.migrations (version, name) values ('20260927000000', '20260927000000_connector_manage');
     applied := applied + 1;
-    raise notice 'Applied %', '20260927000000_connector_manage';
+    raise notice 'Applied %', '20260927000000_connector_manage' || case when late[5] then ' (it had been skipped)' else '' end;
   end if;
 
   if not have[6] then
@@ -1370,7 +1383,7 @@ grant execute on function public.connector_update_academics(text, jsonb) to anon
 $m20260928000000$;
     insert into average_app.migrations (version, name) values ('20260928000000', '20260928000000_strategy_progress_bridge');
     applied := applied + 1;
-    raise notice 'Applied %', '20260928000000_strategy_progress_bridge';
+    raise notice 'Applied %', '20260928000000_strategy_progress_bridge' || case when late[6] then ' (it had been skipped)' else '' end;
   end if;
 
   if not have[7] then
@@ -1399,7 +1412,7 @@ grant execute on function public.connector_watch(text) to anon, authenticated;
 $m20260929000000$;
     insert into average_app.migrations (version, name) values ('20260929000000', '20260929000000_watch_desk');
     applied := applied + 1;
-    raise notice 'Applied %', '20260929000000_watch_desk';
+    raise notice 'Applied %', '20260929000000_watch_desk' || case when late[7] then ' (it had been skipped)' else '' end;
   end if;
 
   if not have[8] then
@@ -1472,7 +1485,7 @@ $$;
 $m20260930000000$;
     insert into average_app.migrations (version, name) values ('20260930000000', '20260930000000_editing_mode');
     applied := applied + 1;
-    raise notice 'Applied %', '20260930000000_editing_mode';
+    raise notice 'Applied %', '20260930000000_editing_mode' || case when late[8] then ' (it had been skipped)' else '' end;
   end if;
 
   if not have[9] then
@@ -1946,7 +1959,7 @@ grant execute on function public.connector_counselor_poll(text) to anon, authent
 $m20261001000000$;
     insert into average_app.migrations (version, name) values ('20261001000000', '20261001000000_permissions_counselor_profile');
     applied := applied + 1;
-    raise notice 'Applied %', '20261001000000_permissions_counselor_profile';
+    raise notice 'Applied %', '20261001000000_permissions_counselor_profile' || case when late[9] then ' (it had been skipped)' else '' end;
   end if;
 
   if not have[10] then
@@ -2074,7 +2087,7 @@ grant execute on function public.connector_activity(text, text, uuid, uuid) to a
 $m20261002000000$;
     insert into average_app.migrations (version, name) values ('20261002000000', '20261002000000_counselor_page');
     applied := applied + 1;
-    raise notice 'Applied %', '20261002000000_counselor_page';
+    raise notice 'Applied %', '20261002000000_counselor_page' || case when late[10] then ' (it had been skipped)' else '' end;
   end if;
 
   if not have[11] then
@@ -2138,7 +2151,7 @@ grant execute on function public.connector_counselor_poll(text, text) to anon, a
 $m20261003000000$;
     insert into average_app.migrations (version, name) values ('20261003000000', '20261003000000_counselor_update');
     applied := applied + 1;
-    raise notice 'Applied %', '20261003000000_counselor_update';
+    raise notice 'Applied %', '20261003000000_counselor_update' || case when late[11] then ' (it had been skipped)' else '' end;
   end if;
 
   if not have[12] then
@@ -2225,7 +2238,7 @@ grant execute on function public.connector_counselor_poll(text, text) to anon, a
 $m20261004000000$;
     insert into average_app.migrations (version, name) values ('20261004000000', '20261004000000_models');
     applied := applied + 1;
-    raise notice 'Applied %', '20261004000000_models';
+    raise notice 'Applied %', '20261004000000_models' || case when late[12] then ' (it had been skipped)' else '' end;
   end if;
 
   if not have[13] then
@@ -2413,7 +2426,7 @@ grant execute on function public.connector_set_letter(text, uuid, uuid, text) to
 $m20261005000000$;
     insert into average_app.migrations (version, name) values ('20261005000000', '20261005000000_recommenders');
     applied := applied + 1;
-    raise notice 'Applied %', '20261005000000_recommenders';
+    raise notice 'Applied %', '20261005000000_recommenders' || case when late[13] then ' (it had been skipped)' else '' end;
   end if;
 
   if not have[14] then
@@ -2500,7 +2513,7 @@ grant execute on function public.connector_profile(text) to anon, authenticated;
 $m20261006000000$;
     insert into average_app.migrations (version, name) values ('20261006000000', '20261006000000_transcript');
     applied := applied + 1;
-    raise notice 'Applied %', '20261006000000_transcript';
+    raise notice 'Applied %', '20261006000000_transcript' || case when late[14] then ' (it had been skipped)' else '' end;
   end if;
 
   if not have[15] then
@@ -2585,7 +2598,7 @@ grant execute on function public.connector_desk(text) to anon, authenticated;
 $m20261007000000$;
     insert into average_app.migrations (version, name) values ('20261007000000', '20261007000000_submitted');
     applied := applied + 1;
-    raise notice 'Applied %', '20261007000000_submitted';
+    raise notice 'Applied %', '20261007000000_submitted' || case when late[15] then ' (it had been skipped)' else '' end;
   end if;
 
   if not have[16] then
@@ -2806,7 +2819,7 @@ $$;
 $m20261008000000$;
     insert into average_app.migrations (version, name) values ('20261008000000', '20261008000000_trash');
     applied := applied + 1;
-    raise notice 'Applied %', '20261008000000_trash';
+    raise notice 'Applied %', '20261008000000_trash' || case when late[16] then ' (it had been skipped)' else '' end;
   end if;
 
   if not have[17] then
@@ -2857,7 +2870,7 @@ create trigger forget_unconfirmed_password
 $m20261009000000$;
     insert into average_app.migrations (version, name) values ('20261009000000', '20261009000000_sign_in');
     applied := applied + 1;
-    raise notice 'Applied %', '20261009000000_sign_in';
+    raise notice 'Applied %', '20261009000000_sign_in' || case when late[17] then ' (it had been skipped)' else '' end;
   end if;
 
   if not have[18] then
@@ -2979,7 +2992,7 @@ grant execute on function public.join_desk(text, text, text) to authenticated;
 $m20261010000000$;
     insert into average_app.migrations (version, name) values ('20261010000000', '20261010000000_share_password');
     applied := applied + 1;
-    raise notice 'Applied %', '20261010000000_share_password';
+    raise notice 'Applied %', '20261010000000_share_password' || case when late[18] then ' (it had been skipped)' else '' end;
   end if;
 
   if not have[19] then
@@ -3009,7 +3022,7 @@ drop trigger if exists forget_unconfirmed_password on auth.users;
 $m20261011000000$;
     insert into average_app.migrations (version, name) values ('20261011000000', '20261011000000_password_drop_waits_for_codes');
     applied := applied + 1;
-    raise notice 'Applied %', '20261011000000_password_drop_waits_for_codes';
+    raise notice 'Applied %', '20261011000000_password_drop_waits_for_codes' || case when late[19] then ' (it had been skipped)' else '' end;
   end if;
 
   if not have[20] then
@@ -3052,7 +3065,7 @@ revoke all on function public.connector_allow(text, text) from public, anon, aut
 $m20261012000000$;
     insert into average_app.migrations (version, name) values ('20261012000000', '20261012000000_average_app_name');
     applied := applied + 1;
-    raise notice 'Applied %', '20261012000000_average_app_name';
+    raise notice 'Applied %', '20261012000000_average_app_name' || case when late[20] then ' (it had been skipped)' else '' end;
   end if;
 
   if not have[21] then
@@ -3200,7 +3213,7 @@ grant execute on function public.join_desk_by_name(text, text, text) to authenti
 $m20261013000000$;
     insert into average_app.migrations (version, name) values ('20261013000000', '20261013000000_share_by_name');
     applied := applied + 1;
-    raise notice 'Applied %', '20261013000000_share_by_name';
+    raise notice 'Applied %', '20261013000000_share_by_name' || case when late[21] then ' (it had been skipped)' else '' end;
   end if;
 
   if not have[22] then
@@ -3321,7 +3334,7 @@ grant execute on function public.desk_share_guesses(uuid) to authenticated;
 $m20261014000000$;
     insert into average_app.migrations (version, name) values ('20261014000000', '20261014000000_share_join_limits');
     applied := applied + 1;
-    raise notice 'Applied %', '20261014000000_share_join_limits';
+    raise notice 'Applied %', '20261014000000_share_join_limits' || case when late[22] then ' (it had been skipped)' else '' end;
   end if;
 
   if not have[23] then
@@ -3463,7 +3476,7 @@ grant execute on function public.connector_add_profile_file(text, text, text, te
 $m20261015000000$;
     insert into average_app.migrations (version, name) values ('20261015000000', '20261015000000_profile_files');
     applied := applied + 1;
-    raise notice 'Applied %', '20261015000000_profile_files';
+    raise notice 'Applied %', '20261015000000_profile_files' || case when late[23] then ' (it had been skipped)' else '' end;
   end if;
 
   if applied = 0 then

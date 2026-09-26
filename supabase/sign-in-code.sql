@@ -11,3 +11,12 @@ drop trigger if exists forget_unconfirmed_password on auth.users;
 create trigger forget_unconfirmed_password
   before update of email_confirmed_at on auth.users
   for each row execute function public.forget_unconfirmed_password();
+
+-- setup.sql tells migration 20261011 ran by this trigger being gone; with it back, say so here,
+-- so setup.sql never runs 20261011 again and drops it.
+create schema if not exists average_app;
+revoke all on schema average_app from public;
+create table if not exists average_app.migrations (version text primary key, name text not null, applied_at timestamptz not null default now());
+insert into average_app.migrations (version, name)
+values ('20261009000000', '20261009000000_sign_in'), ('20261011000000', '20261011000000_password_drop_waits_for_codes')
+on conflict (version) do nothing;

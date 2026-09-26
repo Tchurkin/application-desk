@@ -64,6 +64,27 @@ jobs:
           mkdir -p "$RUNNER_TEMP/migrations"
           mv supabase/migrations/*.sql "$RUNNER_TEMP/migrations/"
           npx supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor
+      # The live database as it was on 9/26/26: migrations pasted by hand up to 20261012, skipping
+      # 20261008, 20261009 and 20261011. setup.sql runs those late (they change nothing the later
+      # ones do) and the rest after them.
+      - name: Bring a database that skipped migrations up to date, then start over
+        run: |
+          eval "$(npx supabase status -o env)"
+          command -v psql >/dev/null || (sudo apt-get update && sudo apt-get install -y postgresql-client)
+          db="${DB_URL:-postgresql://postgres:postgres@127.0.0.1:54322/postgres}"
+          for f in "$RUNNER_TEMP"/migrations/*.sql; do
+            v=$(basename "$f" | cut -c1-8)
+            case "$v" in 20261008|20261009|20261011) continue ;; esac
+            if [[ "$v" > "20261012" ]]; then continue; fi
+            psql "$db" -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+          psql "$db" -v ON_ERROR_STOP=1 -f supabase/setup.sql 2>&1 | tee "$RUNNER_TEMP/gap-1.txt"
+          grep -q "Applied 20261008000000_trash (it had been skipped)" "$RUNNER_TEMP/gap-1.txt"
+          grep -q "Applied 20261015000000_profile_files" "$RUNNER_TEMP/gap-1.txt"
+          psql "$db" -v ON_ERROR_STOP=1 -f supabase/setup.sql 2>&1 | tee "$RUNNER_TEMP/gap-2.txt"
+          grep -q "up to date: nothing to do" "$RUNNER_TEMP/gap-2.txt"
+          test "$(psql "$db" -tAc "select count(*) from pg_trigger where tgname = 'forget_unconfirmed_password'")" = 0
+          npx supabase db reset
       - name: Set up the database from supabase/setup.sql, then check a second run does nothing
         run: |
           eval "$(npx supabase status -o env)"
