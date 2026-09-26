@@ -93,7 +93,10 @@ Put those two values in `.env.local`.
 
 1. Create a project at [supabase.com](https://supabase.com).
 2. Copy the project URL and publishable key (Project Settings → API) into `.env.local`.
-3. Apply the schema: `npx supabase link --project-ref <your-ref>` then `npx supabase db push`.
+3. Apply the schema: paste all of [`supabase/setup.sql`](supabase/setup.sql) into the SQL Editor
+   and run it. It applies whatever migrations the database doesn't have yet, so run it again
+   after every update; when nothing is missing it changes nothing. (Or use the CLI:
+   `npx supabase link --project-ref <your-ref>` then `npx supabase db push`.)
 4. For a quick start, turn off Authentication → Sign In / Providers → Email → **Confirm
    email**, or set up SMTP. Supabase's built-in email is rate-limited to a few messages an hour.
 5. For share links, turn on Authentication → Sign In / Providers → **Allow anonymous
