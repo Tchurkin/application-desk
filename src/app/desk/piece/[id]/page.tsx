@@ -39,7 +39,7 @@ export default async function PiecePage(props: PageProps<"/desk/piece/[id]">) {
         userId={userId}
         author={profile?.display_name || "Student"}
         collegeName={college?.name ?? null}
-        workspace={{ groups, tabs }}
+        workspace={{ groups, tabs, base: "/desk" }}
       />
     </main>
   );

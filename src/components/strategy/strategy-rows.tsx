@@ -22,12 +22,29 @@ const SOURCE_HINT = {
   average: "The college's published average admission rate (College Scorecard). It ignores your profile, so it isn't your personal chance.",
 } as const;
 
+/** The same, for the people the student shares their desk with. */
+const GUEST_HINT = {
+  ai: "Estimated by the student's AI assistant from their profile.",
+  student: "The chance the student set.",
+  average: "The college's published average admission rate (College Scorecard). It ignores the student's profile, so it isn't their personal chance.",
+} as const;
+
 const cell = "px-3 py-2 align-top";
 
-function CollegeCell({ college }: { college: StrategyCollegeView }) {
+/** A college's name, opening its page (the student's only). */
+function CollegeName({ college, guest }: { college: StrategyCollegeView; guest: boolean }) {
+  if (guest) return <>{college.name}</>;
+  return (
+    <Link href={`/desk/college/${college.id}`} className="hover:underline">
+      {college.name}
+    </Link>
+  );
+}
+
+function CollegeCell({ college, guest }: { college: StrategyCollegeView; guest: boolean }) {
   return (
     <td className={`${cell} font-medium`}>
-      <Link href={`/desk/college/${college.id}`} className="hover:underline">{college.name}</Link>
+      <CollegeName college={college} guest={guest} />
     </td>
   );
 }
@@ -44,7 +61,8 @@ function EditButton({ name, open, onClick }: { name: string; open: boolean; onCl
 
 const outOf10 = (v: number | null | undefined) => (v === null || v === undefined ? "—" : `${v}/10`);
 
-export function OddsRow({ row, editable }: { row: StrategyRow<StrategyCollegeView>; editable: boolean }) {
+/** `guest`: someone the student shared their desk with, reading it. */
+export function OddsRow({ row, editable, guest = false }: { row: StrategyRow<StrategyCollegeView>; editable: boolean; guest?: boolean }) {
   const [open, setOpen] = useState<"none" | "edit" | "why">("none");
   const { college, chance, band, cost } = row;
   const note = college.chance_note?.trim() ?? "";
@@ -54,7 +72,7 @@ export function OddsRow({ row, editable }: { row: StrategyRow<StrategyCollegeVie
   return (
     <>
       <tr className="border-t border-line" data-college={college.id}>
-        <CollegeCell college={college} />
+        <CollegeCell college={college} guest={guest} />
         <td className={`${cell} min-w-40`}>
           {chance ? (
             <>
@@ -65,7 +83,7 @@ export function OddsRow({ row, editable }: { row: StrategyRow<StrategyCollegeVie
                 </span>
               </div>
               <div className="mt-0.5 flex items-center gap-2 text-xs text-muted">
-                <span title={SOURCE_HINT[chance.source]}>{SOURCE_LABEL[chance.source]}</span>
+                <span title={(guest ? GUEST_HINT : SOURCE_HINT)[chance.source]}>{SOURCE_LABEL[chance.source]}</span>
                 {note && (
                   <button
                     type="button"
@@ -120,7 +138,7 @@ export function OddsRow({ row, editable }: { row: StrategyRow<StrategyCollegeVie
   );
 }
 
-export function IntlRow({ college, editable }: { college: StrategyCollegeView; editable: boolean }) {
+export function IntlRow({ college, editable, guest = false }: { college: StrategyCollegeView; editable: boolean; guest?: boolean }) {
   const [editing, setEditing] = useState(false);
   const text = (v: string | null | undefined) => (v?.trim() ? v : <span className="text-muted">—</span>);
   const wrap = `${cell} min-w-40 whitespace-normal`;
@@ -128,7 +146,7 @@ export function IntlRow({ college, editable }: { college: StrategyCollegeView; e
     <>
       <tr className="border-t border-line" data-college={college.id}>
         <td className={`${cell} font-medium`}>
-          <Link href={`/desk/college/${college.id}`} className="hover:underline">{college.name}</Link>
+          <CollegeName college={college} guest={guest} />
           <span className="block text-xs font-normal text-muted">{college.country}</span>
         </td>
         <td className={wrap}>{text(college.intl_course)}</td>

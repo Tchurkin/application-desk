@@ -47,7 +47,16 @@ function Empty({ columns }: { columns: number }) {
   );
 }
 
-export function BandSections({ strategy, editable }: { strategy: Strategy<StrategyCollegeView>; editable: boolean }) {
+/** `guest`: someone the student shared their desk with, reading it (no editing, no college pages). */
+export function BandSections({
+  strategy,
+  editable,
+  guest = false,
+}: {
+  strategy: Strategy<StrategyCollegeView>;
+  editable: boolean;
+  guest?: boolean;
+}) {
   return (
     <>
       {strategy.bands
@@ -60,7 +69,7 @@ export function BandSections({ strategy, editable }: { strategy: Strategy<Strate
                 {b.rows.length === 0 ? (
                   <Empty columns={ODDS_COLUMNS} />
                 ) : (
-                  b.rows.map((r) => <OddsRow key={r.college.id} row={r} editable={editable} />)
+                  b.rows.map((r) => <OddsRow key={r.college.id} row={r} editable={editable && !guest} guest={guest} />)
                 )}
               </tbody>
             </table>
@@ -77,7 +86,7 @@ export function BandSections({ strategy, editable }: { strategy: Strategy<Strate
             <Head columns={["College", "Course", "What decides it", "Cost a year", "Where it stands"]} />
             <tbody>
               {strategy.international.map((c) => (
-                <IntlRow key={c.id} college={c} editable={editable} />
+                <IntlRow key={c.id} college={c} editable={editable && !guest} guest={guest} />
               ))}
             </tbody>
           </table>

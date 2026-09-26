@@ -94,8 +94,8 @@ export function PieceEditor({
   workspace,
 }: {
   deskId?: string;
-  /** The owner's Write workspace: the college rail and this college's pieces as tabs. */
-  workspace?: { groups: RailGroup[]; tabs: RailPiece[] };
+  /** The Write workspace: the college rail and this college's pieces as tabs, linking under `base`. */
+  workspace?: { groups: RailGroup[]; tabs: RailPiece[]; base: string };
   piece: PieceMeta;
   userId: string;
   author: string;
@@ -537,6 +537,7 @@ export function PieceEditor({
   return (
     <WriteWorkspace
       workspace={workspace}
+      owner={owner}
       pieceId={piece.id}
       deskId={deskId ?? ""}
       title={title}

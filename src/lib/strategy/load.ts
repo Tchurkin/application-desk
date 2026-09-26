@@ -38,21 +38,25 @@ function baselineOf(e: CatalogEntry | null): StrategyCollegeView["baseline"] {
   return e ? { id: e.id, name: e.name, rate: e.rate, sat: e.sat, act: e.act, cost: e.cost, net: e.net } : null;
 }
 
-export async function loadStrategy(supabase: SupabaseClient, deskId: string, userId: string): Promise<StrategyData> {
+/** `userId` null: someone the student shared the desk with, who sees the colleges but not the student's academics or requests. */
+export async function loadStrategy(supabase: SupabaseClient, deskId: string, userId: string | null): Promise<StrategyData> {
+  const none = Promise.resolve({ data: null, error: null });
   const [colleges, probe, profile, requests, links] = await Promise.all([
     // "*" so strategy columns come back when the database has them, and nothing breaks when not.
     supabase.from("colleges").select("*").eq("desk_id", deskId).order("name"),
     supabase.from("colleges").select("chance_percent").eq("desk_id", deskId).limit(1),
-    supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
-    supabase
-      .from("desk_requests")
-      .select(REQUEST_COLS)
-      .eq("desk_id", deskId)
-      .eq("kind", "odds")
-      .in("status", ["pending", "answered"])
-      .order("created_at", { ascending: false })
-      .limit(10),
-    supabase.from("connector_links").select("label").eq("desk_id", deskId).is("revoked_at", null),
+    userId ? supabase.from("profiles").select("*").eq("id", userId).maybeSingle() : none,
+    userId
+      ? supabase
+          .from("desk_requests")
+          .select(REQUEST_COLS)
+          .eq("desk_id", deskId)
+          .eq("kind", "odds")
+          .in("status", ["pending", "answered"])
+          .order("created_at", { ascending: false })
+          .limit(10)
+      : none,
+    userId ? supabase.from("connector_links").select("label").eq("desk_id", deskId).is("revoked_at", null) : none,
   ]);
   if (colleges.error) throw colleges.error;
 

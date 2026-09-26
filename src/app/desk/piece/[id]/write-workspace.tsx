@@ -12,21 +12,22 @@ import type { PieceStatus } from "@/lib/domain/colleges";
 import type { RailGroup, RailPiece } from "@/lib/write/rail";
 import { deletePiece } from "../../actions";
 
-const TOOLS: ToolDef[] = [
-  { id: "files", label: "Files", hint: "Colleges and pieces", icon: <FilesIcon /> },
-  { id: "ask", label: "Ask", hint: "Ask Claude or ChatGPT about this piece", icon: <AskIcon /> },
-  { id: "history", label: "History", hint: "Earlier versions of this piece", icon: <HistoryIcon /> },
-];
-
-const pieceHref = (id: string) => `/desk/piece/${id}`;
-const collegeHref = (id: string) => `/desk/college/${id}`;
+const FILES: ToolDef = { id: "files", label: "Files", hint: "Colleges and pieces", icon: <FilesIcon /> };
+const ASK: ToolDef = { id: "ask", label: "Ask", hint: "Ask Claude or ChatGPT about this piece", icon: <AskIcon /> };
+const HISTORY: ToolDef = { id: "history", label: "History", hint: "Earlier versions of this piece", icon: <HistoryIcon /> };
+// Asking the counselor, adding and deleting pieces are the student's; people they share with
+// move around the desk and read the history.
+const OWNER_TOOLS = [FILES, ASK, HISTORY];
+const GUEST_TOOLS = [FILES, HISTORY];
 
 /**
- * The owner's Write page around the editor: the tool strip and side panel (the college rail,
- * Ask, History), and this college's pieces as tabs.
+ * The Write page around the editor: the tool strip and side panel (the college rail, Ask,
+ * History), and this college's pieces as tabs. `workspace.base` is "/desk" for the student and
+ * "/shared/<id>" for the people they share with.
  */
 export function WriteWorkspace({
   workspace,
+  owner,
   pieceId,
   deskId,
   title,
@@ -37,7 +38,8 @@ export function WriteWorkspace({
   onDeleteCurrent,
   children,
 }: {
-  workspace: { groups: RailGroup[]; tabs: RailPiece[] };
+  workspace: { groups: RailGroup[]; tabs: RailPiece[]; base: string };
+  owner: boolean;
   pieceId: string;
   deskId: string;
   title: string;
@@ -51,10 +53,13 @@ export function WriteWorkspace({
 }) {
   const [deleting, setDeleting] = useState<RailPiece | null>(null);
   const group = workspace.groups.find((g) => g.pieces.some((p) => p.id === pieceId));
+  const pieceHref = (id: string) => `${workspace.base}/piece/${id}`;
+  // A college with no pieces yet opens its page, which only the student has.
+  const collegeHref = owner ? (id: string) => `/desk/college/${id}` : undefined;
 
   return (
     <Workspace
-      tools={TOOLS}
+      tools={owner ? OWNER_TOOLS : GUEST_TOOLS}
       title={(t) => (t === "files" ? "Colleges" : t === "ask" ? `Asking about ${title}` : "History")}
       renderPanel={(t) =>
         t === "files" ? (
@@ -93,13 +98,13 @@ export function WriteWorkspace({
             currentCount={countNow}
             besideId={null}
             pieceHref={pieceHref}
-            owner
+            owner={owner}
             onDelete={setDeleting}
           />
         </div>
       )}
       {children}
-      {deleting && (
+      {owner && deleting && (
         <ConfirmDialog
           question={`Delete "${deleting.title}"?`}
           detail="It goes to the Trash (Settings → Trash) with its history, notes and suggestions, and you can restore it for 30 days."

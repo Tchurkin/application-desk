@@ -186,6 +186,40 @@ test("a suggestion made just before leaving or reloading is kept, and Ctrl+Z und
   await expect(page.locator(".sugg-ins")).toHaveText(" World");
 });
 
+test("people it's shared with have the Board, Write and Strategy, and nothing of the student's own", async ({ page, browser }) => {
+  await studentWith(page, "pages", "Hello from Testy.");
+  const guest = await join(browser, await makeLink(page, { role: "view" }), "Dad");
+  const nav = guest.getByRole("navigation", { name: "Desk" });
+  for (const name of ["Board", "Write", "Strategy"]) await expect(nav.getByRole("link", { name, exact: true })).toBeVisible();
+  for (const name of ["Profile", "Counselor", "Settings"]) await expect(nav.getByRole("link", { name, exact: true })).toHaveCount(0);
+
+  // Write opens the piece to work on, in the workspace: the rail and history, but no asking the counselor.
+  await nav.getByRole("link", { name: "Write", exact: true }).click();
+  await expect(guest).toHaveURL(/\/shared\/[^/]+\/piece\//);
+  await expectEssay(guest, "Hello from Testy.");
+  const tools = guest.getByRole("toolbar", { name: "Tools" });
+  await expect(tools.getByRole("button", { name: "Files" })).toBeVisible();
+  await expect(tools.getByRole("button", { name: "History" })).toBeVisible();
+  await expect(tools.getByRole("button", { name: "Ask" })).toHaveCount(0);
+  await expect(guest.getByRole("button", { name: /Delete “/ })).toHaveCount(0);
+  await expect(guest.getByRole("button", { name: /Add a piece/ })).toHaveCount(0);
+  // The Files panel starts open: the rail, and tabs that stay on the shared desk.
+  await expect(guest.getByRole("tree", { name: "Colleges and pieces" }).getByRole("treeitem", { name: /Shared essay/ })).toBeVisible();
+  await expect(guest.getByRole("tab", { name: /Shared essay/ })).toHaveAttribute("href", /\/shared\/[^/]+\/piece\//);
+
+  // Strategy, to read: the colleges in bands, without the student's academics or their requests.
+  await nav.getByRole("link", { name: "Strategy", exact: true }).click();
+  await expect(guest.getByRole("heading", { name: "Strategy", level: 1 })).toBeVisible();
+  await expect(guest.getByRole("cell", { name: "Share College" })).toBeVisible();
+  await expect(guest.getByRole("link", { name: "Share College" })).toHaveCount(0);
+  await expect(guest.getByRole("button", { name: /^Edit/ })).toHaveCount(0);
+  await expect(guest.getByText("Academic profile")).toHaveCount(0);
+  await expect(guest.getByText("Estimate your odds")).toHaveCount(0);
+
+  await nav.getByRole("link", { name: "Board", exact: true }).click();
+  await expect(guest.getByRole("heading", { name: "Board", level: 1 })).toBeVisible();
+});
+
 test("read-only links can't change anything", async ({ page, browser }) => {
   await studentWith(page, "viewonly", "Read me.");
   const reader = await join(browser, await makeLink(page, { role: "view" }), "Grandpa");

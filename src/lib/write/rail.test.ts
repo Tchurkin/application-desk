@@ -4,6 +4,7 @@ import {
   groupMeta,
   nextVersionTitle,
   pickCollegePiece,
+  pieceToWrite,
   railOrder,
   SHARED,
   stepPiece,
@@ -156,5 +157,30 @@ describe("versions", () => {
   it("names the next version", () => {
     expect(nextVersionTitle("Why us?", 1)).toBe("Why us? (version 2)");
     expect(nextVersionTitle("Why us? (version 2)", 2)).toBe("Why us? (version 3)");
+  });
+});
+
+describe("pieceToWrite", () => {
+  const colleges = [college("a", "2030-11-01"), college("b", "2030-10-15")];
+  const pieces = [
+    piece("a1", "a"),
+    piece("b1", "b", { status: "final" }),
+    piece("b2", "b"),
+    piece("solo", null, { due: "2030-10-20" }),
+  ];
+
+  it("opens the piece last open, while it's still there", () => {
+    expect(pieceToWrite(colleges, pieces, "a1")).toBe("a1");
+    expect(pieceToWrite(colleges, pieces, "gone")).toBe("b2");
+  });
+
+  it("else the unfinished piece due soonest, by its own date or its college's deadline", () => {
+    expect(pieceToWrite(colleges, pieces)).toBe("b2");
+    expect(pieceToWrite(colleges, pieces.filter((p) => p.id !== "b2"))).toBe("solo");
+  });
+
+  it("else any piece, and nothing on an empty desk", () => {
+    expect(pieceToWrite(colleges, [piece("done", "a", { status: "submitted" })])).toBe("done");
+    expect(pieceToWrite(colleges, [])).toBeNull();
   });
 });

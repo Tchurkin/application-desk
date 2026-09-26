@@ -59,8 +59,8 @@ export default function PrivacyPage() {
         <li>You.</li>
         <li>
           People you share with: anyone you tell your desk&apos;s name and password (they open it from the home page), and anyone
-          you give a link. They can read your colleges (with the odds and notes on them), your essays, their notes and history,
-          suggestions and your recommenders. Depending on what you choose, they can also suggest edits or make them. They
+          you give a link. They can read your colleges (with the odds and notes on them, and the reasoning behind the odds,
+          which can mention your grades and scores), your essays, their notes and history, suggestions and your recommenders. Depending on what you choose, they can also suggest edits or make them. They
           can&apos;t see your profile, your academics or your conversations with your counselor. You can remove anyone, and
           turning sharing off (or a link) cuts off everyone who came in that way, at once.
         </li>

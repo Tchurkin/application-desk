@@ -133,6 +133,23 @@ export function railOrder(colleges: RailCollege[], pieces: RailPiece[], today: s
   return rows;
 }
 
+/**
+ * The piece "Write" opens: the one last open (when it's still there), else the unfinished piece
+ * due soonest (its own due date, else its college's deadline; desk order on a tie), else any
+ * piece. Null on an empty desk.
+ */
+export function pieceToWrite(
+  colleges: { id: string; deadline: string | null }[],
+  pieces: { id: string; college_id: string | null; status: PieceStatus; due?: string | null }[],
+  last?: string | null,
+): string | null {
+  if (last && pieces.some((p) => p.id === last)) return last;
+  const deadline = new Map(colleges.map((c) => [c.id, c.deadline]));
+  const due = (p: (typeof pieces)[number]) => p.due ?? (p.college_id ? deadline.get(p.college_id) : null) ?? "9999";
+  const open = pieces.filter((p) => !isDone(p.status)).sort((a, b) => (due(a) < due(b) ? -1 : due(a) > due(b) ? 1 : 0));
+  return (open[0] ?? pieces[0])?.id ?? null;
+}
+
 /** Where opening a college lands: its first piece still being worked on, else its first piece. */
 export function pickCollegePiece<T extends { status: PieceStatus }>(pieces: T[]): T | null {
   return pieces.find((p) => !isDone(p.status)) ?? pieces[0] ?? null;
