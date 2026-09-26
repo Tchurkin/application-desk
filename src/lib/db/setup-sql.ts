@@ -40,6 +40,8 @@ export const PROBES: Record<string, string> = {
   "20261011000000": `${fn("forget_unconfirmed_password")} and not exists (select 1 from pg_trigger where tgname = 'forget_unconfirmed_password' and tgrelid = to_regclass('auth.users'))`,
   "20261012000000": `coalesce(position('Average App' in pg_get_functiondef(to_regprocedure('public.connector_link(text)'))) > 0, false)`,
   "20261013000000": col("share_passwords", "share_name"),
+  "20261014000000": fn("desk_share_guesses"),
+  "20261015000000": tbl("profile_files"),
 };
 
 export function migrationFiles(dir: string): { version: string; name: string; sql: string }[] {

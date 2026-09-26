@@ -1,5 +1,5 @@
 "use client";
-import { useActionState } from "react";
+import { startTransition, useActionState, useEffect, useRef } from "react";
 import { ConfirmButton } from "@/components/confirm-button";
 import { SHARE_ROLES, type ShareRole } from "@/lib/domain/share";
 import { setDeskSharing, stopDeskSharing, type DeskSharingState } from "../../share-actions";
@@ -10,8 +10,21 @@ import { setDeskSharing, stopDeskSharing, type DeskSharingState } from "../../sh
  */
 export function DeskSharing({ name, suggested, on, role }: { name: string | null; suggested: string; on: boolean; role: ShareRole }) {
   const [state, action, pending] = useActionState<DeskSharingState, FormData>(setDeskSharing, {});
+  const password = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (state.saved && password.current) password.current.value = "";
+  }, [state]);
   return (
-    <form action={action} className="flex flex-col gap-3">
+    // Submitted by hand, not as the form's action: React empties a form after its action runs, even
+    // when the save failed, and the student would lose what they typed.
+    <form
+      className="flex flex-col gap-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const data = new FormData(e.currentTarget);
+        startTransition(() => action(data));
+      }}
+    >
       <p className="text-sm">
         {on
           ? `On: anyone with your desk name and password can open your desk from the home page.`
@@ -23,6 +36,7 @@ export function DeskSharing({ name, suggested, on, role }: { name: string | null
             Desk name
           </label>
           <input
+            key={name ?? ""}
             className="field"
             id="share-name"
             name="name"
@@ -41,6 +55,7 @@ export function DeskSharing({ name, suggested, on, role }: { name: string | null
           <input
             className="field"
             id="share-password"
+            ref={password}
             name="password"
             type="password"
             minLength={8}
@@ -54,7 +69,7 @@ export function DeskSharing({ name, suggested, on, role }: { name: string | null
         <label className="label" htmlFor="share-role">
           People with the password can
         </label>
-        {/* Keyed, so after a save it shows the saved choice (a form resets its selects to how they first rendered). */}
+        {/* Keyed, so after a save it shows the saved choice. */}
         <select key={role} className="field" id="share-role" name="role" defaultValue={role}>
           {SHARE_ROLES.map((r) => (
             <option key={r.value} value={r.value}>

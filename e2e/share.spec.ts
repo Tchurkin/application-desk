@@ -7,7 +7,8 @@ const deskName = (tag: string) => `testy-${tag}-${Date.now().toString(36)}${Math
 /** The student turns on sharing by desk name and password in Settings. */
 async function shareByName(page: Page, opts: { name: string; password: string; role?: "suggest" | "view" | "edit" }) {
   await page.goto("/desk/settings/sharing");
-  await page.getByLabel("Desk name").fill(opts.name);
+  // By id: "Desk name" also matches the section headed "Desk name and password".
+  await page.locator("#share-name").fill(opts.name);
   // Labelled "New password" once sharing is on; blank keeps the password.
   if (opts.password) await page.locator("#share-password").fill(opts.password);
   if (opts.role) await page.getByLabel("People with the password can").selectOption(opts.role);

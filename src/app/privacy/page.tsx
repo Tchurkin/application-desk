@@ -136,7 +136,7 @@ export default function PrivacyPage() {
       <H2>Security</H2>
       <p>
         The database only lets you, and the people you&apos;ve shared with, read your desk. Your sharing password, share links
-        and connector links are stored only in scrambled form, and ten wrong passwords in a row lock your desk for 15 minutes. No
+        and connector links are stored only in scrambled form, and wrong passwords are limited to slow down guessing. No
         system is perfectly secure, though: anyone with your desk&apos;s name and password can open it, and a link is its own
         key. Choose a password that&apos;s hard to guess, share it only with people you trust, and turn sharing off when you&apos;re
         done.

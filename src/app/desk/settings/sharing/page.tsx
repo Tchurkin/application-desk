@@ -19,12 +19,13 @@ export default async function SharingSettingsPage() {
   const { supabase, desk, userId } = await requireDesk();
   const links = (cols: string) =>
     supabase.from("share_links").select(cols).eq("desk_id", desk.id).is("revoked_at", null).order("created_at", { ascending: false });
-  const [withFlag, members, password, profile] = await Promise.all([
+  const [withFlag, members, password, profile, guesses] = await Promise.all([
     links("id, role, label, created_at, via_password"),
     supabase.from("desk_members").select("user_id, display_name, link_id, joined_at").eq("desk_id", desk.id).order("joined_at"),
     // Only the student can read this row: the name sits here, not on the desk its members can read.
     supabase.from("share_passwords").select("desk_id, share_name").eq("desk_id", desk.id).maybeSingle(),
     supabase.from("profiles").select("display_name").eq("id", userId).maybeSingle(),
+    supabase.rpc("desk_share_guesses", { d: desk.id }),
   ]);
   // A database before migration 20261013 has no desk names yet: links only.
   const behind = !!password.error || !!withFlag.error;
@@ -34,6 +35,7 @@ export default async function SharingSettingsPage() {
   const shareName = (password.data as { share_name?: string | null } | null)?.share_name ?? null;
   const on = !behind && !!shareName && !!byPassword;
   const people = members.data ?? [];
+  const wrongTries = on && typeof guesses.data === "number" ? guesses.data : 0;
 
   return (
     <>
@@ -49,6 +51,12 @@ export default async function SharingSettingsPage() {
         <h3 id="desk-sharing-h" className="mb-2 font-medium">
           Desk name and password
         </h3>
+        {wrongTries >= 20 && (
+          <p role="alert" className="mb-3 rounded-md bg-danger-soft px-3 py-2 text-sm text-danger">
+            {wrongTries} wrong passwords have been tried on your desk name today. If that isn&apos;t someone you know mistyping,
+            change the desk name and password below and give the new ones only to people you trust.
+          </p>
+        )}
         {behind ? (
           <p className="text-sm text-muted">Run the latest database update (supabase/setup.sql) to share with a desk name and password.</p>
         ) : (
