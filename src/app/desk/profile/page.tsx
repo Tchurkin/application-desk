@@ -3,6 +3,7 @@ import { InterviewStart } from "@/components/profile/interview-start";
 import { ProfileEditor } from "@/components/profile/profile-editor";
 import { bridgeMissing, REQUEST_COLS, type DeskRequest } from "@/lib/bridge/requests";
 import { academicsOf } from "@/lib/profile/academics";
+import { FILE_COLS, type FileRow } from "@/lib/profile/files";
 import { SECTION_COLS, type SectionRow } from "@/lib/profile/sections";
 import { requireDesk } from "@/lib/supabase/server";
 
@@ -10,7 +11,7 @@ export const metadata = { title: "Profile" };
 
 export default async function ProfilePage() {
   const { supabase, userId, desk } = await requireDesk();
-  const [{ data, error }, { data: profile }, transcripts] = await Promise.all([
+  const [{ data, error }, { data: profile }, transcripts, files] = await Promise.all([
     supabase.from("profile_sections").select(SECTION_COLS).eq("desk_id", desk.id),
     // "*" so the academic fields come back when the database has them.
     supabase.from("profiles").select("*").eq("id", userId).single(),
@@ -23,6 +24,8 @@ export default async function ProfilePage() {
       .eq("status", "pending")
       .order("created_at", { ascending: false })
       .limit(1),
+    // Missing on a database from before files (migration 20261015): notes only.
+    supabase.from("profile_files").select(FILE_COLS).eq("desk_id", desk.id).order("created_at"),
   ]);
   const academics = academicsOf(profile);
 
@@ -30,9 +33,9 @@ export default async function ProfilePage() {
     <main className="mx-auto w-full max-w-6xl px-4 py-8">
       <h1 className="mb-2 font-serif text-3xl">Profile</h1>
       <p className="mb-6 max-w-[66ch] text-sm text-muted">
-        What Claude knows about you: your academics, background, activities, stories, values and goals. Write sections yourself,
-        or let Claude interview you and write them as you talk. Claude reads your profile before helping with any essay, so the
-        more specific it is, the more your essays sound like you.
+        What Claude knows about you: your academics, background, activities, stories, values and goals. Write notes yourself, let
+        Claude interview you and write them as you talk, or upload files like a resume or a school&apos;s form to fill in. Claude
+        reads your profile before helping with any essay, so the more specific it is, the more your essays sound like you.
       </p>
       <div className="grid items-start gap-6 lg:grid-cols-[1fr_24rem]">
         <div className="flex min-w-0 flex-col gap-6">
@@ -48,7 +51,7 @@ export default async function ProfilePage() {
               {bridgeMissing(error) ? "Run the latest database update to use your profile." : `Couldn't load your profile (${error.message}).`}
             </p>
           ) : (
-            <ProfileEditor deskId={desk.id} initial={(data ?? []) as SectionRow[]} />
+            <ProfileEditor deskId={desk.id} initial={(data ?? []) as SectionRow[]} files={files.error ? null : ((files.data ?? []) as FileRow[])} />
           )}
         </div>
         <div className="lg:sticky lg:top-4">

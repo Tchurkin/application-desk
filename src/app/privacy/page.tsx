@@ -29,8 +29,9 @@ export default function PrivacyPage() {
           page.
         </li>
         <li>
-          <strong>Your profile:</strong> what you write about yourself, your academics (GPA, test scores, class rank, courses) and
-          any transcript you paste in.
+          <strong>Your profile:</strong> what you write about yourself, your academics (GPA, test scores, class rank, courses), any
+          transcript you paste in, and files you upload to it (a resume, a school&apos;s form), with the copies your counselor fills
+          in.
         </li>
         <li>
           <strong>What you ask your counselor:</strong> your questions and messages, the passages you ask about, and the answers.
@@ -74,7 +75,8 @@ export default function PrivacyPage() {
           <strong>Connecting Claude or ChatGPT.</strong> You make a connector link in Settings and add it to your own Claude or
           ChatGPT account. From then on, that assistant can read your whole desk: your essays, notes, profile, academics, colleges
           and questions. It can do what you allow for that link, which is suggesting edits, writing directly, or managing your
-          colleges and essays. Any link can also update your profile, academics and odds, and answer your questions. New links start
+          colleges and essays. Any link can also update your profile, academics and odds, fill in forms you upload (saving a filled
+          copy next to yours), and answer your questions. New links start
           with everything allowed; you can change that when you make one or at any time. You can turn a link off whenever you like.
         </li>
         <li>

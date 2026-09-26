@@ -1,5 +1,6 @@
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { expect, test, type Page } from "@playwright/test";
+import { PDFDocument, StandardFonts } from "pdf-lib";
 import { apiClient, signUp } from "./helpers";
 
 async function makeConnector(page: Page) {
@@ -24,34 +25,53 @@ async function call(client: Client, name: string, args: Record<string, unknown> 
   return { text: r.content.map((c) => c.text ?? "").join("\n"), isError: !!r.isError };
 }
 
-const sections = (p: Page) => p.getByTestId("profile-section");
+const notes = (p: Page) => p.getByTestId("profile-section");
+const files = (p: Page) => p.getByTestId("profile-file");
+const note = (p: Page) => p.getByTestId("profile-note");
 
-test("the profile: sections by hand and by Claude, read with every piece", async ({ page }) => {
+/** A school's one-page form for Testy, with a name field and a checkbox. */
+async function schoolForm() {
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([612, 792]);
+  page.drawText("Records release for Testy Student", { x: 50, y: 740, size: 14, font: await doc.embedFont(StandardFonts.Helvetica) });
+  const form = doc.getForm();
+  form.createTextField("student_name").addToPage(page, { x: 50, y: 680, width: 300, height: 20 });
+  form.createCheckBox("waive").addToPage(page, { x: 50, y: 650, width: 12, height: 12 });
+  return Buffer.from(await doc.save());
+}
+
+test("the profile: notes by hand and by Claude, read with every piece", async ({ page }) => {
   await signUp(page, "profile");
   const client = await connect(await makeConnector(page));
   await page.goto("/desk/profile");
   await expect(page.getByRole("heading", { name: "Profile", level: 1 })).toBeVisible();
 
-  await page.getByRole("button", { name: "Add a section" }).click();
-  await sections(page).first().getByLabel("Section title").fill("Robotics");
-  await sections(page).first().getByRole("textbox").nth(1).fill("Captain of the robotics team.");
-  await page.getByRole("heading", { name: "Profile", level: 1 }).click();
-  // Saved as typed: Claude reads it, and it's there after a reload.
+  // A new note opens over the page.
+  await page.getByRole("button", { name: "New note" }).click();
+  await note(page).getByLabel("Note name").fill("Robotics");
+  await note(page).getByLabel("Note text").fill("Captain of the robotics team.");
+  await note(page).getByRole("button", { name: "Close" }).click();
+  await expect(note(page)).toHaveCount(0);
+  // Saved as typed: Claude reads it, and it's there after a reload, folded to one line.
   await expect.poll(async () => (await call(client, "read_profile")).text).toContain("Captain of the robotics team.");
   expect((await call(client, "read_profile")).text).toContain("### Robotics [section_id:");
   await page.reload();
-  await expect(sections(page).first().getByLabel("Section title")).toHaveValue("Robotics");
-  await expect(sections(page).first().getByRole("textbox").nth(1)).toHaveValue("Captain of the robotics team.");
+  await expect(notes(page).first()).toContainText("Robotics");
+  await expect(page.getByLabel("Note text")).toHaveCount(0);
+  await notes(page).first().getByRole("button").first().click();
+  await expect(note(page).getByLabel("Note name")).toHaveValue("Robotics");
+  await expect(note(page).getByLabel("Note text")).toHaveValue("Captain of the robotics team.");
+  await note(page).getByRole("button", { name: "Close" }).click();
 
-  // Claude's sections appear live.
+  // Claude's notes appear live.
   const added = await call(client, "save_profile_section", { title: "Family", body: "Oldest of three." });
   expect(added.isError).toBe(false);
-  await expect(sections(page)).toHaveCount(2);
-  await expect(sections(page).nth(1).getByLabel("Section title")).toHaveValue("Family");
+  await expect(notes(page)).toHaveCount(2);
+  await expect(notes(page).nth(1)).toContainText("Family");
 
-  // Moving a section, and the order Claude sees.
-  await sections(page).nth(1).getByRole("button", { name: "Move up" }).click();
-  await expect(sections(page).first().getByLabel("Section title")).toHaveValue("Family");
+  // Moving a note, and the order Claude sees.
+  await page.getByRole("button", { name: "Move Family up" }).click();
+  await expect(notes(page).first()).toContainText("Family");
   await expect
     .poll(async () => {
       const t = (await call(client, "read_profile")).text;
@@ -65,6 +85,60 @@ test("the profile: sections by hand and by Claude, read with every piece", async
   const read = await call(client, "read_piece", { piece_id: pieceId });
   expect(read.text).toContain("## The student's profile");
   expect(read.text).toContain("Oldest of three.");
+  await client.close();
+});
+
+test("profile files: the student uploads a form, and the counselor reads it and fills in a copy", async ({ page }) => {
+  await signUp(page, "files");
+  const client = await connect(await makeConnector(page));
+  await page.goto("/desk/profile");
+
+  // A PDF is kept as a file; a Markdown file becomes a note.
+  await page.getByTestId("profile-upload").setInputFiles([
+    { name: "Records release.pdf", mimeType: "application/pdf", buffer: await schoolForm() },
+    { name: "Robotics story.md", mimeType: "text/markdown", buffer: Buffer.from("Testy rebuilt the **arm** twice.") },
+  ]);
+  await expect(files(page)).toHaveCount(1);
+  await expect(files(page).first()).toContainText("Records release.pdf");
+  await expect(files(page).first()).toContainText("PDF");
+  await expect(notes(page)).toHaveCount(1);
+  await expect(notes(page).first()).toContainText("Robotics story");
+
+  // Opening it shows the PDF over the page.
+  await files(page).first().getByRole("button").click();
+  const open = page.getByTestId("profile-file-open");
+  await expect(open.locator("iframe")).toBeVisible();
+  await expect(open.getByRole("link", { name: "Download" })).toHaveAttribute("download", "Records release.pdf");
+  await open.getByRole("button", { name: "Close" }).click();
+
+  // The counselor finds it on the profile, reads its fields, and fills in a copy.
+  const profile = (await call(client, "read_profile")).text;
+  const id = profile.match(/Records release\.pdf \(PDF, [^)]*\) \[file_id: ([0-9a-f-]{36})\]/)![1];
+  const read = await call(client, "read_profile_file", { file_id: id });
+  expect(read.isError, read.text).toBe(false);
+  expect(read.text).toContain('"student_name" (text)');
+  expect(read.text).toContain("Records release for Testy Student");
+  const filled = await call(client, "fill_pdf_form", { file_id: id, fields: { student_name: "Testy Student", waive: true, nope: "x" } });
+  expect(filled.isError, filled.text).toBe(false);
+  expect(filled.text).toContain('saved "Records release (filled).pdf"');
+  expect(filled.text).toContain('"nope": no field has that name');
+
+  // The copy shows up live, and holds the answers; the original is as it was.
+  await expect(files(page)).toHaveCount(2);
+  await expect(files(page).nth(1)).toContainText("Records release (filled).pdf");
+  await expect(files(page).nth(1)).toContainText("filled in by");
+  const copy = filled.text.match(/file_id: ([0-9a-f-]{36})/)![1];
+  expect((await call(client, "read_profile_file", { file_id: copy })).text).toContain('now "Testy Student"');
+  expect((await call(client, "read_profile_file", { file_id: id })).text).not.toContain('now "Testy Student"');
+
+  // Deleting the original.
+  await files(page).first().getByRole("button").click();
+  await open.getByRole("button", { name: "Delete" }).click();
+  await open.getByRole("alertdialog").getByRole("button", { name: "Delete" }).click();
+  await expect(open).toHaveCount(0);
+  await expect(files(page)).toHaveCount(1);
+  await expect.poll(async () => (await call(client, "read_profile")).text).not.toContain("Records release.pdf (");
+  expect((await call(client, "read_profile_file", { file_id: id })).isError).toBe(true);
   await client.close();
 });
 
