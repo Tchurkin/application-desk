@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { isOutdated, useConnectors } from "@/components/ask/watch-status";
+import { counselorPlatform, isOutdated, useConnectors } from "@/components/ask/watch-status";
 import { ConfirmButton } from "@/components/confirm-button";
 import { revokeConnectorLink, setCounselorPaused, setCounselorRemove, updateCounselorLink } from "@/app/desk/connector-actions";
 import { timeOf, whenLabel } from "@/lib/bridge/thread";
@@ -71,8 +71,9 @@ function CounselorCard({
   onChange: () => Promise<unknown>;
 }) {
   const platform = usePlatform();
-  // Updating means running a new setup on this computer: a Windows PC or a Mac.
-  const here = platform === "windows" || platform === "mac" ? platform : null;
+  // Updating means running a new setup on the computer the counselor runs on, from its browser.
+  const theirs = counselorPlatform(c);
+  const here = platform === theirs ? theirs : null;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -119,7 +120,7 @@ function CounselorCard({
             Update downloaded. Run the file on the computer your counselor runs on; this one keeps answering until the new one starts,
             and the new one carries on the same conversation.
           </p>
-          <InstallSteps platform={here ?? "windows"} />
+          <InstallSteps platform={theirs} />
           <div>
             <button type="button" className="btn" disabled={busy} onClick={() => void run(() => revokeConnectorLink(pending.id!))}>
               Cancel the update
@@ -148,7 +149,9 @@ function CounselorCard({
             >
               Update the counselor
             </button>
-            {platform === "other" && <p className="mt-1 text-xs text-muted">Open this page on the computer your counselor runs on to update it.</p>}
+            {platform !== null && !here && (
+              <p className="mt-1 text-xs text-muted">Open this page on the {theirs === "mac" ? "Mac" : "Windows PC"} your counselor runs on to update it.</p>
+            )}
           </div>
         )
       )}

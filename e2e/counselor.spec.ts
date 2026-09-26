@@ -169,11 +169,14 @@ test.describe("on a Windows computer", () => {
 test.describe("on a Mac", () => {
   test.use({ userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15" });
 
-  test("the counselor downloads as a zip holding its setup, marked to run, with the Mac's steps", async ({ page }) => {
+  test("the counselor downloads as a zip holding its setup, with the Mac's steps", async ({ page }) => {
     await signUp(page, "maccounselor");
     await page.goto(SETTINGS);
+    // Once the setup is on the page: only the Mac's download is offered.
+    const mac = page.getByRole("button", { name: "Download the counselor for Mac" });
+    await expect(mac).toBeVisible();
     await expect(page.getByRole("button", { name: "Download the counselor for Windows" })).toHaveCount(0);
-    const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Download the counselor for Mac" }).click()]);
+    const [download] = await Promise.all([page.waitForEvent("download"), mac.click()]);
     expect(download.suggestedFilename()).toBe("Average App counselor setup.zip");
     const files = unzipSync(new Uint8Array(readFileSync((await download.path())!)));
     expect(Object.keys(files)).toEqual(["Average App counselor setup.command"]);

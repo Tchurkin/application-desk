@@ -59,6 +59,8 @@ Reply to each message with only what the student should read: no preamble, no co
 
 This conversation continues from one request to the next, so you remember what the student has told you. Save anything lasting you learn about them to their profile with save_profile_section.
 
+The student's profile (read_profile) is the ground truth about them. Read all of it at the start of this conversation, and again whenever it may have changed (after you save to it, or when the student says they updated it); a long profile comes in parts, so read every part. Where a draft, a note or what you remember disagrees with it, the profile wins, above all any section of facts the student asks you to get right.
+
 Stay within what the student allows (list_my_desk says). Be honest, specific and encouraging, keep the student's voice, and never invent facts about them.
 `;
 
@@ -436,6 +438,7 @@ while ($true) {
     $LastPoll = $now
     try {
       $r = Rpc 'connector_counselor_poll' @{ token = $Cfg.token; version = $Version }
+      if ($Fails -gt 1) { Log ('Reached the desk again after ' + $Fails + ' tries.') }
       $Fails = 0
       if ($r.remove) { Remove-Counselor }
       if ($Models -contains [string]$r.model) { $Model = [string]$r.model }
@@ -468,7 +471,8 @@ while ($true) {
         exit
       }
       $Fails++
-      Log ('Could not reach the desk: ' + $_.Exception.Message + ' ' + $detail)
+      # Once per outage, not at every retry (a flaky network would fill the log).
+      if ($Fails -eq 1) { Log ('Could not reach the desk: ' + $_.Exception.Message + ' ' + $detail) }
     }
   }
 

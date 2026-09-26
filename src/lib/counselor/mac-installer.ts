@@ -94,7 +94,8 @@ my %SpeedEffort = (fast => 'low', balanced => 'medium', thorough => 'high');
 # (status, body). Status 0: no answer at all (no network, a timeout).
 sub http {
   my ($method, $url, $body, $timeout) = @_;
-  my @cmd = ($Curl, '-sS', '--max-time', $timeout, '-H', '@' . $Headers, '-X', $method, '-w', '\n%{http_code}');
+  # -q first: the student's own ~/.curlrc (fail, include, verbose...) mustn't change what comes back.
+  my @cmd = ($Curl, '-q', '-sS', '--max-time', $timeout, '-H', '@' . $Headers, '-X', $method, '-w', '\n%{http_code}');
   push @cmd, ('--data-binary', '@-') if defined $body;
   push @cmd, $url;
   my ($in, $out);
@@ -514,7 +515,8 @@ while (1) {
   my $interval = $Fails ? ($Fails * 3 > 60 ? 60 : $Fails * 3) : 2;
   if ($now - $LastPoll >= $interval) {
     $LastPoll = $now;
-    my $r = eval { rpc('connector_counselor_poll', { token => $Cfg->{token}, version => $Version }) };
+    # "-mac": the website tells a Mac counselor from a Windows one (to offer the right update).
+    my $r = eval { rpc('connector_counselor_poll', { token => $Cfg->{token}, version => "$Version-mac" }) };
     my $err = $@;
     if ($err) {
       if (revoked($err)) {
@@ -524,8 +526,10 @@ while (1) {
         leave();
       }
       $Fails++;
-      Log('Could not reach the desk: ' . $err);
+      # Once per outage, not at every retry (a flaky network would fill the log).
+      Log('Could not reach the desk: ' . $err) if $Fails == 1;
     } elsif (ref $r eq 'HASH') {
+      Log("Reached the desk again after $Fails tries.") if $Fails > 1;
       $Fails = 0;
       remove_counselor() if $r->{remove};
       my $m = defined $r->{model} ? "$r->{model}" : '';
@@ -648,12 +652,21 @@ if [ -z "$CLAUDE" ]; then
   exit 1
 fi
 
-# An older counselor stops first (an update replaces it).
-/bin/launchctl bootout "gui/$UIDN/$LABEL" >/dev/null 2>&1
-for i in 1 2 3 4 5 6 7 8 9 10; do
-  /bin/launchctl print "gui/$UIDN/$LABEL" >/dev/null 2>&1 || break
-  sleep 0.5
-done
+# A setup file from an older download carries a link that's been turned off: say so, and change nothing.
+LIVE=$(/usr/bin/curl -q -sS -o /dev/null -w '%{http_code}' --max-time 20 "$SITE/api/counselor/$TOKEN" 2>/dev/null)
+if [ "$LIVE" = 403 ] || [ "$LIVE" = 404 ]; then
+  say "$(printf 'This setup file is from an older download, and its link has been turned off.\n\nIn Downloads, open the newest counselor setup file (its name may end in 2 or (1)), or download it again from Settings > Counselor.')" 2
+  exit 1
+fi
+
+# An older counselor stops first (an update replaces it). A test leaves the real one alone.
+if [ -z "$AVERAGEAPP_TEST" ] || [ -n "$AVERAGEAPP_TEST_LAUNCHD" ]; then
+  /bin/launchctl bootout "gui/$UIDN/$LABEL" >/dev/null 2>&1
+  for i in 1 2 3 4 5 6 7 8 9 10; do
+    /bin/launchctl print "gui/$UIDN/$LABEL" >/dev/null 2>&1 || break
+    sleep 0.5
+  done
+fi
 /usr/bin/pkill -f "$DIR/mcp.json" >/dev/null 2>&1
 
 mkdir -p "$DIR" || fail "Could not make its folder, $DIR."
@@ -702,20 +715,38 @@ else
 fi
 RUNPATH="$DIR/bin:$(dirname "$CLAUDE"):/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
+# launchd starts the watcher with little of what this Terminal has (none of your shell's
+# settings), so the check runs with the same, plus the settings Claude Code itself may need if you
+# have them (a key or token it signs in with, a proxy, a school network's certificates), which go
+# into the LaunchAgent too. A check that passes then means the counselor will work.
+xml() { printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }
+NL='
+'
+EXTRA_ENV=""
+set -- HOME="$HOME" USER="$USER" LOGNAME="$LOGNAME" SHELL="$SHELL" TMPDIR="$TMPDIR" PATH="$RUNPATH" LANG=en_US.UTF-8 ENABLE_TOOL_SEARCH=false
+for v in ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL CLAUDE_CODE_OAUTH_TOKEN CLAUDE_CONFIG_DIR NODE_EXTRA_CA_CERTS SSL_CERT_FILE HTTPS_PROXY https_proxy HTTP_PROXY http_proxy NO_PROXY no_proxy; do
+  val=$(printenv "$v")
+  if [ -n "$val" ]; then
+    set -- "$@" "$v=$val"
+    EXTRA_ENV="$EXTRA_ENV    <key>$v</key>$NL    <string>$(xml "$val")</string>$NL"
+  fi
+done
+# A test's stand-in Claude Code writes its log where it's told.
+if [ -n "$AVERAGEAPP_TEST" ]; then set -- "$@" "FAKE_CLAUDE_LOG=$FAKE_CLAUDE_LOG"; fi
+
 # A first run checks that Claude Code is signed in and can reach the desk. An update keeps the
 # counselor's conversation (and so what it remembers); a new counselor starts one.
 echo "Checking that Claude can reach your desk (this takes a few seconds)..."
-export ENABLE_TOOL_SEARCH=false
 export PATH="$RUNPATH"
 SESSION=""
 [ -f session.txt ] && SESSION=$(cat session.txt)
 OK=0
 if [ -n "$SESSION" ]; then
-  CHECK=$("$CLAUDE" -p '__CHECK__' --resume "$SESSION" --model sonnet --effort low --restricted --mcp-config "$DIR/mcp.json" --strict-mcp-config --allowedTools 'mcp__${MCP_SERVER}' 2>&1 </dev/null) && OK=1
+  CHECK=$(env -i "$@" "$CLAUDE" -p '__CHECK__' --resume "$SESSION" --model sonnet --effort low --restricted --mcp-config "$DIR/mcp.json" --strict-mcp-config --allowedTools 'mcp__${MCP_SERVER}' 2>&1 </dev/null) && OK=1
 fi
 if [ "$OK" = 0 ]; then
   SESSION=$( { /usr/bin/uuidgen 2>/dev/null || cat /proc/sys/kernel/random/uuid; } | tr 'A-Z' 'a-z')
-  CHECK=$("$CLAUDE" -p '__CHECK__' --session-id "$SESSION" --name 'Average App counselor' --model sonnet --effort low --restricted --mcp-config "$DIR/mcp.json" --strict-mcp-config --allowedTools 'mcp__${MCP_SERVER}' 2>&1 </dev/null) && OK=1
+  CHECK=$(env -i "$@" "$CLAUDE" -p '__CHECK__' --session-id "$SESSION" --name 'Average App counselor' --model sonnet --effort low --restricted --mcp-config "$DIR/mcp.json" --strict-mcp-config --allowedTools 'mcp__${MCP_SERVER}' 2>&1 </dev/null) && OK=1
 fi
 if [ "$OK" = 0 ]; then
   say "$(printf 'Claude Code could not reach your desk:\n\n%s\n\nIf it asks you to sign in, open Claude Code once and sign in, then open this file again.' "$(printf '%s' "$CHECK" | head -c 600)")" 0
@@ -756,7 +787,7 @@ cat > "$PLIST.tmp" <<AVERAGEAPP_PLIST
     <string>en_US.UTF-8</string>
     <key>ENABLE_TOOL_SEARCH</key>
     <string>false</string>
-  </dict>
+$EXTRA_ENV  </dict>
   <key>StandardOutPath</key>
   <string>$DIR/launchd.log</string>
   <key>StandardErrorPath</key>

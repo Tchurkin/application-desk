@@ -36,10 +36,10 @@ export function InstallSteps({ platform }: { platform: InstallerPlatform }) {
           In your Downloads folder, double-click <span className="font-medium">{MAC_INSTALLER_NAME}</span>. (If you see{" "}
           <span className="font-medium">{MAC_ZIP_NAME}</span> instead, double-click that first.)
         </li>
-        <li>Your Mac says it can&apos;t open it. That&apos;s expected: click Done (not Move to Trash).</li>
+        <li>Your Mac says it can&apos;t open it. That&apos;s expected: click Done or Cancel (not Move to Trash).</li>
         <li>
           Open System Settings → Privacy & Security and scroll down to where it says the file was blocked. Click Open Anyway, then
-          Open Anyway again, and enter your Mac&apos;s password if it asks. (It&apos;s a script this site wrote for you; it installs
+          Open Anyway (or Open) in the box that appears, and enter your Mac&apos;s password if it asks. (It&apos;s a script this site wrote for you; it installs
           nothing from the internet.)
         </li>
         <li>

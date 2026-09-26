@@ -34,7 +34,12 @@ export function useConnectors(deskId: string, every = 15_000) {
 
 /** A counselor running an older watcher than this site offers. */
 export function isOutdated(c: Connector | null): boolean {
-  return !!c && c.counselor_version !== undefined && c.counselor_version !== COUNSELOR_VERSION;
+  return !!c && c.counselor_version !== undefined && c.counselor_version.split("-")[0] !== COUNSELOR_VERSION;
+}
+
+/** The computer a counselor runs on: the Mac one reports its version as "3-mac". */
+export function counselorPlatform(c: Connector): "windows" | "mac" {
+  return c.counselor_version?.endsWith("-mac") ? "mac" : "windows";
 }
 
 /** One line: who is answering the desk right now and what it's doing, or how to get someone to. */
