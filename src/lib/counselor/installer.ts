@@ -1,5 +1,6 @@
 /*
- * The counselor for Windows: one file the student downloads and double-clicks, once.
+ * The counselor for Windows: one file the student downloads and double-clicks, once. (The Mac
+ * version, which works the same way, is mac-installer.ts.)
  *
  * It sets up Claude Code, which the student already has and is signed in to, as their
  * counselor, running hidden on their own computer on their own Claude plan:
@@ -43,7 +44,8 @@ const OLD_STARTUP_NAME = "Application Desk counselor.lnk";
 const REMOVE_STARTUP = `foreach ($lnkName in @('${STARTUP_NAME}', '${OLD_STARTUP_NAME}')) { Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path ([Environment]::GetFolderPath('Startup')) $lnkName) }`;
 export const INSTALLER_NAME = "Average App counselor setup.cmd";
 
-const MCP_SERVER = "application-desk";
+/** The desk's tools in Claude Code: mcp__application-desk__*. Kept from before the rename, so installed counselors match. */
+export const MCP_SERVER = "application-desk";
 
 /** The first thing the installer asks, to check Claude Code can reach the desk. */
 export const CHECK_PROMPT = "You are now my Average App counselor. Call list_my_desk, then reply with only the desk title.";
@@ -644,6 +646,17 @@ const SAFE = {
   token: /^[A-Za-z0-9_\-]{20,64}$/,
 };
 
+/** The values an installer is made from, checked to be plain (they go into a script), without trailing slashes. */
+export function checkedConfig(c: InstallerConfig): InstallerConfig {
+  const site = c.site.replace(/\/+$/, "");
+  const supabaseUrl = c.supabaseUrl.replace(/\/+$/, "");
+  if (!SAFE.url.test(site) || !SAFE.url.test(supabaseUrl)) throw new Error("Unexpected site or database address.");
+  if (!SAFE.key.test(c.supabaseKey)) throw new Error("Unexpected database key.");
+  if (!SAFE.token.test(c.token)) throw new Error("Unexpected connector token.");
+  if (CHECK_PROMPT.includes("'")) throw new Error("The check prompt can't contain a single quote.");
+  return { site, supabaseUrl, supabaseKey: c.supabaseKey, token: c.token };
+}
+
 /** Text for a single-quoted PowerShell here-string: no line may start with '@. */
 function hereString(s: string): string {
   if (/^'@/m.test(s)) throw new Error("A here-string can't contain a line starting with '@");
@@ -655,13 +668,9 @@ function crlf(s: string): string {
 }
 
 /** The whole installer, ready to download. */
-export function counselorInstaller(c: InstallerConfig): string {
-  const site = c.site.replace(/\/+$/, "");
-  const supabaseUrl = c.supabaseUrl.replace(/\/+$/, "");
-  if (!SAFE.url.test(site) || !SAFE.url.test(supabaseUrl)) throw new Error("Unexpected site or database address.");
-  if (!SAFE.key.test(c.supabaseKey)) throw new Error("Unexpected database key.");
-  if (!SAFE.token.test(c.token)) throw new Error("Unexpected connector token.");
-  if (CHECK_PROMPT.includes("'")) throw new Error("The check prompt can't contain a single quote.");
+export function counselorInstaller(config: InstallerConfig): string {
+  const c = checkedConfig(config);
+  const { site, supabaseUrl } = c;
   // Functions, so "$" in PowerShell code is never read as a replacement pattern.
   const fill: [string, string][] = [
     ["__STOPPER__", STOPPER.trim().split("\n").join("\n  ")],

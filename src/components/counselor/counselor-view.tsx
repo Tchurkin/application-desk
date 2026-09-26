@@ -70,7 +70,7 @@ function SetupCard() {
         Set up your counselor
       </h2>
       <p className="text-sm text-muted">
-        One download and a double-click make Claude Code on this computer your counselor: it answers everything you ask on your desk,
+        One download, for Windows or Mac, makes Claude Code on this computer your counselor: it answers everything you ask on your desk,
         hidden, on your own Claude plan. Needs Claude Code installed and signed in once (claude.com/claude-code). Choose what it may
         do in{" "}
         <Link href="/desk/settings/counselor" className="underline underline-offset-2">
@@ -80,7 +80,7 @@ function SetupCard() {
       </p>
       <CounselorSetup withPermissions={false} />
       <p className="text-xs text-muted">
-        No Windows computer? Add your connector to a Claude or ChatGPT chat and say &ldquo;{WATCH_PHRASE}&rdquo;: it answers here too.
+        On another kind of computer? Add your connector to a Claude or ChatGPT chat and say &ldquo;{WATCH_PHRASE}&rdquo;: it answers here too.
       </p>
     </section>
   );

@@ -33,6 +33,19 @@ jobs:
       - run: npm run typecheck
       - run: npm test
 
+  mac-counselor:
+    name: Mac counselor (macOS)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # The Mac counselor's setup and watcher, run for real against a stand-in desk and Claude Code.
+      - run: npx vitest run src/lib/counselor
+
   e2e:
     name: End-to-end (two browsers, local Supabase)
     runs-on: ubuntu-latest

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useSyncExternalStore } from "react";
+import { useState } from "react";
 import { isOutdated, useConnectors } from "@/components/ask/watch-status";
 import { ConfirmButton } from "@/components/confirm-button";
 import { revokeConnectorLink, setCounselorPaused, setCounselorRemove, updateCounselorLink } from "@/app/desk/connector-actions";
@@ -11,7 +11,7 @@ import { activityText, counselors, isCounselor, pendingReplacement, type Connect
 import { downloadInstaller } from "@/lib/counselor/download";
 import { asEssayAccess } from "@/lib/domain/share";
 import { ConnectorPermissions } from "../connector-creator";
-import { CounselorSetup, InstallSteps, isWindows } from "../counselor-setup";
+import { CounselorSetup, InstallSteps, usePlatform } from "../counselor-setup";
 
 /*
  * Settings → Counselor: set it up, or, for each computer it runs on, see whether it's on and
@@ -70,11 +70,9 @@ function CounselorCard({
   now: number;
   onChange: () => Promise<unknown>;
 }) {
-  const windows = useSyncExternalStore(
-    () => () => {},
-    isWindows,
-    () => true,
-  );
+  const platform = usePlatform();
+  // Updating means running a new setup on this computer: a Windows PC or a Mac.
+  const here = platform === "windows" || platform === "mac" ? platform : null;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -121,7 +119,7 @@ function CounselorCard({
             Update downloaded. Run the file on the computer your counselor runs on; this one keeps answering until the new one starts,
             and the new one carries on the same conversation.
           </p>
-          <InstallSteps />
+          <InstallSteps platform={here ?? "windows"} />
           <div>
             <button type="button" className="btn" disabled={busy} onClick={() => void run(() => revokeConnectorLink(pending.id!))}>
               Cancel the update
@@ -138,18 +136,19 @@ function CounselorCard({
             <button
               type="button"
               className="btn btn-primary"
-              disabled={busy || !windows}
+              disabled={busy || !here}
               onClick={() =>
                 void run(async () => {
+                  if (!here) return;
                   const r = await updateCounselorLink(id);
                   if (r.error || !r.token) throw new Error(r.error ?? "No link was made.");
-                  downloadInstaller(r.token);
+                  await downloadInstaller(r.token, here);
                 })
               }
             >
               Update the counselor
             </button>
-            {!windows && <p className="mt-1 text-xs text-muted">Open this page on the computer your counselor runs on to update it.</p>}
+            {platform === "other" && <p className="mt-1 text-xs text-muted">Open this page on the computer your counselor runs on to update it.</p>}
           </div>
         )
       )}
@@ -184,7 +183,7 @@ function CounselorCard({
             <ConfirmButton
               label="Turn off"
               confirmLabel="Turn off"
-              question="Turn it off? This older counselor can't delete itself: update it first to remove it completely, or delete the folder ApplicationDesk\Counselor in your AppData\Local yourself."
+              question="Turn it off? This older counselor can't delete itself: update it first to remove it completely, or delete its folder yourself (AppData\Local\ApplicationDesk\Counselor on Windows; Library/Application Support/AverageApp/Counselor in your home folder on a Mac)."
               onConfirm={disconnect}
             />
           ) : (

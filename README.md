@@ -54,7 +54,7 @@ each assistant may do**, and every direct change is kept in the piece's history.
   bill.
 - **Ask from the desk**: questions, "polish this passage" and odds estimates are asked on the
   website and answered there, by a Claude or ChatGPT chat told to "Watch my Average App",
-  or by the **counselor**: a one-file Windows setup that runs Claude Code hidden on your own
+  or by the **counselor**: a one-file setup for Windows or Mac that runs Claude Code in the background on your own
   computer. It keeps one Claude session warm, gets each request with the essay or college list
   it's about, and streams its answer onto the page as it writes.
 - **Import from Google Docs** (Board → Import essays): pick docs from Google Drive (a doc per

@@ -77,7 +77,7 @@ export default function PrivacyPage() {
           with everything allowed; you can change that when you make one or at any time. You can turn a link off whenever you like.
         </li>
         <li>
-          <strong>The counselor.</strong> A setup file for Windows that runs Claude Code, on your own Claude account, on your own
+          <strong>The counselor.</strong> A setup file for Windows or Mac that runs Claude Code, on your own Claude account, on your own
           computer. It keeps its settings (including its connector link) and a log in a folder on your computer, and Claude Code
           keeps its conversation there too. &ldquo;Remove from computer&rdquo; in Settings deletes them; otherwise they stay until
           you delete them.

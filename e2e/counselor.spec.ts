@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { expect, test, type Page } from "@playwright/test";
+import { strFromU8, unzipSync } from "fflate";
 import { COUNSELOR_VERSION } from "../src/lib/counselor/version";
 import { addCollege, addPiece, apiClient, signUp, studentClient } from "./helpers";
 
@@ -162,6 +163,26 @@ test.describe("on a Windows computer", () => {
     await expect(card(page).getByTestId("counselor-state")).toContainText("On");
     await expect(card(page).getByTestId("counselor-update")).toHaveCount(0);
     await expect(card(page).getByTestId("counselor-update-pending")).toHaveCount(0);
+  });
+});
+
+test.describe("on a Mac", () => {
+  test.use({ userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15" });
+
+  test("the counselor downloads as a zip holding its setup, marked to run, with the Mac's steps", async ({ page }) => {
+    await signUp(page, "maccounselor");
+    await page.goto(SETTINGS);
+    await expect(page.getByRole("button", { name: "Download the counselor for Windows" })).toHaveCount(0);
+    const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Download the counselor for Mac" }).click()]);
+    expect(download.suggestedFilename()).toBe("Average App counselor setup.zip");
+    const files = unzipSync(new Uint8Array(readFileSync((await download.path())!)));
+    expect(Object.keys(files)).toEqual(["Average App counselor setup.command"]);
+    const script = strFromU8(files["Average App counselor setup.command"]);
+    expect(script.startsWith("#!/bin/bash\n")).toBe(true);
+    // The link inside is a live counselor link: the watcher's first check-in works.
+    const token = script.match(/^TOKEN='([A-Za-z0-9_-]+)'$/m)![1];
+    expect(await counselorApi(token).poll()).toMatchObject({ fresh: 0, paused: false, remove: false });
+    await expect(page.getByTestId("counselor-steps")).toContainText("Open Anyway");
   });
 });
 
