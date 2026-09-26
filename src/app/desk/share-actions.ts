@@ -41,21 +41,39 @@ export async function revokeShareLink(id: string) {
   revalidatePath("/desk/settings", "layout");
 }
 
-export interface SharePasswordState {
-  saved?: "set" | "cleared";
+export interface DeskSharingState {
+  saved?: boolean;
   error?: string;
 }
 
-/** The one password every share link asks for the first time someone opens it; blank turns it off. */
-export async function setSharePassword(_prev: SharePasswordState, f: FormData): Promise<SharePasswordState> {
+/** Sharing by desk name and password: turn it on, or change the name, password (blank keeps it) or what people may do. */
+export async function setDeskSharing(_prev: DeskSharingState, f: FormData): Promise<DeskSharingState> {
   const { supabase, desk } = await requireDesk();
-  const pw = f.get("clear") ? "" : String(f.get("password") ?? "");
-  if (!f.get("clear") && pw.length < 6) return { error: "Use at least 6 characters for the password." };
-  const { error } = await supabase.rpc("set_share_password", { d: desk.id, pw });
+  const name = String(f.get("name") ?? "").trim().toLowerCase();
+  const pw = String(f.get("password") ?? "");
+  const { data, error } = await supabase.rpc("set_desk_sharing", { d: desk.id, desk_name: name, pw: pw || null, r: asShareRole(f.get("role")) });
   if (error) {
     const missing = error.code === "PGRST202" || error.code === "42883";
-    return { error: missing ? "Run the latest database update to use this." : error.message };
+    return { error: missing ? "Run the latest database update (supabase/setup.sql) to use this." : error.message };
   }
+  const r = data as { ok: boolean; error?: string } | null;
+  if (!r?.ok) return { error: r?.error ?? "Couldn't save it." };
   revalidatePath("/desk/settings", "layout");
-  return { saved: pw ? "set" : "cleared" };
+  return { saved: true };
+}
+
+/** Turn it off: the password goes, and everyone who came in with it loses access. */
+export async function stopDeskSharing() {
+  const { supabase, desk } = await requireDesk();
+  const { error } = await supabase.rpc("stop_desk_sharing", { d: desk.id });
+  if (error) throw new Error(error.message);
+  revalidatePath("/desk/settings", "layout");
+}
+
+/** Take one person off the desk (they can come back only with the password, or a link). */
+export async function removeMember(userId: string) {
+  const { supabase, desk } = await requireDesk();
+  const { error } = await supabase.from("desk_members").delete().eq("desk_id", desk.id).eq("user_id", userId);
+  if (error) throw new Error(error.message);
+  revalidatePath("/desk/settings", "layout");
 }

@@ -1,9 +1,12 @@
 import Link from "next/link";
 import { LegalLinks } from "@/components/legal";
+import { OpenDesk } from "@/components/open-desk";
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 
-export default async function Home() {
+export default async function Home(props: PageProps<"/">) {
+  // ?open: someone already on a shared desk opening another.
+  const opening = "open" in (await props.searchParams);
   const supabase = await supabaseServer();
   const { data } = await supabase.auth.getClaims();
   const userId = data?.claims?.sub;
@@ -12,13 +15,14 @@ export default async function Home() {
     if (data?.claims?.is_anonymous) {
       const { data: shared } = await supabase.rpc("my_shared_desks");
       const first = (shared as { desk_id: string }[] | null)?.[0];
-      if (first) redirect(`/shared/${first.desk_id}`);
-    } else redirect("/desk");
+      if (first && !opening) redirect(`/shared/${first.desk_id}`);
+    } else if (!opening) redirect("/desk");
   }
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col justify-center px-4 py-16">
       <h1 className="font-serif text-4xl leading-tight sm:text-5xl">Average App</h1>
+      <p className="mt-2 font-serif text-2xl text-muted">Be the average admit.</p>
       <p className="mt-4 text-lg text-muted">
         Every college, every essay and short answer, in one place. Word counts against the limit, a version history back to
         the first draft, and a board that shows what&apos;s due next. Bring your Google Docs over in a minute.
@@ -30,6 +34,9 @@ export default async function Home() {
       <div className="mt-8 flex gap-3">
         <Link className="btn btn-primary" href="/login?mode=signup">Start a desk</Link>
         <Link className="btn" href="/login">Sign in</Link>
+      </div>
+      <div className="mt-10">
+        <OpenDesk />
       </div>
       <p className="mt-12 text-xs text-muted">
         Free and open source. <a className="underline" href="https://github.com/Tchurkin/margin-application-desk">Source on GitHub</a>.{" "}

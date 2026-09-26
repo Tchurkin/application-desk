@@ -36,8 +36,8 @@ export default function PrivacyPage() {
           <strong>What you ask your counselor:</strong> your questions and messages, the passages you ask about, and the answers.
         </li>
         <li>
-          <strong>Sharing:</strong> the links you make and your sharing password, both stored only in scrambled form, and the name
-          each person types when they open one of your links.
+          <strong>Sharing:</strong> your desk&apos;s name and sharing password (the password only in scrambled form), any links
+          you make (also scrambled), and the name each person types when they open your desk.
         </li>
         <li>
           <strong>Claude or ChatGPT, if you connect them:</strong> a scrambled copy of each connector link, when it was last used,
@@ -57,10 +57,11 @@ export default function PrivacyPage() {
       <List>
         <li>You.</li>
         <li>
-          People you share a link with. They can read your colleges (with the odds and notes on them), your essays, their notes and
-          history, suggestions and your recommenders. Depending on the link, they can also suggest edits or make them. They
-          can&apos;t see your profile, your academics or your conversations with your counselor. Turning off a link cuts off
-          everyone who opened it, at once.
+          People you share with: anyone you tell your desk&apos;s name and password (they open it from the home page), and anyone
+          you give a link. They can read your colleges (with the odds and notes on them), your essays, their notes and history,
+          suggestions and your recommenders. Depending on what you choose, they can also suggest edits or make them. They
+          can&apos;t see your profile, your academics or your conversations with your counselor. You can remove anyone, and
+          turning sharing off (or a link) cuts off everyone who came in that way, at once.
         </li>
         <li>An AI assistant, but only one you connect yourself (below).</li>
       </List>
@@ -134,9 +135,11 @@ export default function PrivacyPage() {
 
       <H2>Security</H2>
       <p>
-        The database only lets you, and the people you&apos;ve shared with, read your desk. Share links, connector links and your
-        sharing password are stored only in scrambled form. No system is perfectly secure, though, and a link is its own key: keep
-        your links private, and turn them off when you&apos;re done with them.
+        The database only lets you, and the people you&apos;ve shared with, read your desk. Your sharing password, share links
+        and connector links are stored only in scrambled form, and ten wrong passwords in a row lock your desk for 15 minutes. No
+        system is perfectly secure, though: anyone with your desk&apos;s name and password can open it, and a link is its own
+        key. Choose a password that&apos;s hard to guess, share it only with people you trust, and turn sharing off when you&apos;re
+        done.
       </p>
 
       <H2>Age</H2>

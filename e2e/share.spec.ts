@@ -1,16 +1,28 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { addCollege, addPiece, apiClient, essay, expectEssay, expectEssayContains, signUp, suggestLog, waitSaved } from "./helpers";
 
+/** A desk name no other test has. */
+const deskName = (tag: string) => `testy-${tag}-${Date.now().toString(36)}${Math.floor(Math.random() * 1e4)}`;
+
+/** The student turns on sharing by desk name and password in Settings. */
+async function shareByName(page: Page, opts: { name: string; password: string; role?: "suggest" | "view" | "edit" }) {
+  await page.goto("/desk/settings/sharing");
+  await page.getByLabel("Desk name").fill(opts.name);
+  // Labelled "New password" once sharing is on; blank keeps the password.
+  if (opts.password) await page.locator("#share-password").fill(opts.password);
+  if (opts.role) await page.getByLabel("People with the password can").selectOption(opts.role);
+  await page.getByRole("button", { name: /Turn on sharing|Save/ }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Saved" })).toBeVisible();
+}
+
 /** The student makes a share link in Settings and returns its URL. */
 async function makeLink(page: Page, opts: { role: "suggest" | "view" | "edit"; label?: string; password?: string }) {
   const back = page.url();
+  // The desk's password covers its links too.
+  if (opts.password) await shareByName(page, { name: deskName("link"), password: opts.password });
   await page.goto("/desk/settings/sharing");
-  if (opts.password) {
-    // One password for every link, set on the Sharing page.
-    await page.getByLabel("Password", { exact: true }).fill(opts.password);
-    await page.getByRole("button", { name: "Set password" }).click();
-    await expect(page.getByRole("status").filter({ hasText: "Saved" })).toBeVisible();
-  }
+  const fold = page.getByTestId("share-links-fold");
+  if ((await fold.getAttribute("open")) === null) await fold.locator("summary").click();
   if (opts.label) await page.getByLabel("Who is it for?").fill(opts.label);
   await page.getByLabel("They can").selectOption(opts.role);
   await page.getByRole("button", { name: "Make a share link" }).click();
@@ -186,6 +198,66 @@ test("read-only links can't change anything", async ({ page, browser }) => {
   await page.reload();
   await expectEssay(page, "Read me.");
   await expect(suggestions(page)).toHaveCount(0);
+});
+
+test("anyone with the desk's name and password opens it from the home page; the student decides what they can do", async ({ page, browser }) => {
+  await studentWith(page, "byname", "Hello there.");
+  const name = deskName("byname");
+  await shareByName(page, { name, password: "open-sesame-9", role: "view" });
+
+  const ctx = await browser.newContext();
+  const mom = await ctx.newPage();
+  await mom.goto("/");
+  const box = mom.getByRole("form", { name: "Open a desk" });
+  const open = async (deskNameTyped: string, password: string) => {
+    await box.getByLabel("Desk name").fill(deskNameTyped);
+    await box.getByLabel("Password").fill(password);
+    await box.getByLabel("Your name").fill("Mom");
+    await box.getByRole("button", { name: "Open the desk" }).click();
+  };
+  // A wrong password and a name that doesn't exist get the same answer.
+  await open(name, "not-the-password");
+  await expect(box.getByRole("alert")).toHaveText("That desk name and password don't match.");
+  await open(`${name}-nope`, "open-sesame-9");
+  await expect(box.getByRole("alert")).toHaveText("That desk name and password don't match.");
+  // The name isn't fussy about capitals.
+  await open(name.toUpperCase(), "open-sesame-9");
+  await expect(mom).toHaveURL(/\/shared\//);
+  await expect(mom.getByRole("banner")).toContainText("Mom · read only");
+  const deskUrl = mom.url();
+
+  // What people with the password can do is one setting: suggesting, now.
+  await shareByName(page, { name, password: "", role: "suggest" });
+  await mom.reload();
+  await expect(mom.getByRole("banner")).toContainText("Mom · can suggest");
+
+  // The student sees who came in, and can take one person off.
+  await page.goto("/desk/settings/sharing");
+  const people = page.getByRole("list", { name: "People who have joined" });
+  await expect(people).toContainText("Mom");
+  await expect(people).toContainText("with the password");
+  await people.getByRole("button", { name: "Remove" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Remove" }).click();
+  await expect(page.getByText("Nobody yet.")).toBeVisible();
+  expect((await mom.goto(deskUrl))?.status()).toBe(404);
+
+  // Back in with the password, then sharing is turned off: out again, and the password no longer works.
+  await mom.goto("/?open");
+  await open(name, "open-sesame-9");
+  await expect(mom).toHaveURL(/\/shared\//);
+  await page.goto("/desk/settings/sharing");
+  await page.getByRole("button", { name: "Turn off" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Turn off" }).click();
+  await expect(page.getByRole("button", { name: "Turn on sharing" })).toBeVisible();
+  expect((await mom.goto(deskUrl))?.status()).toBe(404);
+  await mom.goto("/?open");
+  await open(name, "open-sesame-9");
+  await expect(box.getByRole("alert")).toHaveText("That desk name and password don't match.");
+
+  // On again, with a new password: whoever was in before isn't let back in by it.
+  await shareByName(page, { name, password: "brand-new-pass-7", role: "suggest" });
+  expect((await mom.goto(deskUrl))?.status()).toBe(404);
+  await ctx.close();
 });
 
 test("passwords are checked, and revoking a link cuts access", async ({ page, browser }) => {

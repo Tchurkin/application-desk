@@ -5,10 +5,16 @@ import "./globals.css";
 const sans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const serif = Source_Serif_4({ variable: "--font-serif", subsets: ["latin"] });
 
+// The tagline is Braxton's call (9/26/26, team request 21). Claims here are about the application, never admission.
+const DESCRIPTION =
+  "Be the average admit. Every college essay and short answer in one place: word counts against each limit, every draft kept, and a board of what's due next.";
+
 export const metadata: Metadata = {
+  metadataBase: new URL("https://averageapp.com"),
   title: { default: "Average App", template: "%s · Average App" },
-  description:
-    "Average App: every college essay in one place. Your words stay in the middle; parents, your counselor and AI work from the margin.",
+  description: DESCRIPTION,
+  openGraph: { title: "Average App", description: DESCRIPTION, siteName: "Average App", type: "website" },
+  twitter: { card: "summary_large_image", title: "Average App", description: DESCRIPTION },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

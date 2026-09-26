@@ -39,6 +39,7 @@ export const PROBES: Record<string, string> = {
   // It only drops 20261009's trigger: ran if that one did and the trigger is gone.
   "20261011000000": `${fn("forget_unconfirmed_password")} and not exists (select 1 from pg_trigger where tgname = 'forget_unconfirmed_password' and tgrelid = to_regclass('auth.users'))`,
   "20261012000000": `coalesce(position('Average App' in pg_get_functiondef(to_regprocedure('public.connector_link(text)'))) > 0, false)`,
+  "20261013000000": col("share_passwords", "share_name"),
 };
 
 export function migrationFiles(dir: string): { version: string; name: string; sql: string }[] {
