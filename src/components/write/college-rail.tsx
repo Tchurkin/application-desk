@@ -21,6 +21,40 @@ export function StatusDot({ status }: { status: PieceStatus }) {
   return <span aria-hidden className={`inline-block h-2 w-2 shrink-0 rounded-full ${DOT[status]}`} />;
 }
 
+type Face = { user: string; name: string; color: string };
+
+const nameOf = (name: string) => name.trim() || "Someone";
+
+/** "Mom is here", "Mom and Dad are here", "Mom, Dad and Claude are here". */
+export function hereLabel(people: Face[]): string {
+  const names = people.map((p) => nameOf(p.name));
+  const list = names.length < 3 ? names.join(" and ") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
+  return `${list} ${names.length === 1 ? "is" : "are"} here`;
+}
+
+/** The people who have a piece open: a colored initial each (three at most, then a count). */
+function Faces({ people }: { people: Face[] }) {
+  if (!people.length) return null;
+  return (
+    <span aria-hidden title={hereLabel(people)} className="flex shrink-0 -space-x-1" data-testid="rail-faces">
+      {people.slice(0, 3).map((p, i) => (
+        <span
+          key={i}
+          className="grid size-4 place-items-center rounded-full text-[9px] leading-none font-semibold text-white ring-1 ring-panel"
+          style={{ backgroundColor: p.color }}
+        >
+          {nameOf(p.name).charAt(0).toUpperCase()}
+        </span>
+      ))}
+      {people.length > 3 && (
+        <span className="grid size-4 place-items-center rounded-full bg-muted text-[8px] leading-none font-semibold text-white ring-1 ring-panel">
+          +{people.length - 3}
+        </span>
+      )}
+    </span>
+  );
+}
+
 /** The piece this page opened with has had its college expanded (once, so it can be folded again). */
 let expandedFor: string | null = null;
 
@@ -38,6 +72,7 @@ export function CollegeRail({
   pieceHref,
   collegeHref,
   live,
+  people,
 }: {
   groups: RailGroup[];
   currentId: string;
@@ -46,6 +81,8 @@ export function CollegeRail({
   collegeHref?: (id: string) => string;
   /** The open piece's count and status as the editor has them right now. */
   live: { count: string; status: PieceStatus };
+  /** Everyone else working on the desk, by the piece they have open. */
+  people?: Map<string, Face[]>;
 }) {
   const router = useRouter();
   const stored = usePref(PREF.railOpen);
@@ -188,12 +225,13 @@ export function CollegeRail({
     const count = here ? live.count : countLabel({ words: p.word_count, kind: p.limit_kind, limit: p.limit_value });
     const isVersion = !!p.variant_of && g.pieces.some((o) => o.id === p.variant_of);
     const indent = level === 1 ? (isVersion ? "pl-8" : "pl-3") : isVersion ? "pl-10" : "pl-7";
+    const on = people?.get(p.id) ?? [];
     return (
       <li
         key={p.id}
         role="treeitem"
         aria-level={level}
-        aria-label={`${p.title}, ${labelOf(PIECE_STATUSES, status)}, ${count}`}
+        aria-label={`${p.title}, ${labelOf(PIECE_STATUSES, status)}, ${count}${on.length ? `, ${hereLabel(on)}` : ""}`}
         aria-current={here ? "page" : undefined}
         data-rail-key={p.id}
         tabIndex={focusable === p.id ? 0 : -1}
@@ -217,6 +255,7 @@ export function CollegeRail({
       >
         <StatusDot status={status} />
         <span className={`min-w-0 flex-1 truncate ${level === 1 ? "font-medium" : ""}`}>{p.title}</span>
+        <Faces people={on} />
         <span className="shrink-0 font-mono text-xs text-muted">{count}</span>
       </li>
     );
@@ -229,12 +268,14 @@ export function CollegeRail({
         const open = isOpen(g);
         const current = g.key === currentKey;
         const meta = groupMeta(g);
+        // Folded, a college shows everyone on its pieces, each person once.
+        const inside = open ? [] : [...new Map(g.pieces.flatMap((p) => people?.get(p.id) ?? []).map((f) => [f.user, f] as const)).values()];
         return (
           <li
             key={g.key}
             role="treeitem"
             aria-level={1}
-            aria-label={`${g.name}, ${meta}`}
+            aria-label={`${g.name}, ${meta}${inside.length ? `, ${hereLabel(inside)}` : ""}`}
             aria-expanded={g.total ? open : undefined}
             data-rail-key={g.key}
             tabIndex={focusable === g.key ? 0 : -1}
@@ -269,7 +310,10 @@ export function CollegeRail({
                 <FilesIcon />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate font-semibold">{g.name}</span>
+                <span className="flex items-center gap-2">
+                  <span className="min-w-0 flex-1 truncate font-semibold">{g.name}</span>
+                  <Faces people={inside} />
+                </span>
                 <span className="block truncate text-xs text-muted">{meta}</span>
                 {g.total > 0 && (
                   <span aria-hidden className="mt-1 block h-1 overflow-hidden rounded-full bg-line">

@@ -11,7 +11,9 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { AnswerText, InlineText } from "@/components/ask/answer-text";
 import { FormattedTextarea } from "@/components/formatted-textarea";
 import { FormatToolbar } from "@/components/write/format-toolbar";
+import { usePref, writePref } from "@/components/write/hooks";
 import { VersionCompare, type LoadedVersion } from "@/components/write/version-compare";
+import { PREF } from "@/lib/write/layout";
 import { countLabel, type RailGroup, type RailPiece } from "@/lib/write/rail";
 import { WriteWorkspace } from "./write-workspace";
 import { PIECE_STATUSES, labelOf, type PieceStatus } from "@/lib/domain/colleges";
@@ -119,6 +121,8 @@ export function PieceEditor({
   const [text, setText] = useState("");
   const [editor, setEditor] = useState<Editor | null>(null);
   const meta = useMetaSaver(piece.id);
+  // The suggestions margin, folded away or not (per browser).
+  const marginFolded = usePref(PREF.marginFolded) === "1";
   // Prompt and Notes open above the writing; the prompt starts open when there is one.
   const [panels, setPanels] = useState({ prompt: !!piece.prompt, notes: false });
   const togglePanel = (k: keyof typeof panels) => setPanels((p) => ({ ...p, [k]: !p[k] }));
@@ -298,10 +302,11 @@ export function PieceEditor({
     [owner, supabase, piece.id],
   );
 
+  const openCount = useOpenCount(live?.store ?? null);
   const limit = limitState(text, limitKind, limitValue);
 
   const body = (
-    <div className={`grid gap-6 lg:grid-cols-[1fr_18rem] ${workspace ? "p-4" : ""}`}>
+    <div className={`grid gap-6 ${marginFolded ? "lg:grid-cols-[1fr_auto]" : "lg:grid-cols-[1fr_18rem]"} ${workspace ? "p-4" : ""}`}>
       <section className="min-w-0">
         {owner ? (
           <input
@@ -394,7 +399,7 @@ export function PieceEditor({
           {people.length > 0 && (
             <span className="flex flex-wrap gap-1" aria-label="Also here">
               {people.map((p, i) => (
-                <span key={i} className="rounded-full px-2 py-0.5 text-xs text-white" style={{ background: p.color }}>
+                <span key={i} className="rounded-full px-2 py-0.5 text-xs text-white" style={{ backgroundColor: p.color }}>
                   {p.name}
                 </span>
               ))}
@@ -516,13 +521,16 @@ export function PieceEditor({
         )}
       </section>
 
-      {/* The margin: suggestions, and nothing else. */}
-      <aside className="flex flex-col gap-3" aria-label="Margin">
-        {live && editor ? (
-          <SuggestionsPanel live={live} editor={editor} role={role} me={me.id} />
-        ) : (
-          <p className="text-sm text-muted">Suggestions appear here.</p>
-        )}
+      {/* The margin: suggestions, and nothing else. On a wide screen it folds away to the right. */}
+      <aside className="flex items-start gap-2" aria-label="Margin">
+        <div id="essay-margin" className={`min-w-0 flex-1 ${marginFolded ? "lg:hidden" : ""}`}>
+          {live && editor ? (
+            <SuggestionsPanel live={live} editor={editor} role={role} me={me.id} />
+          ) : (
+            <p className="text-sm text-muted">Suggestions appear here.</p>
+          )}
+        </div>
+        <MarginToggle folded={marginFolded} count={openCount} />
       </aside>
     </div>
   );
@@ -538,6 +546,7 @@ export function PieceEditor({
     <WriteWorkspace
       workspace={workspace}
       owner={owner}
+      me={{ id: me.id, name: me.name, color: colorFor(me.id) }}
       pieceId={piece.id}
       deskId={deskId ?? ""}
       title={title}
@@ -722,6 +731,41 @@ const CARD: Record<Suggestion["kind"], string> = {
   replace: "border-line bg-panel",
 };
 const VERB: Record<Suggestion["kind"], string> = { insert: "Add", delete: "Delete", replace: "Replace" };
+
+/** How many suggestions are open (none while the piece loads). */
+function useOpenCount(store: SuggestionStore | null): number {
+  const subscribe = useCallback((fn: () => void) => (store ? store.subscribe(fn) : () => {}), [store]);
+  return useSyncExternalStore(
+    subscribe,
+    () => (store ? store.open().length : 0),
+    () => 0,
+  );
+}
+
+/** The caret that folds the margin away (the writing takes its space) and brings it back, with how many suggestions wait there. */
+function MarginToggle({ folded, count }: { folded: boolean; count: number }) {
+  const waiting = count ? ` (${count} suggestion${count === 1 ? "" : "s"})` : "";
+  return (
+    <button
+      type="button"
+      aria-expanded={!folded}
+      aria-controls="essay-margin"
+      aria-label={folded ? `Show the margin${waiting}` : "Fold the margin away"}
+      title={folded ? `Show the suggestions${waiting}` : "Fold the margin away: the writing takes its space"}
+      onClick={() => writePref(PREF.marginFolded, folded ? "0" : "1")}
+      className="hidden shrink-0 flex-col items-center gap-1 rounded-md p-1 text-muted hover:bg-bg hover:text-ink lg:flex"
+    >
+      <svg aria-hidden viewBox="0 0 16 16" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d={folded ? "M10 3.5 5.5 8l4.5 4.5" : "M6 3.5 10.5 8 6 12.5"} />
+      </svg>
+      {folded && count > 0 && (
+        <span className="rounded-full bg-accent px-1.5 text-[10px] leading-4 font-semibold text-accent-ink" data-testid="margin-count">
+          {count}
+        </span>
+      )}
+    </button>
+  );
+}
 
 function SuggestionsPanel({ live, editor, role, me }: { live: Live; editor: Editor; role: Role; me: string }) {
   const { store } = live;

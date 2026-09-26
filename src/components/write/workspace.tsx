@@ -74,12 +74,22 @@ export function Workspace({
   useLayoutEffect(() => {
     const el = root.current;
     if (!el) return;
-    const measure = () => el.style.setProperty("--ws-top", `${Math.max(0, el.getBoundingClientRect().top + window.scrollY)}px`);
+    const measure = () => {
+      const top = `${Math.max(0, el.getBoundingClientRect().top + window.scrollY)}px`;
+      if (el.style.getPropertyValue("--ws-top") !== top) el.style.setProperty("--ws-top", top);
+    };
     measure();
-    // The header's font can land after the first paint and change its height.
+    // The header's font can land after the first paint, and the header can wrap: either changes
+    // how far down the workspace starts.
     void document.fonts?.ready.then(measure);
+    const resized = new ResizeObserver(measure);
+    resized.observe(document.body);
+    document.querySelectorAll("header").forEach((h) => resized.observe(h));
     window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
+    return () => {
+      resized.disconnect();
+      window.removeEventListener("resize", measure);
+    };
   }, []);
 
   // On a wide screen nothing but the columns scrolls. A field taking focus, or the editor keeping
@@ -129,6 +139,7 @@ export function Workspace({
   return (
     <div
       ref={root}
+      data-write-workspace
       style={{ "--side-w": `${width}px` } as CSSProperties}
       className={`flex flex-col lg:grid lg:h-[calc(100dvh-var(--ws-top,3.1rem))] lg:grid-rows-[minmax(0,1fr)] lg:overflow-hidden ${
         shown && !narrow ? "lg:grid-cols-[46px_var(--side-w)_7px_minmax(0,1fr)]" : "lg:grid-cols-[46px_minmax(0,1fr)]"
@@ -184,7 +195,7 @@ export function Workspace({
               </button>
             )}
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto">{renderPanel(tool)}</div>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{renderPanel(tool)}</div>
         </aside>
       )}
       {shown && !narrow && (
@@ -221,7 +232,7 @@ export function Workspace({
         </div>
       )}
 
-      <div className="min-w-0 lg:min-h-0 lg:overflow-y-auto" data-write-scroll>
+      <div className="min-w-0 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain" data-write-scroll>
         {children}
       </div>
     </div>

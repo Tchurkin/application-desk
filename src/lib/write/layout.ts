@@ -18,6 +18,8 @@ export const PREF = {
   beside: "desk:write:beside",
   notesOpen: "desk:write:notes-open",
   flash: "desk:write:flash",
+  /** The suggestions margin folded away, the writing taking its space. */
+  marginFolded: "desk:write:margin-folded",
 } as const;
 
 export type Tool = "files" | "ask" | "history";

@@ -17,12 +17,12 @@ create table if not exists average_app.migrations (version text primary key, nam
 
 do $setup$
 declare
-  names text[] := array['20260923000000_init', '20260924000000_sharing', '20260925000000_connectors', '20260926000000_connector_editing', '20260927000000_connector_manage', '20260928000000_strategy_progress_bridge', '20260929000000_watch_desk', '20260930000000_editing_mode', '20261001000000_permissions_counselor_profile', '20261002000000_counselor_page', '20261003000000_counselor_update', '20261004000000_models', '20261005000000_recommenders', '20261006000000_transcript', '20261007000000_submitted', '20261008000000_trash', '20261009000000_sign_in', '20261010000000_share_password', '20261011000000_password_drop_waits_for_codes', '20261012000000_average_app_name', '20261013000000_share_by_name', '20261014000000_share_join_limits', '20261015000000_profile_files'];
+  names text[] := array['20260923000000_init', '20260924000000_sharing', '20260925000000_connectors', '20260926000000_connector_editing', '20260927000000_connector_manage', '20260928000000_strategy_progress_bridge', '20260929000000_watch_desk', '20260930000000_editing_mode', '20261001000000_permissions_counselor_profile', '20261002000000_counselor_page', '20261003000000_counselor_update', '20261004000000_models', '20261005000000_recommenders', '20261006000000_transcript', '20261007000000_submitted', '20261008000000_trash', '20261009000000_sign_in', '20261010000000_share_password', '20261011000000_password_drop_waits_for_codes', '20261012000000_average_app_name', '20261013000000_share_by_name', '20261014000000_share_join_limits', '20261015000000_profile_files', '20261016000000_desk_presence'];
   marked text[];
   cli text[] := '{}';
   have boolean[];
   -- For each migration, the later ones that change some of the same things, and what.
-  clash jsonb := '{"1":{"2":"function can_read_desk, function can_write_desk, function handle_new_user and 1 more","8":"policy \"add updates\" on piece_updates","9":"policy \"add updates\" on piece_updates","17":"function handle_new_user"},"2":{"3":"function check_suggestion_update","8":"function check_suggestion_update","9":"function can_suggest_desk, function create_share_link","17":"function handle_new_user","18":"function join_desk, function link_info"},"3":{"4":"function connector_add_suggestions","5":"function connector_add_suggestions, function connector_desk","8":"function check_suggestion_update","9":"function connector_add_suggestions, function connector_desk","15":"function connector_desk","20":"function connector_link"},"4":{"5":"function connector_add_suggestions","9":"function connector_add_suggestions, function connector_create_piece, function connector_write"},"5":{"9":"function connector_add_suggestions, function connector_delete_college, function connector_delete_piece and 4 more","15":"function connector_desk","16":"function connector_delete_college, function connector_delete_piece"},"6":{"12":"function connector_requests","14":"function connector_strategy, function connector_update_academics"},"8":{"9":"function can_edit_text, policy \"add updates\" on piece_updates"},"9":{"10":"constraint desk_requests_kind_check, function connector_counselor_poll","11":"function connector_counselor_poll","12":"function connector_counselor_poll","14":"constraint desk_requests_kind_check, function connector_profile","15":"function connector_desk","16":"function connector_delete_college, function connector_delete_piece","20":"function connector_allow"},"10":{"11":"column connector_links.counselor_remove, function connector_counselor_poll, function connector_counselor_removed","12":"function connector_counselor_poll","14":"constraint desk_requests_kind_check"},"11":{"12":"function connector_counselor_poll"},"17":{"19":"trigger forget_unconfirmed_password"},"21":{"22":"function join_desk_by_name, function set_desk_sharing"}}';
+  clash jsonb := '{"1":{"2":"function can_read_desk, function can_write_desk, function handle_new_user and 1 more","8":"policy \"add updates\" on piece_updates","9":"policy \"add updates\" on piece_updates","17":"function handle_new_user"},"2":{"3":"function check_suggestion_update","8":"function check_suggestion_update","9":"function can_suggest_desk, function create_share_link","17":"function handle_new_user","18":"function join_desk, function link_info","24":"function can_use_piece_topic"},"3":{"4":"function connector_add_suggestions","5":"function connector_add_suggestions, function connector_desk","8":"function check_suggestion_update","9":"function connector_add_suggestions, function connector_desk","15":"function connector_desk","20":"function connector_link"},"4":{"5":"function connector_add_suggestions","9":"function connector_add_suggestions, function connector_create_piece, function connector_write"},"5":{"9":"function connector_add_suggestions, function connector_delete_college, function connector_delete_piece and 4 more","15":"function connector_desk","16":"function connector_delete_college, function connector_delete_piece"},"6":{"12":"function connector_requests","14":"function connector_strategy, function connector_update_academics"},"8":{"9":"function can_edit_text, policy \"add updates\" on piece_updates"},"9":{"10":"constraint desk_requests_kind_check, function connector_counselor_poll","11":"function connector_counselor_poll","12":"function connector_counselor_poll","14":"constraint desk_requests_kind_check, function connector_profile","15":"function connector_desk","16":"function connector_delete_college, function connector_delete_piece","20":"function connector_allow"},"10":{"11":"column connector_links.counselor_remove, function connector_counselor_poll, function connector_counselor_removed","12":"function connector_counselor_poll","14":"constraint desk_requests_kind_check"},"11":{"12":"function connector_counselor_poll"},"17":{"19":"trigger forget_unconfirmed_password"},"21":{"22":"function join_desk_by_name, function set_desk_sharing"}}';
   late boolean[] := '{}';
   blocked text;
   applied int := 0;
@@ -54,7 +54,8 @@ begin
     ('20261012000000' = any(marked)) or ('20261012000000' = any(cli)) or (coalesce(position('Average App' in pg_get_functiondef(to_regprocedure('public.connector_link(text)'))) > 0, false)),
     ('20261013000000' = any(marked)) or ('20261013000000' = any(cli)) or (exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'share_passwords' and column_name = 'share_name')),
     ('20261014000000' = any(marked)) or ('20261014000000' = any(cli)) or (exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'desk_share_guesses')),
-    ('20261015000000' = any(marked)) or ('20261015000000' = any(cli)) or (to_regclass('public.profile_files') is not null)
+    ('20261015000000' = any(marked)) or ('20261015000000' = any(cli)) or (to_regclass('public.profile_files') is not null),
+    ('20261016000000' = any(marked)) or ('20261016000000' = any(cli)) or (coalesce(position('desk:' in pg_get_functiondef(to_regprocedure('public.can_use_piece_topic(text)'))) > 0, false))
   ];
 
   for i in 1 .. array_length(names, 1) loop
@@ -3477,6 +3478,33 @@ $m20261015000000$;
     insert into average_app.migrations (version, name) values ('20261015000000', '20261015000000_profile_files');
     applied := applied + 1;
     raise notice 'Applied %', '20261015000000_profile_files' || case when late[23] then ' (it had been skipped)' else '' end;
+  end if;
+
+  if not have[24] then
+    execute $m20261016000000$
+-- Where everyone is on a desk.
+--
+-- Braxton's call (9/26/26): the Write page's list of colleges and pieces shows where the people
+-- working on the desk are. Each open piece says so on a private channel for its desk
+-- ("desk:<id>"), which only people who can read the desk may join, like the channel each piece
+-- already has for cursors. The same check covers both.
+
+create or replace function public.can_use_piece_topic(topic text)
+returns boolean language plpgsql stable security definer set search_path = public as $$
+begin
+  if topic ~ '^piece:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
+    return public.can_read_desk(public.piece_desk(substring(topic from 7)::uuid));
+  end if;
+  if topic ~ '^desk:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
+    return public.can_read_desk(substring(topic from 6)::uuid);
+  end if;
+  return false;
+end;
+$$;
+$m20261016000000$;
+    insert into average_app.migrations (version, name) values ('20261016000000', '20261016000000_desk_presence');
+    applied := applied + 1;
+    raise notice 'Applied %', '20261016000000_desk_presence' || case when late[24] then ' (it had been skipped)' else '' end;
   end if;
 
   if applied = 0 then

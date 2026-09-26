@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Source_Serif_4 } from "next/font/google";
+import { ScrollbarReveal } from "@/components/scrollbar-reveal";
 import "./globals.css";
 
 const sans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
@@ -20,7 +21,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${sans.variable} ${serif.variable} h-full antialiased`}>
-      <body className="flex min-h-full flex-col">{children}</body>
+      <body className="flex min-h-full flex-col">
+        {children}
+        <ScrollbarReveal />
+      </body>
     </html>
   );
 }

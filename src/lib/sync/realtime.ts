@@ -67,7 +67,10 @@ export class PieceChannel {
     this.awareness.getStates().forEach((st, client) => {
       if (client === this.awareness.clientID) return;
       const u = (st as { user?: Person }).user;
-      if (u) people.push(u);
+      if (!u || typeof u.name !== "string") return;
+      // Shown as a background: a plain color only, never something that makes the browser fetch.
+      const color = typeof u.color === "string" && /^#[0-9a-f]{6}$/i.test(u.color) ? u.color : COLORS[0];
+      people.push({ name: u.name.slice(0, 80), color, role: u.role });
     });
     this.handlers.onPeople(people);
   }

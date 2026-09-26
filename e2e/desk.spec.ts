@@ -261,3 +261,38 @@ test("a piece gets a due date of its own, shown on the board", async ({ page }) 
   await expect(lane).toContainText("Nov 1");
   await expect(lane.getByRole("slider", { name: "Why us?", exact: true })).toContainText("Oct 20");
 });
+
+test("the margin folds away and the writing takes its space; the page itself never scrolls", async ({ page }) => {
+  await signUp(page, "margin");
+  await addCollege(page, "Fold College");
+  await addPiece(page, "Long one");
+  await essay(page).click();
+  await page.keyboard.insertText(Array.from({ length: 80 }, (_, i) => `Paragraph ${i + 1} of Testy's essay.`).join("\n"));
+  await waitSaved(page);
+
+  const margin = page.getByRole("complementary", { name: "Margin" });
+  const before = (await essay(page).boundingBox())!.width;
+  await margin.getByRole("button", { name: "Fold the margin away" }).click();
+  await expect(margin.locator("#essay-margin")).toBeHidden();
+  await expect.poll(async () => (await essay(page).boundingBox())!.width).toBeGreaterThan(before + 200);
+  // Remembered.
+  await page.reload();
+  await expect(margin.getByRole("button", { name: /^Show the margin/ })).toBeVisible();
+  await margin.getByRole("button", { name: /^Show the margin/ }).click();
+  await expect(margin.getByRole("button", { name: "Fold the margin away" })).toBeVisible();
+
+  // Scrolling on past the end of the essay doesn't move the page (it used to jump, then snap back).
+  await page.evaluate(() => {
+    (window as unknown as { maxY: number }).maxY = 0;
+    window.addEventListener("scroll", () => {
+      const w = window as unknown as { maxY: number };
+      w.maxY = Math.max(w.maxY, window.scrollY);
+    });
+  });
+  const box = (await essay(page).boundingBox())!;
+  await page.mouse.move(box.x + 40, Math.min(box.y + 200, 600));
+  for (let i = 0; i < 12; i++) await page.mouse.wheel(0, 900);
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => (window as unknown as { maxY: number }).maxY)).toBe(0);
+  expect(await page.evaluate(() => document.querySelector("[data-write-scroll]")!.scrollTop)).toBeGreaterThan(0);
+});

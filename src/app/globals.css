@@ -120,6 +120,35 @@ body {
   bottom: 9rem;
 }
 
+/* Scrollbars stay out of sight until they're wanted: the pointer near one, dragging it, or its
+   area scrolling (ScrollbarReveal adds .scrollbar-shown). Thin when they show. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.scrollbar-shown {
+  scrollbar-color: color-mix(in srgb, var(--muted) 65%, transparent) transparent;
+}
+
+/* A highlighter stroke behind a word (the tagline's "admit"). */
+.marker {
+  --marker: color-mix(in srgb, var(--accent) 28%, transparent);
+  color: var(--ink);
+  background: linear-gradient(transparent 40%, var(--marker) 40%, var(--marker) 92%, transparent 92%);
+  padding: 0 0.12em;
+  margin: 0 -0.04em;
+  box-decoration-break: clone;
+}
+
+/* The Write page on a wide screen fills the window and scrolls inside its columns. The page itself
+   never scrolls there, so scrolling on past the end of a column can't nudge it down (only for it to
+   be put back). */
+@media (min-width: 64rem) {
+  html:has([data-write-workspace]) {
+    overflow: hidden;
+  }
+}
+
 /* The essay editor */
 .essay .ProseMirror {
   font-family: var(--font-serif), Georgia, serif;

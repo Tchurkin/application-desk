@@ -1,7 +1,7 @@
 "use client";
 
 import type { Editor } from "@tiptap/react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { AskPanel } from "@/components/ask/ask-panel";
 import { CollegeRail } from "@/components/write/college-rail";
 import { ConfirmDialog } from "@/components/write/confirm-dialog";
@@ -9,6 +9,8 @@ import { AskIcon, FilesIcon, HistoryIcon } from "@/components/write/icons";
 import { PieceTabs } from "@/components/write/piece-tabs";
 import { Workspace, type ToolDef } from "@/components/write/workspace";
 import type { PieceStatus } from "@/lib/domain/colleges";
+import { supabaseBrowser } from "@/lib/supabase/client";
+import { byPiece, deskPresence, type Here } from "@/lib/sync/desk-presence";
 import type { RailGroup, RailPiece } from "@/lib/write/rail";
 import { deletePiece } from "../../actions";
 
@@ -28,6 +30,7 @@ const GUEST_TOOLS = [FILES, HISTORY];
 export function WriteWorkspace({
   workspace,
   owner,
+  me,
   pieceId,
   deskId,
   title,
@@ -40,6 +43,8 @@ export function WriteWorkspace({
 }: {
   workspace: { groups: RailGroup[]; tabs: RailPiece[]; base: string };
   owner: boolean;
+  /** Who is at this screen, as the people on the desk see them. */
+  me: { id: string; name: string; color: string };
   pieceId: string;
   deskId: string;
   title: string;
@@ -53,6 +58,13 @@ export function WriteWorkspace({
 }) {
   const [deleting, setDeleting] = useState<RailPiece | null>(null);
   const group = workspace.groups.find((g) => g.pieces.some((p) => p.id === pieceId));
+
+  // Where everyone else working on the desk is, shown in the rail; and where we are, for them.
+  const supabase = supabaseBrowser();
+  const here = useMemo<Here>(() => ({ user: me.id, name: me.name, color: me.color, piece: pieceId }), [me.id, me.name, me.color, pieceId]);
+  const [others, setOthers] = useState<Here[]>([]);
+  useEffect(() => (deskId ? deskPresence(supabase, deskId).attach(here, setOthers) : undefined), [supabase, deskId, here]);
+  const people = useMemo(() => byPiece(others), [others]);
   const pieceHref = (id: string) => `${workspace.base}/piece/${id}`;
   // A college with no pieces yet opens its page, which only the student has.
   const collegeHref = owner ? (id: string) => `/desk/college/${id}` : undefined;
@@ -69,6 +81,7 @@ export function WriteWorkspace({
             pieceHref={pieceHref}
             collegeHref={collegeHref}
             live={{ count: countNow, status }}
+            people={people}
           />
         ) : t === "ask" ? (
           <div className="p-3">

@@ -22,7 +22,20 @@ export default function Image() {
         }}
       >
         <div style={{ fontSize: 112, fontWeight: 600, letterSpacing: -2 }}>Average App</div>
-        <div style={{ marginTop: 16, fontSize: 56, color: "#2f5d4a" }}>Be the average admit.</div>
+        <div style={{ display: "flex", marginTop: 16, fontSize: 56, color: "#2f5d4a" }}>
+          <span>Be the average</span>
+          <span
+            style={{
+              marginLeft: 14,
+              padding: "0 6px",
+              color: "#1f2421",
+              backgroundImage: "linear-gradient(transparent 40%, #c6dccf 40%, #c6dccf 92%, transparent 92%)",
+            }}
+          >
+            admit
+          </span>
+          <span>.</span>
+        </div>
         <div style={{ marginTop: 40, fontSize: 30, color: "#6b6f6c" }}>Every college essay and short answer, in one place.</div>
       </div>
     ),

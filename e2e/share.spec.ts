@@ -220,6 +220,29 @@ test("people it's shared with have the Board, Write and Strategy, and nothing of
   await expect(guest.getByRole("heading", { name: "Board", level: 1 })).toBeVisible();
 });
 
+test("the Files panel shows where everyone on the desk is", async ({ page, browser }) => {
+  await studentWith(page, "presence", "Where is everyone?");
+  await page.goto((await page.getByRole("link", { name: "Share College", exact: true }).first().getAttribute("href"))!);
+  await addPiece(page, "Second essay");
+  const mom = await join(browser, await makeLink(page, { role: "suggest", label: "Mom" }), "Mom Testy");
+  await openShared(mom, "Shared essay");
+
+  // The student is on "Second essay"; Mom has "Shared essay" open.
+  const rail = page.getByRole("tree", { name: "Colleges and pieces" });
+  await expect(rail.getByRole("treeitem", { name: /^Shared essay,.*Mom Testy is here/ })).toBeVisible({ timeout: 15_000 });
+  await expect(rail.getByRole("treeitem", { name: /^Second essay,/ })).not.toHaveAccessibleName(/is here/);
+
+  // She moves to the student's piece, and the faces follow her.
+  const sharedDesk = new URL(mom.url()).pathname.split("/piece/")[0];
+  await mom.goto(`${sharedDesk}/piece/${page.url().split("/piece/")[1]}`);
+  await expect(rail.getByRole("treeitem", { name: /^Second essay,.*Mom Testy is here/ })).toBeVisible({ timeout: 15_000 });
+  await expect(rail.getByRole("treeitem", { name: /^Shared essay,/ })).not.toHaveAccessibleName(/is here/);
+
+  // And she's gone when she closes the desk.
+  await mom.close();
+  await expect(rail.getByRole("treeitem", { name: /^Second essay,/ })).not.toHaveAccessibleName(/is here/, { timeout: 20_000 });
+});
+
 test("read-only links can't change anything", async ({ page, browser }) => {
   await studentWith(page, "viewonly", "Read me.");
   const reader = await join(browser, await makeLink(page, { role: "view" }), "Grandpa");
