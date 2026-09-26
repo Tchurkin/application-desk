@@ -8,6 +8,8 @@ import { UndoCaret } from "@/lib/editor/undo-caret";
 import { EditorContent, useEditor, type Editor, type JSONContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { AnswerText, InlineText } from "@/components/ask/answer-text";
+import { FormattedTextarea } from "@/components/formatted-textarea";
 import { FormatToolbar } from "@/components/write/format-toolbar";
 import { VersionCompare, type LoadedVersion } from "@/components/write/version-compare";
 import { countLabel, type RailGroup, type RailPiece } from "@/lib/write/rail";
@@ -406,7 +408,7 @@ export function PieceEditor({
             "Prompt",
             !!prompt,
             owner ? (
-              <textarea
+              <FormattedTextarea
                 className="field"
                 rows={3}
                 value={prompt}
@@ -418,7 +420,7 @@ export function PieceEditor({
                 }}
               />
             ) : (
-              <p className="rounded-md border border-line bg-panel px-3 py-2 text-sm whitespace-pre-wrap">{prompt || "No prompt entered."}</p>
+              <div className="rounded-md border border-line bg-panel px-3 py-2">{prompt ? <AnswerText text={prompt} /> : <p className="text-sm">No prompt entered.</p>}</div>
             ),
           )}
           {fold(
@@ -426,7 +428,7 @@ export function PieceEditor({
             "Notes",
             !!notes,
             owner ? (
-              <textarea
+              <FormattedTextarea
                 className="field"
                 rows={4}
                 value={notes}
@@ -438,7 +440,7 @@ export function PieceEditor({
                 }}
               />
             ) : (
-              <p className="rounded-md border border-line bg-panel px-3 py-2 text-sm whitespace-pre-wrap">{notes || "No notes."}</p>
+              <div className="rounded-md border border-line bg-panel px-3 py-2">{notes ? <AnswerText text={notes} /> : <p className="text-sm">No notes.</p>}</div>
             ),
           )}
         </div>
@@ -785,7 +787,11 @@ function SuggestionsPanel({ live, editor, role, me }: { live: Live; editor: Edit
                   {r.gone && " · its text is gone"}
                 </span>
                 <SuggestionText s={s} />
-                {s.note && <span className="mt-1 block text-xs text-muted">Why: {s.note}</span>}
+                {s.note && (
+                  <span className="mt-1 block text-xs text-muted">
+                    Why: <InlineText text={s.note} />
+                  </span>
+                )}
               </button>
               <div className="mt-2 flex gap-2">
                 {role === "owner" && (

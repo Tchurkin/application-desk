@@ -2,8 +2,8 @@
 export type ShareRole = "view" | "suggest" | "edit";
 
 export const SHARE_ROLES: { value: ShareRole; label: string; short: string }[] = [
-  { value: "suggest", label: "Read and suggest edits", short: "can suggest" },
   { value: "edit", label: "Read and edit (or suggest)", short: "can edit" },
+  { value: "suggest", label: "Read and suggest edits", short: "can suggest" },
   { value: "view", label: "Only read", short: "read only" },
 ];
 

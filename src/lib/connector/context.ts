@@ -2,7 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { head, renderRequest, renderRequestList, type ListingOptions, type PendingRequest } from "@/lib/bridge/listing";
 import type { RequestKind } from "@/lib/bridge/requests";
-import { renderProfile, type ProfileInfo } from "@/lib/profile/render";
+import { profileInContext, type ProfileInfo } from "@/lib/profile/render";
 import { catalogCandidates, matchCollege } from "@/lib/strategy/catalog";
 import { renderStrategy, type StrategyInfo } from "@/lib/strategy/render";
 import { loadDeskInfo, loadPiece, renderDesk, renderPiece } from "./tools";
@@ -17,6 +17,9 @@ import { loadDeskInfo, loadPiece, renderDesk, renderPiece } from "./tools";
 
 /** Each piece of context is cut at this many characters. */
 const CONTEXT_MAX = 40_000;
+/** How much of the profile comes along: whole sections from the top, then a pointer to read_profile for the rest. */
+const PROFILE_WITH_PIECE = 16_000;
+const PROFILE_ALONE = 30_000;
 
 const clip = (s: string) => (s.length <= CONTEXT_MAX ? s : `${head(s, CONTEXT_MAX)}\n[…cut here; the tools have the rest]`);
 
@@ -47,7 +50,7 @@ class Context {
         try {
           const [{ p: info, doc, flat }, profile, desk] = await Promise.all([
             loadPiece(this.sb, this.token, id),
-            this.profileText(),
+            this.profileText(PROFILE_WITH_PIECE),
             this.deskText(),
           ]);
           doc.destroy();
@@ -80,9 +83,9 @@ class Context {
     return this.desk;
   }
 
-  async profileText(): Promise<string | null> {
+  async profileText(max = PROFILE_ALONE): Promise<string | null> {
     const p = await this.loadProfile();
-    return p ? clip(renderProfile(p)) : null;
+    return p ? profileInContext(p, max) : null;
   }
 
   /** The context one request needs, or null. */
@@ -120,6 +123,11 @@ const REPLY_RULES =
   "Your final reply is posted to the student as the answer, so write only that: no preamble before your tool calls, no commentary between them, " +
   "and don't call answer_request. Paragraphs, **bold** and simple \"- \" lists show as formatting.";
 
+/** In every request, so a counselor installed before this was said still hears it. */
+export const PROFILE_RULE =
+  "The student's profile (read_profile) is the ground truth about them: where a draft, a note or what you remember disagrees with it, " +
+  "the profile wins, above all any section of facts they ask you to get right.";
+
 /** One message per request for the counselor, each with its context. */
 export async function counselorMessages(
   sb: SupabaseClient,
@@ -135,7 +143,7 @@ export async function counselorMessages(
         id: r.id,
         kind: r.kind,
         model: r.model ?? "",
-        text: [`# A request from the student's desk`, body, "", REPLY_RULES, ...(c ? ["", "---", "", c.text] : [])].join("\n"),
+        text: [`# A request from the student's desk`, body, "", REPLY_RULES, PROFILE_RULE, ...(c ? ["", "---", "", c.text] : [])].join("\n"),
       };
     }),
   );

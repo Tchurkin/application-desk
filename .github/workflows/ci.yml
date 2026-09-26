@@ -57,8 +57,22 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Start Supabase
-        run: npx supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor
+      # The database is built from supabase/setup.sql, the way a hosted project is set up, not from
+      # the migrations folder: the tests then prove that file works.
+      - name: Start Supabase with no migrations
+        run: |
+          mkdir -p "$RUNNER_TEMP/migrations"
+          mv supabase/migrations/*.sql "$RUNNER_TEMP/migrations/"
+          npx supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor
+      - name: Set up the database from supabase/setup.sql, then check a second run does nothing
+        run: |
+          eval "$(npx supabase status -o env)"
+          command -v psql >/dev/null || (sudo apt-get update && sudo apt-get install -y postgresql-client)
+          db="${DB_URL:-postgresql://postgres:postgres@127.0.0.1:54322/postgres}"
+          psql "$db" -v ON_ERROR_STOP=1 -f supabase/setup.sql 2>&1 | tee "$RUNNER_TEMP/setup-1.txt"
+          grep -q "Done: applied" "$RUNNER_TEMP/setup-1.txt"
+          psql "$db" -v ON_ERROR_STOP=1 -f supabase/setup.sql 2>&1 | tee "$RUNNER_TEMP/setup-2.txt"
+          grep -q "up to date: nothing to do" "$RUNNER_TEMP/setup-2.txt"
       - name: Point the app at it
         run: |
           eval "$(npx supabase status -o env)"

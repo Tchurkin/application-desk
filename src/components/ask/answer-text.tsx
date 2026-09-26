@@ -1,5 +1,5 @@
 import { Fragment } from "react";
-import { parseAnswer, type Line } from "@/lib/bridge/answer-format";
+import { parseAnswer, parseInline, type Line } from "@/lib/bridge/answer-format";
 
 /** One line of spans. Every piece is a text node: an answer can never inject markup. */
 function Spans({ line }: { line: Line }) {
@@ -18,6 +18,11 @@ function Lines({ lines }: { lines: Line[] }) {
       <Spans line={l} />
     </Fragment>
   ));
+}
+
+/** A short note on one line (a suggestion's reason): its bold, italic and code, with line breaks as spaces. */
+export function InlineText({ text }: { text: string }) {
+  return <Spans line={parseInline(text.replace(/\s*\n\s*/g, " "))} />;
 }
 
 /** The assistant's answer: paragraphs, bold, lists and quotes, rendered as elements. `large` where it's the page's subject (the Counselor chat). */

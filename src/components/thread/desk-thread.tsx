@@ -5,6 +5,7 @@ import { AnswerText } from "@/components/ask/answer-text";
 import { PendingAnswer } from "@/components/ask/pending-answer";
 import { useConnectors, WatchStatus } from "@/components/ask/watch-status";
 import { ConfirmButton } from "@/components/confirm-button";
+import { LengthNote } from "@/components/length-note";
 import { setCounselorModel } from "@/app/desk/connector-actions";
 import { subscribeDeskRequests } from "@/lib/bridge/live";
 import { MESSAGE_MAX } from "@/lib/bridge/listing";
@@ -137,6 +138,7 @@ export function DeskThread(p: DeskThreadProps) {
   }, [waiting, load]);
 
   const started = (rows?.length ?? 0) > 0;
+  const tooLong = draft.length > MESSAGE_MAX;
   const nearEnd = (log: HTMLElement) => log.scrollHeight - log.scrollTop - log.clientHeight < NEAR_END;
 
   // In a conversation, whenever it grows (a message, an answer being written) or its window
@@ -250,7 +252,7 @@ export function DeskThread(p: DeskThreadProps) {
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
-      if (draft.trim()) void send(draft.trim());
+      if (draft.trim() && !tooLong) void send(draft.trim());
     }
   }
 
@@ -325,7 +327,7 @@ export function DeskThread(p: DeskThreadProps) {
         className="shrink-0 rounded-xl border border-line bg-panel shadow-sm focus-within:border-accent"
         onSubmit={(e) => {
           e.preventDefault();
-          if (draft.trim()) void send(draft.trim());
+          if (draft.trim() && !tooLong) void send(draft.trim());
         }}
       >
         <label htmlFor={`${ids}-a`} className="sr-only">
@@ -337,11 +339,13 @@ export function DeskThread(p: DeskThreadProps) {
           className="block max-h-[40vh] w-full resize-none bg-transparent px-3.5 pt-3 pb-1 text-[15px] leading-relaxed text-ink outline-none placeholder:text-muted"
           rows={2}
           value={draft}
-          maxLength={MESSAGE_MAX}
           placeholder={p.placeholder}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={onKeyDown}
         />
+        <div className="px-3.5">
+          <LengthNote length={draft.length} max={MESSAGE_MAX} over="send it in parts, or put long things about you in files on your Profile page." />
+        </div>
         <div className="flex flex-wrap items-center justify-between gap-2 px-2.5 pb-2">
           <span className="flex flex-wrap items-center gap-2">
             {choice && (
@@ -353,7 +357,7 @@ export function DeskThread(p: DeskThreadProps) {
           </span>
           <span className="flex items-center gap-2">
             <span className="hidden text-xs text-muted sm:inline">Enter to send · Shift+Enter for a new line</span>
-            <button type="submit" className="btn btn-primary" disabled={busy || !draft.trim()}>
+            <button type="submit" className="btn btn-primary" disabled={busy || !draft.trim() || tooLong}>
               {p.sendLabel}
             </button>
           </span>
